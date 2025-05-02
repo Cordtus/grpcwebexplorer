@@ -33,19 +33,19 @@ export async function GET(request: NextRequest) {
     // Create file-safe endpoint name for caching
     const safeEndpoint = endpoint.replace(/[:/.]/g, '_');
     const cacheFileName = `${safeEndpoint}${useTLS ? '_tls' : ''}_services.json`;
-
+    
     try {
       // Create output directory if it doesn't exist
       const outputDir = await ensureOutputDir();
       const cacheFilePath = path.join(outputDir, cacheFileName);
-
+      
       // Check if cached file exists and is not expired
       if (useCache) {
         try {
           const stats = await fs.promises.stat(cacheFilePath);
           const fileAge = Date.now() - stats.mtimeMs;
           const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-
+          
           if (fileAge < maxAge) {
             // Cache file exists and is not expired
             const cachedData = await fs.promises.readFile(cacheFilePath, 'utf8');
@@ -73,20 +73,20 @@ export async function GET(request: NextRequest) {
       const services = servicesList.map(service => {
         const parts = service.split('.');
         let chain = 'default';
-        let module = 'default';
+        let moduleItem = 'default';  // Renamed from 'module' to 'moduleItem'
 
         // Try to identify chain and module from service name
       if (parts.length >= 3) {
         chain = parts[0];
-        module = parts[1];
+        moduleItem = parts[1];  // Renamed from 'module' to 'moduleItem'
       } else if (parts.length === 2) {
-        module = parts[0];
+        moduleItem = parts[0];  // Renamed from 'module' to 'moduleItem'
       }
 
       return {
         service,
         chain,
-        module,
+        module: moduleItem,  // We still use 'module' in the returned object as that's what the frontend expects
         path: service // Use the service name as the path
       };
       });

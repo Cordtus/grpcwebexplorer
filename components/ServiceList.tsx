@@ -29,22 +29,22 @@ const ServiceList: React.FC<ServiceListProps> = ({
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-
+  
   // Load settings for expanded state when services change or defaultExpanded changes
   useEffect(() => {
     if (defaultExpanded && services.length > 0) {
       // If default expanded is true, expand all chains and modules
       const allChains = new Set<string>();
       const allModules = new Set<string>();
-
+      
       services.forEach(service => {
         const chain = service.chain || 'default';
-        const module = service.module || 'default';
-
+        const moduleItem = service.module || 'default';
+        
         allChains.add(chain);
-        allModules.add(`${chain}.${module}`);
+        allModules.add(`${chain}.${moduleItem}`);
       });
-
+      
       setExpandedChains(allChains);
       setExpandedModules(allModules);
     }
@@ -101,7 +101,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
   };
 
   const filteredServices = services.filter((service) =>
-  service.service.toLowerCase().includes(filter.toLowerCase())
+    service.service.toLowerCase().includes(filter.toLowerCase())
   );
 
   const getServiceDisplayName = (serviceName: string) => {
@@ -114,117 +114,117 @@ const ServiceList: React.FC<ServiceListProps> = ({
 
   filteredServices.forEach(service => {
     const chain = service.chain || 'default';
-  const module = service.module || 'default';
+    const moduleItem = service.module || 'default';
 
-  if (!groupedServices[chain]) {
-    groupedServices[chain] = {};
-  }
+    if (!groupedServices[chain]) {
+      groupedServices[chain] = {};
+    }
 
-  if (!groupedServices[chain][module]) {
-    groupedServices[chain][module] = [];
-  }
+    if (!groupedServices[chain][moduleItem]) {
+      groupedServices[chain][moduleItem] = [];
+    }
 
-  groupedServices[chain][module].push(service);
+    groupedServices[chain][moduleItem].push(service);
   });
 
   return (
     <div className={styles.container}>
-    <div className={styles.searchContainer}>
-    <input
-    type="text"
-    value={filter}
-    onChange={(e) => setFilter(e.target.value)}
-    placeholder="Filter services..."
-    className={styles.searchInput}
-    />
-    </div>
-
-    <div className={styles.serviceList}>
-    {loading ? (
-      <div className="flex flex-col items-center justify-center p-8">
-      <LoadingSpinner size="md" />
-      <span className="mt-2 text-text-secondary">Loading services...</span>
+      <div className={styles.searchContainer}>
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter services..."
+          className={styles.searchInput}
+        />
       </div>
-    ) : filteredServices.length === 0 ? (
-      <div className={styles.emptyState}>
-      {filter ? 'No matching services found' : 'No services available'}
-      </div>
-    ) : (
-      Object.entries(groupedServices).map(([chain, modules]) => (
-        <div key={chain} className={styles.chainGroup}>
-        <div
-        className={styles.chainName}
-        onClick={(e) => toggleChain(chain, e)}
-        >
-        <span className={styles.expandIcon}>
-        {expandedChains.has(chain) ? '▼' : '▶'}
-        </span>
-        <span>{chain}</span>
-        </div>
 
-        {expandedChains.has(chain) && (
-          <div className={styles.moduleList}>
-          {Object.entries(modules).map(([moduleItem, moduleServices]) => (
-            <div key={`${chain}.${module}`} className={styles.moduleGroup}>
-            <div
-            className={styles.moduleName}
-            onClick={(e) => toggleModule(`${chain}.${module}`, e)}
-            >
-            <span className={styles.expandIcon}>
-            {expandedModules.has(`${chain}.${module}`) ? '▼' : '▶'}
-            </span>
-            <span>{module}</span>
-            </div>
-
-            {expandedModules.has(`${chain}.${module}`) && (
-              <div className={styles.servicesList}>
-              {moduleServices.map((service) => (
-                <div key={service.service} className={styles.serviceItem}>
-                <div
-                className={`${styles.serviceName} ${
-                  selectedService?.service === service.service ? styles.selected : ''
-                }`}
-                onClick={(e) => handleServiceClick(service, e)}
-                >
+      <div className={styles.serviceList}>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center p-8">
+            <LoadingSpinner size="md" />
+            <span className="mt-2 text-text-secondary">Loading services...</span>
+          </div>
+        ) : filteredServices.length === 0 ? (
+          <div className={styles.emptyState}>
+            {filter ? 'No matching services found' : 'No services available'}
+          </div>
+        ) : (
+          Object.entries(groupedServices).map(([chain, modules]) => (
+            <div key={chain} className={styles.chainGroup}>
+              <div
+                className={styles.chainName}
+                onClick={(e) => toggleChain(chain, e)}
+              >
                 <span className={styles.expandIcon}>
-                {expandedServices.has(service.service) ? '▼' : '▶'}
+                  {expandedChains.has(chain) ? '▼' : '▶'}
                 </span>
-                <span>{getServiceDisplayName(service.service)}</span>
-                </div>
+                <span>{chain}</span>
+              </div>
 
-                {expandedServices.has(service.service) && service.methods && (
-                  <div className={styles.methodList}>
-                  {service.methods.map((method) => (
-                    <div
-                    key={`${service.service}.${method.name}`}
-                    className={`${styles.methodItem} ${
-                      selectedMethod?.name === method.name &&
-                      selectedService?.service === service.service
-                      ? styles.selectedMethod
-                      : ''
-                    }`}
-                    onClick={(e) => handleMethodClick(method, service, e)}
-                    >
-                    {method.name}
+              {expandedChains.has(chain) && (
+                <div className={styles.moduleList}>
+                  {Object.entries(modules).map(([moduleItem, moduleServices]) => (
+                    <div key={`${chain}.${moduleItem}`} className={styles.moduleGroup}>
+                      <div
+                        className={styles.moduleName}
+                        onClick={(e) => toggleModule(`${chain}.${moduleItem}`, e)}
+                      >
+                        <span className={styles.expandIcon}>
+                        {expandedModules.has(`${chain}.${moduleItem}`) ? '▼' : '▶'}
+                        </span>
+                        <span>{moduleItem}</span>
+                      </div>
+
+                      {expandedModules.has(`${chain}.${moduleItem}`) && (
+                        <div className={styles.servicesList}>
+                          {moduleServices.map((service) => (
+                            <div key={service.service} className={styles.serviceItem}>
+                              <div
+                                className={`${styles.serviceName} ${
+                                  selectedService?.service === service.service ? styles.selected : ''
+                                }`}
+                                onClick={(e) => handleServiceClick(service, e)}
+                              >
+                                <span className={styles.expandIcon}>
+                                  {expandedServices.has(service.service) ? '▼' : '▶'}
+                                </span>
+                                <span>{getServiceDisplayName(service.service)}</span>
+                              </div>
+
+                              {expandedServices.has(service.service) && service.methods && (
+                                <div className={styles.methodList}>
+                                  {service.methods.map((method) => (
+                                    <div
+                                      key={`${service.service}.${method.name}`}
+                                      className={`${styles.methodItem} ${
+                                        selectedMethod?.name === method.name &&
+                                        selectedService?.service === service.service
+                                          ? styles.selectedMethod
+                                          : ''
+                                      }`}
+                                      onClick={(e) => handleMethodClick(method, service, e)}
+                                    >
+                                      {method.name}
+                                    </div>
+                                  ))}
+                                  {service.methods.length === 0 && (
+                                    <div className={styles.emptyMethods}>No methods available</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
-                  {service.methods.length === 0 && (
-                    <div className={styles.emptyMethods}>No methods available</div>
-                  )}
-                  </div>
-                )}
                 </div>
-              ))}
-              </div>
-            )}
+              )}
             </div>
-          ))}
-          </div>
+          ))
         )}
-        </div>
-      ))
-    )}
-    </div>
+      </div>
     </div>
   );
 };

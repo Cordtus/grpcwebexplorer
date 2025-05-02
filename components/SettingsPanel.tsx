@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   getUserSettings,
-  saveUserSettings,
+  saveUserSettings as _saveUserSettings,
   updateSetting,
   clearMethodCache,
   getCacheStats,

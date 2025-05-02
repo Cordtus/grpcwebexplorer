@@ -1,15 +1,16 @@
 // components/NetworkTab.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ServiceList from './ServiceList';
 import { Service, Method } from './GrpcExplorerApp';
 import LoadingSpinner from './LoadingSpinner';
+import _styles from './NetworkTab.module.css';
 
 interface NetworkTabProps {
   endpoint: string;
   useTLS: boolean;
   cacheEnabled: boolean;
   onServiceSelect: (service: Service) => void;
-  onMethodSelect: (method: Method, service: Service, endpoint: string) => void;
+  onMethodSelect: (_method: Method, _service: Service, _endpoint: string) => void;
   selectedService: Service | null;
   selectedMethod: Method | null;
   isMinimized: boolean;
@@ -38,11 +39,7 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
 
-  useEffect(() => {
-    fetchServices();
-  }, [endpoint, useTLS, cacheEnabled]);
-
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     if (!endpoint) {
       setServices([]);
       setLoading(false);
@@ -72,7 +69,11 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [endpoint, useTLS, cacheEnabled]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
   const handleMaximize = () => {
     setIsMaximized(!isMaximized);
