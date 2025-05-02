@@ -6,8 +6,9 @@
   background-color: #252525;
   color: #f0f0f0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+  sans-serif;
+  transition: width 0.3s ease, max-width 0.3s ease;
 }
 
 .header {
@@ -32,6 +33,39 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
+}
+
+/* Traffic light buttons */
+.trafficButton {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s, transform 0.1s;
+  position: relative;
+  box-shadow: inset 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.trafficButton:hover {
+  opacity: 0.8;
+  transform: scale(1.08);
+}
+
+.trafficButton:active {
+  transform: scale(0.95);
+}
+
+.trafficButton::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: 4px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
 .headerTitle {
@@ -170,4 +204,29 @@
 .leafNode {
   padding-left: 20px;
   color: #ABB2BF;
+}
+
+/* Panel state styles */
+.minimized .body {
+  display: none;
+}
+
+.minimized .toolbar {
+  display: none;
+}
+
+.minimized .header {
+  border-bottom: none;
+}
+
+.minimized .headerTitle:after {
+  content: ' (minimized)';
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+.fullWidth {
+  max-width: 800px !important;
+  width: 800px !important;
 }
