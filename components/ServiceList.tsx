@@ -25,6 +25,10 @@ const ServiceList: React.FC<ServiceListProps> = ({
   const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
+  // Add these state variables for the traffic light functionality
+  const [isPanelMinimized, setIsPanelMinimized] = useState<boolean>(false);
+  const [isPanelFullWidth, setIsPanelFullWidth] = useState<boolean>(false);
+
   const toggleService = (serviceId: string) => {
     setExpandedServices((prev) => {
       const newSet = new Set(prev);
@@ -61,6 +65,20 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
+  // Add these functions for the traffic light functionality
+  const handleMinimizePanel = () => {
+    setIsPanelMinimized(!isPanelMinimized);
+  };
+
+  const handleMaximizePanel = () => {
+    setIsPanelFullWidth(!isPanelFullWidth);
+  };
+
+  const handleClosePanel = () => {
+    // Since we can't actually close the panel, we can minimize it instead
+    setIsPanelMinimized(true);
+  };
+
   const filteredServices = services.filter((service) =>
   service.service.toLowerCase().includes(filter.toLowerCase())
   );
@@ -89,13 +107,31 @@ const ServiceList: React.FC<ServiceListProps> = ({
   });
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${isPanelMinimized ? styles.minimized : ''} ${isPanelFullWidth ? styles.fullWidth : ''}`}>
     <div className={styles.header}>
     <div className={styles.headerControls}>
     <div className={styles.traffic}>
-    <span className={styles.trafficLight} style={{ backgroundColor: '#FF605C' }} />
-    <span className={styles.trafficLight} style={{ backgroundColor: '#FFBD44' }} />
-    <span className={styles.trafficLight} style={{ backgroundColor: '#00CA4E' }} />
+    <button
+    className={styles.trafficButton}
+    style={{ backgroundColor: '#FF605C' }}
+    onClick={handleClosePanel}
+    title="Minimize panel"
+    aria-label="Minimize panel"
+    />
+    <button
+    className={styles.trafficButton}
+    style={{ backgroundColor: '#FFBD44' }}
+    onClick={handleMinimizePanel}
+    title={isPanelMinimized ? "Restore panel" : "Minimize panel"}
+    aria-label={isPanelMinimized ? "Restore panel" : "Minimize panel"}
+    />
+    <button
+    className={styles.trafficButton}
+    style={{ backgroundColor: '#00CA4E' }}
+    onClick={handleMaximizePanel}
+    title={isPanelFullWidth ? "Restore panel size" : "Maximize panel"}
+    aria-label={isPanelFullWidth ? "Restore panel size" : "Maximize panel"}
+    />
     </div>
     <div className={styles.headerTitle}>Services</div>
     </div>

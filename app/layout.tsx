@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'gRPC Explorer',
   description: 'A web application for exploring and querying gRPC services',
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
