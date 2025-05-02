@@ -1,15 +1,22 @@
 // components/MethodForm.tsx
 import React, { useState, useEffect } from 'react';
 import { Service, Method, Field } from './GrpcExplorerApp';
+import LoadingSpinner from './LoadingSpinner';
 import styles from './MethodForm.module.css';
 
 interface MethodFormProps {
   service: Service | null;
   method: Method | null;
   onExecute: (params: Record<string, any>) => void;
+  isLoading?: boolean;
 }
 
-const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) => {
+const MethodForm: React.FC<MethodFormProps> = ({
+  service,
+  method,
+  onExecute,
+  isLoading = false
+}) => {
   const [formState, setFormState] = useState<Record<string, any>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [jsonMode, setJsonMode] = useState<boolean>(false);
@@ -163,60 +170,88 @@ const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) =
     </div>
     </div>
     <div className={styles.headerActions}>
-    <button className={styles.modeToggle} onClick={toggleJsonMode} disabled={jsonMode && jsonError !== null}>
+    <button className={styles.modeToggle} onClick={toggleJsonMode} disabled={jsonMode && jsonError !== null || isLoading}>
     {jsonMode ? 'Form Mode' : 'JSON Mode'}
     </button>
     </div>
     </div>
 
-    <div className={styles.formContainer}>
-    {jsonMode ? (
-      <div className={styles.jsonContainer}>
-      <textarea className={`${styles.jsonEditor} ${jsonError ? styles.jsonError : ''}`} value={jsonInput} onChange={handleJsonInputChange} placeholder="Enter JSON request parameters..." rows={20} />
-      {jsonError && <div className={styles.errorMessage}>{jsonError}</div>}
+    {isLoading ? (
+      <div className="flex flex-col items-center justify-center flex-grow p-8">
+      <LoadingSpinner size="lg" />
+      <p className="mt-4 text-text-secondary">Loading...</p>
       </div>
     ) : (
-      <div className={styles.fieldsList}>
-      {method.fields?.length ? method.fields.map(field => (
-        <div key={field.name} className={styles.fieldContainer}>
-        <label className={styles.fieldLabel}>
-        {field.name}
-        <span className={styles.fieldType}>{field.repeated ? `${field.type}[]` : field.type}</span>
-        </label>
-        {field.options && <div className={styles.fieldDescription}>{field.options}</div>}
-        {field.repeated ? (
-          <div className={styles.arrayContainer}>
-          {(formState[field.name] || []).map((value: any, index: number) => (
-            <div key={index} className={styles.arrayItem}>
-            <input type="text" value={value} onChange={(e) => handleArrayChange(field.name, index, e.target.value, field)} className={styles.input} placeholder={`Enter ${field.type}...`} />
-            <button className={styles.removeButton} onClick={() => removeArrayItem(field.name, index)} type="button">×</button>
-            </div>
-          ))}
-          <button className={styles.addButton} onClick={() => addArrayItem(field.name)} type="button">+ Add Item</button>
-          </div>
-        ) : (
-          <div>
-          {field.type === 'bool' ? (
-            <select value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={styles.select}>
-            <option value="">Select...</option>
-            <option value="true">true</option>
-            <option value="false">false</option>
-            </select>
-          ) : (
-            <input type={["int32", "int64", "uint32", "uint64", "float", "double"].includes(field.type) ? 'number' : 'text'} value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={`${styles.input} ${formErrors[field.name] ? styles.inputError : ''}`} placeholder={`Enter ${field.type}...`} />
-          )}
-          {formErrors[field.name] && <div className={styles.errorMessage}>{formErrors[field.name]}</div>}
-          </div>
-        )}
+      <>
+      <div className={styles.formContainer}>
+      {jsonMode ? (
+        <div className={styles.jsonContainer}>
+        <textarea
+        className={`${styles.jsonEditor} ${jsonError ? styles.jsonError : ''}`}
+        value={jsonInput}
+        onChange={handleJsonInputChange}
+        placeholder="Enter JSON request parameters..."
+        rows={20}
+        />
+        {jsonError && <div className={styles.errorMessage}>{jsonError}</div>}
         </div>
-      )) : <div className={styles.emptyFields}>No parameters required</div>}
+      ) : (
+        <div className={styles.fieldsList}>
+        {method.fields?.length ? method.fields.map(field => (
+          <div key={field.name} className={styles.fieldContainer}>
+          <label className={styles.fieldLabel}>
+          {field.name}
+          <span className={styles.fieldType}>{field.repeated ? `${field.type}[]` : field.type}</span>
+          </label>
+          {field.options && <div className={styles.fieldDescription}>{field.options}</div>}
+          {field.repeated ? (
+            <div className={styles.arrayContainer}>
+            {(formState[field.name] || []).map((value: any, index: number) => (
+              <div key={index} className={styles.arrayItem}>
+              <input type="text" value={value} onChange={(e) => handleArrayChange(field.name, index, e.target.value, field)} className={styles.input} placeholder={`Enter ${field.type}...`} />
+              <button className={styles.removeButton} onClick={() => removeArrayItem(field.name, index)} type="button">×</button>
+              </div>
+            ))}
+            <button className={styles.addButton} onClick={() => addArrayItem(field.name)} type="button">+ Add Item</button>
+            </div>
+          ) : (
+            <div>
+            {field.type === 'bool' ? (
+              <select value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={styles.select}>
+              <option value="">Select...</option>
+              <option value="true">true</option>
+              <option value="false">false</option>
+              </select>
+            ) : (
+              <input type={["int32", "int64", "uint32", "uint64", "float", "double"].includes(field.type) ? 'number' : 'text'} value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={`${styles.input} ${formErrors[field.name] ? styles.inputError : ''}`} placeholder={`Enter ${field.type}...`} />
+            )}
+            {formErrors[field.name] && <div className={styles.errorMessage}>{formErrors[field.name]}</div>}
+            </div>
+          )}
+          </div>
+        )) : <div className={styles.emptyFields}>No parameters required</div>}
+        </div>
+      )}
       </div>
-    )}
-    </div>
 
-    <div className={styles.actionsContainer}>
-    <button className={styles.executeButton} onClick={handleSubmit} disabled={(jsonMode && jsonError !== null) || Object.keys(formErrors).length > 0}>Execute</button>
-    </div>
+      <div className={styles.actionsContainer}>
+      <button
+      className={styles.executeButton}
+      onClick={handleSubmit}
+      disabled={(jsonMode && jsonError !== null) || Object.keys(formErrors).length > 0 || isLoading}
+      >
+      {isLoading ? (
+        <span className="flex items-center justify-center">
+        <LoadingSpinner size="sm" color="#ffffff" />
+        <span className="ml-2">Executing...</span>
+        </span>
+      ) : (
+        'Execute'
+      )}
+      </button>
+      </div>
+      </>
+    )}
     </div>
   );
 };

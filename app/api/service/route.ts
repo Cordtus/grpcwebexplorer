@@ -1,6 +1,23 @@
 // app/api/service/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { execCommand } from '@/utils/process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+
+const execAsync = promisify(exec);
+
+// Ensure output directory exists
+async function ensureOutputDir() {
+  const outputDir = path.join(process.cwd(), 'public', 'output');
+  try {
+    await fs.promises.mkdir(outputDir, { recursive: true });
+    return outputDir;
+  } catch (err) {
+    console.error('Failed to create output directory:', err);
+    throw err;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,6 +25,7 @@ export async function GET(request: NextRequest) {
     const service = searchParams.get('service');
     const endpoint = searchParams.get('endpoint');
     const useTLS = searchParams.get('useTLS') === 'true';
+    const useCache = searchParams.get('useCache') !== 'false'; // Default to true
 
     if (!service || !endpoint) {
       return NextResponse.json({
@@ -15,12 +33,38 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Create file-safe endpoint and service name for caching
+    const safeEndpoint = endpoint.replace(/[:/.]/g, '_');
+    const safeService = service.replace(/[:.]/g, '_');
+    const cacheFileName = `${safeEndpoint}${useTLS ? '_tls' : ''}_${safeService}.json`;
+
     try {
+      // Create output directory if it doesn't exist
+      const outputDir = await ensureOutputDir();
+      const cacheFilePath = path.join(outputDir, cacheFileName);
+
+      // Check if cached file exists and is not expired
+      if (useCache) {
+        try {
+          const stats = await fs.promises.stat(cacheFilePath);
+          const fileAge = Date.now() - stats.mtimeMs;
+          const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+          if (fileAge < maxAge) {
+            // Cache file exists and is not expired
+            const cachedData = await fs.promises.readFile(cacheFilePath, 'utf8');
+            return NextResponse.json(JSON.parse(cachedData));
+          }
+        } catch (err) {
+          // File doesn't exist or other error, proceed to fetch fresh data
+        }
+      }
+
       // Build grpcurl command with or without TLS
       const tlsFlag = useTLS ? '' : '-plaintext';
       const command = `grpcurl ${tlsFlag} ${endpoint} list ${service}`;
 
-      const { stdout, stderr } = await execCommand(command);
+      const { stdout, stderr } = await execAsync(command);
 
       if (stderr && !stdout) {
         return NextResponse.json({ error: stderr }, { status: 500 });
@@ -38,7 +82,12 @@ export async function GET(request: NextRequest) {
         responseType: `${name}Response` // Assuming naming convention
       }));
 
-      return NextResponse.json({ methods });
+      const result = { methods };
+
+      // Cache the result to file
+      await fs.promises.writeFile(cacheFilePath, JSON.stringify(result, null, 2), 'utf8');
+
+      return NextResponse.json(result);
     } catch (err: any) {
       console.error('grpcurl execution error:', err);
 
