@@ -1,15 +1,18 @@
 // components/ServiceList.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Service, Method } from './GrpcExplorerApp';
 import styles from './ServiceList.module.css';
+import LoadingSpinner from './LoadingSpinner';
 
 interface ServiceListProps {
   services: Service[];
   selectedService: Service | null;
   selectedMethod: Method | null;
   onServiceSelect: (service: Service) => void;
-  onMethodSelect: (method: Method) => void;
-  loading: boolean;
+  onMethodSelect: (method: Method, service: Service) => void;
+  endpoint?: string;
+  defaultExpanded?: boolean;
+  loading?: boolean;
 }
 
 const ServiceList: React.FC<ServiceListProps> = ({
@@ -18,18 +21,37 @@ const ServiceList: React.FC<ServiceListProps> = ({
   selectedMethod,
   onServiceSelect,
   onMethodSelect,
-  loading,
+  endpoint = '',
+  defaultExpanded = false,
+  loading = false
 }) => {
   const [filter, setFilter] = useState<string>('');
   const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
-  // Add these state variables for the traffic light functionality
-  const [isPanelMinimized, setIsPanelMinimized] = useState<boolean>(false);
-  const [isPanelFullWidth, setIsPanelFullWidth] = useState<boolean>(false);
+  // Load settings for expanded state when services change or defaultExpanded changes
+  useEffect(() => {
+    if (defaultExpanded && services.length > 0) {
+      // If default expanded is true, expand all chains and modules
+      const allChains = new Set<string>();
+      const allModules = new Set<string>();
 
-  const toggleService = (serviceId: string) => {
+      services.forEach(service => {
+        const chain = service.chain || 'default';
+        const module = service.module || 'default';
+
+        allChains.add(chain);
+        allModules.add(`${chain}.${module}`);
+      });
+
+      setExpandedChains(allChains);
+      setExpandedModules(allModules);
+    }
+  }, [services, defaultExpanded]);
+
+  const toggleService = (serviceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setExpandedServices((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(serviceId)) {
@@ -41,7 +63,8 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
-  const toggleChain = (chainId: string) => {
+  const toggleChain = (chainId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setExpandedChains((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(chainId)) {
@@ -53,7 +76,8 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
-  const toggleModule = (moduleId: string) => {
+  const toggleModule = (moduleId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setExpandedModules((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(moduleId)) {
@@ -65,18 +89,15 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
-  // Add these functions for the traffic light functionality
-  const handleMinimizePanel = () => {
-    setIsPanelMinimized(!isPanelMinimized);
+  const handleServiceClick = (service: Service, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onServiceSelect(service);
+    toggleService(service.service, e);
   };
 
-  const handleMaximizePanel = () => {
-    setIsPanelFullWidth(!isPanelFullWidth);
-  };
-
-  const handleClosePanel = () => {
-    // Since we can't actually close the panel, we can minimize it instead
-    setIsPanelMinimized(true);
+  const handleMethodClick = (method: Method, service: Service, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onMethodSelect(method, service);
   };
 
   const filteredServices = services.filter((service) =>
@@ -93,7 +114,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
 
   filteredServices.forEach(service => {
     const chain = service.chain || 'default';
-    const module = service.module || 'default';
+  const module = service.module || 'default';
 
   if (!groupedServices[chain]) {
     groupedServices[chain] = {};
@@ -107,34 +128,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
   });
 
   return (
-    <div className={`${styles.container} ${isPanelMinimized ? styles.minimized : ''} ${isPanelFullWidth ? styles.fullWidth : ''}`}>
-    <div className={styles.header}>
-    <div className={styles.headerControls}>
-    <div className={styles.traffic}>
-    <button
-    className={styles.trafficButton}
-    style={{ backgroundColor: '#FF605C' }}
-    onClick={handleClosePanel}
-    title="Minimize panel"
-    aria-label="Minimize panel"
-    />
-    <button
-    className={styles.trafficButton}
-    style={{ backgroundColor: '#FFBD44' }}
-    onClick={handleMinimizePanel}
-    title={isPanelMinimized ? "Restore panel" : "Minimize panel"}
-    aria-label={isPanelMinimized ? "Restore panel" : "Minimize panel"}
-    />
-    <button
-    className={styles.trafficButton}
-    style={{ backgroundColor: '#00CA4E' }}
-    onClick={handleMaximizePanel}
-    title={isPanelFullWidth ? "Restore panel size" : "Maximize panel"}
-    aria-label={isPanelFullWidth ? "Restore panel size" : "Maximize panel"}
-    />
-    </div>
-    <div className={styles.headerTitle}>Services</div>
-    </div>
+    <div className={styles.container}>
     <div className={styles.searchContainer}>
     <input
     type="text"
@@ -144,19 +138,23 @@ const ServiceList: React.FC<ServiceListProps> = ({
     className={styles.searchInput}
     />
     </div>
-    </div>
 
     <div className={styles.serviceList}>
     {loading ? (
-      <div className={styles.loading}>Loading services...</div>
+      <div className="flex flex-col items-center justify-center p-8">
+      <LoadingSpinner size="md" />
+      <span className="mt-2 text-text-secondary">Loading services...</span>
+      </div>
     ) : filteredServices.length === 0 ? (
-      <div className={styles.emptyState}>No services found</div>
+      <div className={styles.emptyState}>
+      {filter ? 'No matching services found' : 'No services available'}
+      </div>
     ) : (
       Object.entries(groupedServices).map(([chain, modules]) => (
         <div key={chain} className={styles.chainGroup}>
         <div
         className={styles.chainName}
-        onClick={() => toggleChain(chain)}
+        onClick={(e) => toggleChain(chain, e)}
         >
         <span className={styles.expandIcon}>
         {expandedChains.has(chain) ? '▼' : '▶'}
@@ -170,7 +168,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
             <div key={`${chain}.${module}`} className={styles.moduleGroup}>
             <div
             className={styles.moduleName}
-            onClick={() => toggleModule(`${chain}.${module}`)}
+            onClick={(e) => toggleModule(`${chain}.${module}`, e)}
             >
             <span className={styles.expandIcon}>
             {expandedModules.has(`${chain}.${module}`) ? '▼' : '▶'}
@@ -186,10 +184,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
                 className={`${styles.serviceName} ${
                   selectedService?.service === service.service ? styles.selected : ''
                 }`}
-                onClick={() => {
-                  onServiceSelect(service);
-                  toggleService(service.service);
-                }}
+                onClick={(e) => handleServiceClick(service, e)}
                 >
                 <span className={styles.expandIcon}>
                 {expandedServices.has(service.service) ? '▼' : '▶'}
@@ -208,7 +203,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
                       ? styles.selectedMethod
                       : ''
                     }`}
-                    onClick={() => onMethodSelect(method)}
+                    onClick={(e) => handleMethodClick(method, service, e)}
                     >
                     {method.name}
                     </div>

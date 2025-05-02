@@ -1,0 +1,177 @@
+/* components/MethodCard.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--dark-surface);
+  border: 1px solid var(--dark-border);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: all 0.2s ease-in-out;
+}
+
+.header {
+  padding: 10px 16px;
+  background-color: var(--dark-highlight);
+  border-bottom: 1px solid var(--dark-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+}
+
+.traffic {
+  display: flex;
+  gap: 4px;
+  margin-right: 12px;
+}
+
+.trafficButton {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s, transform 0.1s;
+  position: relative;
+}
+
+.trafficButton:hover {
+  opacity: 0.8;
+  transform: scale(1.08);
+}
+
+.trafficButton:active {
+  transform: scale(0.95);
+}
+
+.trafficButton::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: 4px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.methodInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.methodName {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.responseToggle {
+  margin-left: 8px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: var(--blue-accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.methodDetails {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.serviceName {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  margin: 0 6px;
+}
+
+.endpointName {
+  color: var(--blue-accent);
+}
+
+.tag {
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.tagTls {
+  background-color: rgba(0, 202, 78, 0.2);
+  color: var(--success-green);
+}
+
+.tagPlain {
+  background-color: rgba(255, 189, 68, 0.2);
+  color: var(--warning-yellow);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+}
+
+.splitView {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .splitView {
+    flex-direction: row;
+  }
+}
+
+.formSection {
+  flex: 1;
+  border-right: 1px solid var(--dark-border);
+}
+
+.responseSection {
+  flex: 1;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+
+.error {
+  padding: 16px;
+  color: var(--error-red);
+  font-size: 14px;
+}
+
+.minimized {
+  height: 48px !important;
+  overflow: hidden;
+}
+
+.maximized {
+  flex-grow: 1 !important;
+}
