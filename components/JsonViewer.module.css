@@ -1,0 +1,173 @@
+/* JsonViewer.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #252525;
+  color: #f0f0f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.header {
+  padding: 10px 16px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.traffic {
+  display: flex;
+  gap: 6px;
+  margin-right: 16px;
+}
+
+.trafficLight {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.headerTitle {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.searchContainer {
+  flex: 1;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.searchInput:focus {
+  border-color: #0a84ff;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.button:hover {
+  background-color: #333;
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.node {
+  margin: 2px 0;
+}
+
+.nodeHeader {
+  display: flex;
+  align-items: flex-start;
+  cursor: pointer;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.nodeChildren {
+  padding-left: 20px;
+  border-left: 1px dashed #444;
+  margin-left: 4px;
+}
+
+.expandIcon {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  margin-right: 4px;
+  color: #888;
+}
+
+.key {
+  color: #e6c07b;
+  margin-right: 4px;
+}
+
+.colon {
+  color: #888;
+  margin-right: 4px;
+}
+
+.value {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.preview {
+  color: #888;
+  font-style: italic;
+}
+
+.stringValue {
+  color: #98c379;
+}
+
+.numberValue {
+  color: #d19a66;
+}
+
+.booleanValue {
+  color: #56b6c2;
+}
+
+.nullValue {
+  color: #e06c75;
+  font-style: italic;
+}
+
+.undefinedValue {
+  color: #888;
+  font-style: italic;
+}
+
+.arrayItem {
+  color: #c678dd;
+}
+
+.leafNode {
+  padding-left: 20px;
+  color: #ABB2BF;
+}

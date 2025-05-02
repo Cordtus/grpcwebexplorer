@@ -1,0 +1,243 @@
+/* MethodForm.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #f0f0f0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.headerTitle {
+  display: flex;
+  flex-direction: column;
+}
+
+.headerTitle h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.serviceName {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.modeToggle {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #252525;
+  color: #f0f0f0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.modeToggle:hover {
+  background-color: #333;
+}
+
+.modeToggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.formContainer {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.fieldsList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fieldContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fieldType {
+  font-size: 12px;
+  color: #888;
+  font-weight: normal;
+  font-family: monospace;
+}
+
+.fieldDescription {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  margin-bottom: 6px;
+  font-family: monospace;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.input, .select {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #252525;
+  color: #f0f0f0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.input:focus, .select:focus {
+  border-color: #0a84ff;
+}
+
+.inputError {
+  border-color: #FF605C;
+}
+
+.errorMessage {
+  font-size: 12px;
+  color: #FF605C;
+  margin-top: 4px;
+}
+
+.arrayContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.arrayItem {
+  display: flex;
+  gap: 8px;
+}
+
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #252525;
+  color: #FF605C;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.2s;
+}
+
+.removeButton:hover {
+  background-color: rgba(255, 96, 92, 0.1);
+}
+
+.addButton {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px dashed #3c3c3c;
+  background-color: transparent;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  width: fit-content;
+  transition: all 0.2s;
+}
+
+.addButton:hover {
+  background-color: #2a2a2a;
+  color: #f0f0f0;
+}
+
+.jsonContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.jsonEditor {
+  flex: 1;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #3c3c3c;
+  background-color: #252525;
+  color: #f0f0f0;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.2s;
+  resize: none;
+}
+
+.jsonEditor:focus {
+  border-color: #0a84ff;
+}
+
+.jsonError {
+  border-color: #FF605C;
+}
+
+.actionsContainer {
+  padding: 16px;
+  background-color: #2d2d2d;
+  border-top: 1px solid #3c3c3c;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.executeButton {
+  padding: 8px 20px;
+  border-radius: 4px;
+  border: none;
+  background-color: #0a84ff;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.executeButton:hover {
+  background-color: #0074e0;
+}
+
+.executeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.emptyFields {
+  padding: 32px;
+  text-align: center;
+  color: #888;
+}
