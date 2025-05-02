@@ -1,9 +1,6 @@
 // app/api/method/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { execCommand } from '@/utils/process';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +22,7 @@ export async function GET(request: NextRequest) {
 
       // First, get the method description to find the request type
       const describeMethodCommand = `grpcurl ${tlsFlag} ${endpoint} describe ${service}.${method}`;
-      const { stdout: methodDescription, stderr: methodError } = await execAsync(describeMethodCommand);
+      const { stdout: methodDescription, stderr: methodError } = await execCommand(describeMethodCommand);
 
       if (methodError && !methodDescription) {
         return NextResponse.json({ error: methodError }, { status: 500 });
@@ -44,7 +41,7 @@ export async function GET(request: NextRequest) {
 
       // Now describe the request type to get the fields
       const describeRequestCommand = `grpcurl ${tlsFlag} ${endpoint} describe ${requestType}`;
-      const { stdout: requestDescription, stderr: requestError } = await execAsync(describeRequestCommand);
+      const { stdout: requestDescription, stderr: requestError } = await execCommand(describeRequestCommand);
 
       if (requestError && !requestDescription) {
         return NextResponse.json({ error: requestError }, { status: 500 });

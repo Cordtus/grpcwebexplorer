@@ -1,9 +1,6 @@
 // app/api/execute/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { execCommand } from '@/utils/process';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +18,7 @@ export async function POST(request: NextRequest) {
       // Execute grpcurl command with the provided parameters
       const grpcurlCommand = buildGrpcurlCommand(endpoint, service, method, params, useTLS);
 
-      const { stdout, stderr } = await execAsync(grpcurlCommand);
+      const { stdout, stderr } = await execCommand(grpcurlCommand);
 
       if (stderr && !stdout) {
         return NextResponse.json(

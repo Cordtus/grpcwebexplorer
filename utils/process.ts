@@ -1,4 +1,4 @@
-// utils/process.js
+// utils/process.ts
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -20,12 +20,6 @@ if (typeof process !== 'undefined') {
       process.exit(0);
     });
   });
-
-  // Ensure cleanup on uncaught exceptions
-  process.on('uncaughtException', (err) => {
-    console.error('Uncaught exception:', err);
-    process.exit(1);
-  });
 }
 
 /**
@@ -33,7 +27,7 @@ if (typeof process !== 'undefined') {
  * @param {string} command - Command to execute
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
-export async function execCommand(command) {
+export async function execCommand(command: string): Promise<{stdout: string, stderr: string}> {
   const childProcess = exec(command);
   activeProcesses.add(childProcess);
   

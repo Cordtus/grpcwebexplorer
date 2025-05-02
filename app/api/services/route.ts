@@ -1,9 +1,6 @@
 // app/api/services/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { execCommand } from '@/utils/process';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +17,7 @@ export async function GET(request: NextRequest) {
       const tlsFlag = useTLS ? '' : '-plaintext';
       const command = `grpcurl ${tlsFlag} ${endpoint} list`;
 
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execCommand(command);
 
       if (stderr && !stdout) {
         return NextResponse.json({ error: stderr }, { status: 500 });
