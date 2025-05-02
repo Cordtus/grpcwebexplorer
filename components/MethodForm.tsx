@@ -115,11 +115,11 @@ const MethodForm: React.FC<MethodFormProps> = ({
 
   const toggleJsonMode = () => {
     if (!jsonMode) {
-      if (Object.keys(formState).length === 0 && method?.fields?.length > 0) {
-        const exampleData = {};
-        method.fields.forEach(field => {
-          exampleData[field.name] = field.repeated ? getExampleArrayValue(field.type) : getExampleValue(field.type);
-        });
+      if (Object.keys(formState).length === 0 && method?.fields && method.fields.length > 0) {
+	const exampleData: Record<string, any> = {};
+	method.fields?.forEach(field => {
+	  exampleData[field.name] = field.repeated ? getExampleArrayValue(field.type) : getExampleValue(field.type);
+	});
         setJsonInput(JSON.stringify(exampleData, null, 2));
       } else {
         setJsonInput(JSON.stringify(formState, null, 2));

@@ -9,10 +9,6 @@ const nextConfig = {
   },
   // Ensure ESM compatibility
   transpilePackages: [],
-  // Disable ESLint
-  eslint: {
-    ignoreDuringBuilds: true,
-  }
 };
 
 export default nextConfig;
