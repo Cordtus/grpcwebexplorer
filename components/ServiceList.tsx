@@ -164,7 +164,7 @@ const ServiceList: React.FC<ServiceListProps> = ({
 
         {expandedChains.has(chain) && (
           <div className={styles.moduleList}>
-          {Object.entries(modules).map(([module, moduleServices]) => (
+          {Object.entries(modules).map(([moduleItem, moduleServices]) => (
             <div key={`${chain}.${module}`} className={styles.moduleGroup}>
             <div
             className={styles.moduleName}
