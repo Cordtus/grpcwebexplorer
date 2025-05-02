@@ -1,87 +1,67 @@
 # gRPC Explorer Web UI
 
-A sleek, MacOS-themed web interface for exploring and querying gRPC services using gRPC reflection.
+Web interface for exploring and interacting with gRPC services using reflection.
 
 ## Features
 
-- Connect to any gRPC server with reflection enabled
-- Automatic service and method discovery
-- Hierarchical organization by chain > module > service > methods
-- Auto-generated forms for method parameters
-- Execute queries with parameter validation
-- View responses in an expandable/collapsible JSON viewer
-- Dark mode interface inspired by MacOS Terminal
+- Connect to gRPC servers with reflection enabled
+- Dynamic service and method discovery
+- Hierarchical navigation (chain > module > service > methods)
+- Parameter form generation based on protobuf definitions
+- TLS/non-TLS connection support
+- JSON response viewer with filtering and formatting
 
 ## Prerequisites
 
-- Node.js v14 or later
-- Yarn (preferred) or npm
-- [grpcurl](https://github.com/fullstorydev/grpcurl) installed and available in PATH
+- Node.js v14+
+- Yarn or npm
+- [grpcurl](https://github.com/fullstorydev/grpcurl) in PATH
 
-## Getting Started
+## Installation
 
-### Installation
+```bash
+# Clone repository
+git clone <repo-url> grpc-explorer-web
+cd grpc-explorer-web
 
-1. Clone the repository:
-   ```bash
-   git clone <repo-url> grpc-explorer-web
-   cd grpc-explorer-web
-   ```
+# Install dependencies and bootstrap project
+yarn install
+yarn bootstrap
 
-2. Install dependencies:
-   ```bash
-   yarn install
-   ```
-
-3. Set up development environment:
-   ```bash
-   yarn setup
-   ```
-
-4. Start the development server:
-   ```bash
-   yarn dev
-   ```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+# Start development server
+yarn dev
+```
 
 ## Usage
 
-1. Enter your gRPC endpoint in the format `host:port` at the top of the application
-2. Click "Connect" to discover available services using gRPC reflection
-3. Browse the available services in the left panel, organized by chain > module > service
-4. Click on a service to expand and see its methods
-5. Select a method to view its parameters in the center panel
-6. Fill in the required parameters
-7. Click "Execute" to run the query
-8. View the JSON response in the right panel
-   - Use the filter to search within results
-   - Use "Expand All" and "Collapse All" to manage the view
-   - Click "Copy" to copy the entire JSON response to clipboard
+1. Enter gRPC endpoint (`host:port`)
+2. Toggle TLS if required
+3. Click "Connect"
+4. Navigate services in left panel
+5. Select method to view parameters
+6. Input parameters in center panel
+7. Click "Execute"
+8. View response in right panel
 
-## Requirements for Production Use
+## Requirements
 
-1. Your gRPC server must have reflection enabled
-2. The server must be accessible from the machine running this app
-3. grpcurl must be installed and available on the PATH
+- Target gRPC server must have reflection enabled
+- Network access to gRPC server
+- grpcurl installed and in PATH
 
 ## Troubleshooting
 
 ### Connection Issues
-
-If you can't connect to your gRPC server:
-- Verify the server is running and accessible
-- Check that the endpoint format is correct (host:port)
-- Ensure the server has reflection enabled
-- Check network connectivity and firewall settings
+- Verify server is running
+- Check endpoint format (`host:port`)
+- Confirm reflection is enabled
+- Verify TLS setting matches server configuration
 
 ### Execution Errors
-
-If you receive errors when executing queries:
-- Check that required parameters are correctly filled
-- Ensure parameter types match expected types
-- Verify the grpcurl command execution works in terminal
-- Check server logs for detailed error information
+- Ensure all required parameters are provided
+- Check parameter types
+- Verify server access with grpcurl directly
+- Check server logs
 
 ## License
 
