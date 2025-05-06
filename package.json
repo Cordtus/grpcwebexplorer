@@ -10,8 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "build:prod": "NEXT_TELEMETRY_DISABLED=1 next build",
-    "start": "node .next/standalone/server.js",
-    "start:prod": "node .next/standalone/server.js",
+    "start": "next start",
+    "start:prod": "cd .next/standalone && NODE_ENV=production PORT=3000 node server.js",
     "lint": "next lint"
   },
   "dependencies": {
