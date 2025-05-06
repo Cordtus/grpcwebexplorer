@@ -1,0 +1,25 @@
+[Unit]
+Description=gRPC Explorer Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=grpc-user
+Group=grpc-user
+WorkingDirectory=/opt/grpc-explorer/.next/standalone
+ExecStart=/usr/bin/node server.js
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grpc-explorer
+
+# Security hardening (optional but recommended)
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
