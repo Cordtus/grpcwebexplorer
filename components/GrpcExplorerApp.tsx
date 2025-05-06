@@ -10,6 +10,7 @@ import SettingsPanel from './SettingsPanel';
 import NetworkTab from './NetworkTab';
 import MethodCard from './MethodCard';
 import { getUserSettings, addEndpointToHistory, setUseTLS } from '@/utils/userSettings';
+import { fetchServiceMethods, fetchMethodFields } from '@/utils/grpcHelpers';
 import Image from 'next/image';
 import styles from './GrpcExplorerApp.module.css';
 
@@ -88,68 +89,6 @@ const GrpcExplorerApp: React.FC = () => {
   const [_expandServicesByDefault, setExpandServicesByDefault] = useState<boolean>(false);
   const [_expandMethodsByDefault, setExpandMethodsByDefault] = useState<boolean>(false);
 
-  // Define handleEndpointSave with useCallback before it's used in useEffect
-  const handleEndpointSave = useCallback(() => {
-    if (endpoint) {
-      localStorage.setItem('grpcEndpoint', endpoint);
-      localStorage.setItem('grpcUseTLS', useTLS.toString());
-      
-      // Fetch services
-      fetchServices(endpoint);
-      
-      // Also use new method for multi-network support
-      connectToEndpoint(endpoint, useTLS);
-    }
-  }, [endpoint, useTLS]);
-
-  // Load user settings and endpoint history
-  useEffect(() => {
-    // Load saved endpoint, TLS setting, and cache setting on component mount
-    const storedEndpoint = localStorage.getItem('grpcEndpoint') || '';
-    const storedUseTLS = localStorage.getItem('grpcUseTLS') === 'true';
-    
-    // Load from userSettingsService for new features
-    const settings = getUserSettings();
-    setCacheEnabled(settings.cache.enabled);
-    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
-    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
-    setEndpointHistory(settings.endpoints.history);
-
-    // Set from local storage for backward compatibility
-    setEndpoint(storedEndpoint);
-    setUseTLSState(storedUseTLS);
-
-    // If there's a stored endpoint, try to connect
-    if (storedEndpoint) {
-      handleEndpointSave();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Detect if endpoint likely requires TLS based on port number
-  useEffect(() => {
-    if (endpoint) {
-      // Try to parse the endpoint to extract port
-      const parts = endpoint.split(':');
-      const port = parts.length > 1 ? parts[parts.length - 1] : null;
-
-      // Common secure port numbers
-      const securePorts = ['443', '8443', '9443', '4443'];
-
-      if (port && securePorts.includes(port)) {
-        setUseTLSState(true);
-      }
-    }
-  }, [endpoint]);
-
-  // Handle the settings change event
-  const handleSettingsChanged = useCallback(() => {
-    const settings = getUserSettings();
-    setCacheEnabled(settings.cache.enabled);
-    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
-    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
-  }, []);
-
   // Legacy fetch services (for backward compatibility)
   const fetchServices = useCallback(async (endpointUrl: string) => {
     if (!endpointUrl) {
@@ -220,6 +159,68 @@ const GrpcExplorerApp: React.FC = () => {
     setEndpointHistory(settings.endpoints.history);
   }, [networks]);
 
+  // Handle endpoint saving
+  const handleEndpointSave = useCallback(() => {
+    if (endpoint) {
+      localStorage.setItem('grpcEndpoint', endpoint);
+      localStorage.setItem('grpcUseTLS', useTLS.toString());
+      
+      // Fetch services
+      fetchServices(endpoint);
+      
+      // Also use new method for multi-network support
+      connectToEndpoint(endpoint, useTLS);
+    }
+  }, [endpoint, useTLS, fetchServices, connectToEndpoint]);
+
+  // Load user settings and endpoint history
+  useEffect(() => {
+    // Load saved endpoint, TLS setting, and cache setting on component mount
+    const storedEndpoint = localStorage.getItem('grpcEndpoint') || '';
+    const storedUseTLS = localStorage.getItem('grpcUseTLS') === 'true';
+    
+    // Load from userSettingsService for new features
+    const settings = getUserSettings();
+    setCacheEnabled(settings.cache.enabled);
+    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
+    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
+    setEndpointHistory(settings.endpoints.history);
+
+    // Set from local storage for backward compatibility
+    setEndpoint(storedEndpoint);
+    setUseTLSState(storedUseTLS);
+
+    // If there's a stored endpoint, try to connect
+    if (storedEndpoint) {
+      setTimeout(() => handleEndpointSave(), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Detect if endpoint likely requires TLS based on port number
+  useEffect(() => {
+    if (endpoint) {
+      // Try to parse the endpoint to extract port
+      const parts = endpoint.split(':');
+      const port = parts.length > 1 ? parts[parts.length - 1] : null;
+
+      // Common secure port numbers
+      const securePorts = ['443', '8443', '9443', '4443'];
+
+      if (port && securePorts.includes(port)) {
+        setUseTLSState(true);
+      }
+    }
+  }, [endpoint]);
+
+  // Handle the settings change event
+  const handleSettingsChanged = useCallback(() => {
+    const settings = getUserSettings();
+    setCacheEnabled(settings.cache.enabled);
+    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
+    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
+  }, []);
+
   // Legacy service select (for backward compatibility)
   const handleServiceSelect = useCallback(async (service: Service) => {
     try {
@@ -231,29 +232,29 @@ const GrpcExplorerApp: React.FC = () => {
       // Fetch service methods if not already loaded
       if (!service.methods) {
         setLoadingService(true);
-        const res = await fetch(
-          `/api/service?service=${encodeURIComponent(service.service)}&endpoint=${encodeURIComponent(endpoint)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
+        
+        const { error: methodsError, methods } = await fetchServiceMethods(
+          service, endpoint, useTLS, cacheEnabled
         );
-        const data = await res.json();
 
-        if (data.error) {
-          setError(data.error);
+        if (methodsError) {
+          setError(methodsError);
           setLoadingService(false);
           return;
         }
 
         // Update the service with methods
         const updatedServices = services.map(s =>
-          s.service === service.service ? { ...s, methods: data.methods } : s
+          s.service === service.service ? { ...s, methods } : s
         );
 
         setServices(updatedServices);
-        setSelectedService({ ...service, methods: data.methods });
-        setLoadingService(false);
+        setSelectedService({ ...service, methods });
       }
     } catch (err) {
       console.error('Failed to fetch service methods:', err);
       setError('Failed to load service methods. Please check the console for details.');
+    } finally {
       setLoadingService(false);
     }
   }, [services, endpoint, useTLS, cacheEnabled]);
@@ -268,31 +269,31 @@ const GrpcExplorerApp: React.FC = () => {
       // Fetch method field definitions if not already loaded
       if (!method.fields && selectedService) {
         setLoadingMethod(true);
-        const res = await fetch(
-          `/api/method?service=${encodeURIComponent(selectedService.service)}&method=${encodeURIComponent(method.name)}&endpoint=${encodeURIComponent(endpoint)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
+        
+        const { error: fieldsError, fields } = await fetchMethodFields(
+          selectedService, method, endpoint, useTLS, cacheEnabled
         );
-        const data = await res.json();
 
-        if (data.error) {
-          setError(data.error);
+        if (fieldsError) {
+          setError(fieldsError);
           setLoadingMethod(false);
           return;
         }
 
         // Update the method with fields
-        if (selectedService && selectedService.methods) {
+        if (selectedService.methods) {
           const updatedMethods = selectedService.methods.map(m =>
-            m.name === method.name ? { ...m, fields: data.fields } : m
+            m.name === method.name ? { ...m, fields } : m
           );
 
           setSelectedService({ ...selectedService, methods: updatedMethods });
-          setSelectedMethod({ ...method, fields: data.fields });
+          setSelectedMethod({ ...method, fields });
         }
-        setLoadingMethod(false);
       }
     } catch (err) {
       console.error('Failed to fetch method fields:', err);
       setError('Failed to load method fields. Please check the console for details.');
+    } finally {
       setLoadingMethod(false);
     }
   }, [selectedService, endpoint, useTLS, cacheEnabled]);

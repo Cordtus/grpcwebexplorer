@@ -1,15 +1,15 @@
 // components/ServiceList.tsx
 import React, { useState, useEffect } from 'react';
 import { Service, Method } from './GrpcExplorerApp';
-import styles from './ServiceList.module.css';
 import LoadingSpinner from './LoadingSpinner';
+import styles from './ServiceList.module.css';
 
 interface ServiceListProps {
   services: Service[];
   selectedService: Service | null;
   selectedMethod: Method | null;
-  onServiceSelect: (service: Service) => void;
-  onMethodSelect: (method: Method, service: Service) => void;
+  onServiceSelect: (_service: Service) => void;
+  onMethodSelect: (_method: Method, _service: Service) => void;
   endpoint?: string;
   defaultExpanded?: boolean;
   loading?: boolean;
@@ -21,7 +21,6 @@ const ServiceList: React.FC<ServiceListProps> = ({
   selectedMethod,
   onServiceSelect,
   onMethodSelect,
-  endpoint = '',
   defaultExpanded = false,
   loading = false
 }) => {
@@ -30,10 +29,9 @@ const ServiceList: React.FC<ServiceListProps> = ({
   const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   
-  // Load settings for expanded state when services change or defaultExpanded changes
+  // Expand all services by default if specified
   useEffect(() => {
     if (defaultExpanded && services.length > 0) {
-      // If default expanded is true, expand all chains and modules
       const allChains = new Set<string>();
       const allModules = new Set<string>();
       
@@ -50,9 +48,10 @@ const ServiceList: React.FC<ServiceListProps> = ({
     }
   }, [services, defaultExpanded]);
 
+  // Toggle a service's expanded state
   const toggleService = (serviceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedServices((prev) => {
+    setExpandedServices(prev => {
       const newSet = new Set(prev);
       if (newSet.has(serviceId)) {
         newSet.delete(serviceId);
@@ -63,9 +62,10 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
+  // Toggle a chain's expanded state
   const toggleChain = (chainId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedChains((prev) => {
+    setExpandedChains(prev => {
       const newSet = new Set(prev);
       if (newSet.has(chainId)) {
         newSet.delete(chainId);
@@ -76,9 +76,10 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
+  // Toggle a module's expanded state
   const toggleModule = (moduleId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedModules((prev) => {
+    setExpandedModules(prev => {
       const newSet = new Set(prev);
       if (newSet.has(moduleId)) {
         newSet.delete(moduleId);
@@ -89,21 +90,25 @@ const ServiceList: React.FC<ServiceListProps> = ({
     });
   };
 
+  // Handle service click
   const handleServiceClick = (service: Service, e: React.MouseEvent) => {
     e.stopPropagation();
     onServiceSelect(service);
     toggleService(service.service, e);
   };
 
+  // Handle method click
   const handleMethodClick = (method: Method, service: Service, e: React.MouseEvent) => {
     e.stopPropagation();
     onMethodSelect(method, service);
   };
 
+  // Filter services by search term
   const filteredServices = services.filter((service) =>
     service.service.toLowerCase().includes(filter.toLowerCase())
   );
 
+  // Get the display name of a service
   const getServiceDisplayName = (serviceName: string) => {
     const parts = serviceName.split('.');
     return parts[parts.length - 1];

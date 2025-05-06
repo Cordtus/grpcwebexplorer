@@ -3,13 +3,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ServiceList from './ServiceList';
 import { Service, Method } from './GrpcExplorerApp';
 import LoadingSpinner from './LoadingSpinner';
-import _styles from './NetworkTab.module.css';
+import styles from './NetworkTab.module.css';
 
 interface NetworkTabProps {
   endpoint: string;
   useTLS: boolean;
   cacheEnabled: boolean;
-  onServiceSelect: (service: Service) => void;
+  onServiceSelect: (_service: Service) => void;
   onMethodSelect: (_method: Method, _service: Service, _endpoint: string) => void;
   selectedService: Service | null;
   selectedMethod: Method | null;
@@ -18,6 +18,18 @@ interface NetworkTabProps {
   onMaximize: () => void;
   onClose: () => void;
   defaultExpanded: boolean;
+}
+
+interface EndpointInfo {
+  url: string;
+  useTLS: boolean;
+  isActive: boolean;
+}
+
+interface NetworkInfo {
+  chainId: string;
+  bech32Prefix?: string;
+  endpoints: EndpointInfo[];
 }
 
 const NetworkTab: React.FC<NetworkTabProps> = ({
@@ -38,9 +50,41 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+  const [activeEndpoint, setActiveEndpoint] = useState<string>(endpoint);
 
+  // Helper function to execute gRPC calls
+  const executeGrpcCall = useCallback(async (service: string, method: string, params = {}) => {
+    try {
+      const res = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          service,
+          method,
+          params,
+          useTLS,
+          useCache: cacheEnabled
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.error) {
+        console.error(`Failed to execute ${service}.${method}:`, data.error);
+        return null;
+      }
+      
+      return data.response;
+    } catch (err) {
+      console.error(`Failed to execute ${service}.${method}:`, err);
+      return null;
+    }
+  }, [endpoint, useTLS, cacheEnabled]);
+
+  // Fetch available services from the endpoint
   const fetchServices = useCallback(async () => {
-    if (!endpoint) {
+    if (!activeEndpoint) {
       setServices([]);
       setLoading(false);
       return;
@@ -50,9 +94,8 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
       setLoading(true);
       setError(null);
 
-      // Fetch services from the specified endpoint
       const res = await fetch(
-        `/api/services?endpoint=${encodeURIComponent(endpoint)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
+        `/api/services?endpoint=${encodeURIComponent(activeEndpoint)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
       );
       const data = await res.json();
 
@@ -69,28 +112,136 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [endpoint, useTLS, cacheEnabled]);
+  }, [activeEndpoint, useTLS, cacheEnabled]);
 
+  // Fetch Bech32Prefix as a fallback identifier
+  const fetchBech32Prefix = useCallback(async () => {
+    const data = await executeGrpcCall('cosmos.auth.v1beta1.Query', 'Bech32Prefix', {});
+    return data?.bech32_prefix || null;
+  }, [executeGrpcCall]);
+
+  // Fetch node info to get chain ID
+  const fetchNetworkInfo = useCallback(async () => {
+    try {
+      // Try to get chain ID from GetNodeInfo
+      const nodeInfo = await executeGrpcCall(
+        'cosmos.base.tendermint.v1beta1.Service', 
+        'GetNodeInfo', 
+        {}
+      );
+      
+      let chainId = nodeInfo?.default_node_info?.network || null;
+      let bech32Prefix = null;
+      
+      // If chain ID not found, try to get bech32 prefix as fallback
+      if (!chainId) {
+        bech32Prefix = await fetchBech32Prefix();
+        if (bech32Prefix) {
+          chainId = `${bech32Prefix}-network`;
+        } else {
+          // Last resort: use endpoint as network ID
+          chainId = `network-${endpoint.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        }
+      } else {
+        // If we have chain ID, still try to get bech32 prefix for display
+        bech32Prefix = await fetchBech32Prefix();
+      }
+      
+      // Check if we already have this network in local storage
+      const existingNetworks = JSON.parse(localStorage.getItem('grpc_networks') || '{}');
+      const currentEndpointInfo: EndpointInfo = {
+        url: endpoint,
+        useTLS,
+        isActive: true
+      };
+      
+      if (existingNetworks[chainId]) {
+        // Network exists - update endpoints if needed
+        const existingEndpoints = existingNetworks[chainId].endpoints || [];
+        const endpointExists = existingEndpoints.some((e: EndpointInfo) => e.url === endpoint);
+        
+        let updatedEndpoints = existingEndpoints;
+        
+        if (!endpointExists) {
+          updatedEndpoints = [...existingEndpoints, currentEndpointInfo];
+        }
+        
+        // Set current endpoint as active, others as inactive
+        updatedEndpoints = updatedEndpoints.map((e: EndpointInfo) => ({
+          ...e,
+          isActive: e.url === endpoint
+        }));
+        
+        // Update network info in local storage
+        const updatedNetwork = {
+          ...existingNetworks[chainId],
+          bech32Prefix: existingNetworks[chainId].bech32Prefix || bech32Prefix,
+          endpoints: updatedEndpoints
+        };
+        
+        existingNetworks[chainId] = updatedNetwork;
+        localStorage.setItem('grpc_networks', JSON.stringify(existingNetworks));
+        
+        // Update component state
+        setNetworkInfo(updatedNetwork);
+      } else {
+        // Create new network entry
+        const newNetwork: NetworkInfo = {
+          chainId,
+          bech32Prefix,
+          endpoints: [currentEndpointInfo]
+        };
+        
+        existingNetworks[chainId] = newNetwork;
+        localStorage.setItem('grpc_networks', JSON.stringify(existingNetworks));
+        setNetworkInfo(newNetwork);
+      }
+    } catch (err) {
+      console.error('Failed to fetch network info:', err);
+      // Fallback to using endpoint as network ID
+      setNetworkInfo({
+        chainId: `network-${endpoint.replace(/[^a-zA-Z0-9]/g, '-')}`,
+        endpoints: [{ url: endpoint, useTLS, isActive: true }]
+      });
+    }
+  }, [endpoint, useTLS, executeGrpcCall, fetchBech32Prefix]);
+
+  // Initialize on component mount
   useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+    const initialize = async () => {
+      await fetchNetworkInfo();
+      await fetchServices();
+    };
+    
+    initialize();
+  }, [fetchNetworkInfo, fetchServices]);
 
   const handleMaximize = () => {
     setIsMaximized(!isMaximized);
     onMaximize();
   };
 
-  // Extract domain name or IP from endpoint for display
-  const getEndpointDisplay = () => {
-    try {
-      const parts = endpoint.split(':');
-      if (parts.length > 1) {
-        // Extract hostname without port
-        return parts[0];
-      }
-      return endpoint;
-    } catch {
-      return endpoint;
+  const handleEndpointChange = (endpointUrl: string) => {
+    if (!networkInfo) return;
+    
+    // Update active endpoint in network info
+    const updatedEndpoints = networkInfo.endpoints.map(e => ({
+      ...e,
+      isActive: e.url === endpointUrl
+    }));
+
+    // Update local state
+    setNetworkInfo({
+      ...networkInfo,
+      endpoints: updatedEndpoints
+    });
+    setActiveEndpoint(endpointUrl);
+
+    // Update in local storage
+    const storedNetworks = JSON.parse(localStorage.getItem('grpc_networks') || '{}');
+    if (storedNetworks[networkInfo.chainId]) {
+      storedNetworks[networkInfo.chainId].endpoints = updatedEndpoints;
+      localStorage.setItem('grpc_networks', JSON.stringify(storedNetworks));
     }
   };
 
@@ -99,65 +250,102 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
   };
 
   const handleMethodSelect = (method: Method, service: Service) => {
-    onMethodSelect(method, service, endpoint);
+    onMethodSelect(method, service, activeEndpoint);
+  };
+
+  // Helper function to get a display name for the network
+  const getNetworkDisplayName = () => {
+    if (!networkInfo) return 'Loading...';
+    
+    // If we have a bech32Prefix, show it with the chain ID
+    if (networkInfo.bech32Prefix) {
+      // Format the chain ID to look prettier
+      const formattedChainId = networkInfo.chainId
+        .replace(/-\d+$/, '')  // Remove version numbers at end
+        .replace(/-/g, ' ');   // Replace dashes with spaces
+      
+      return `${networkInfo.bech32Prefix} (${formattedChainId})`;
+    }
+    
+    // Fallback to just chain ID
+    return networkInfo.chainId;
   };
 
   return (
-    <div className={`bg-dark-surface border-b border-dark-border transition-all ${
-      isMaximized ? 'flex-grow' : 'flex-none'
-    } ${isMinimized ? 'h-12 overflow-hidden' : ''}`}>
-      <div className="flex justify-between items-center px-4 py-2 bg-dark-highlight">
-        <div className="flex items-center overflow-hidden">
-          <div className="flex gap-2 mr-3">
+    <div className={`${styles.container} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div className={styles.traffic}>
             <button
-              className="w-3 h-3 rounded-full bg-error-red hover:bg-opacity-80 transition"
+              className={`${styles.trafficButton} bg-error-red`}
               onClick={onClose}
               title="Close network"
             />
             <button
-              className="w-3 h-3 rounded-full bg-warning-yellow hover:bg-opacity-80 transition"
+              className={`${styles.trafficButton} bg-warning-yellow`}
               onClick={onMinimize}
               title={isMinimized ? "Expand network" : "Minimize network"}
             />
             <button
-              className="w-3 h-3 rounded-full bg-success-green hover:bg-opacity-80 transition"
+              className={`${styles.trafficButton} bg-success-green`}
               onClick={handleMaximize}
               title={isMaximized ? "Restore size" : "Maximize network"}
             />
           </div>
-          <div className="flex items-center truncate">
-            <span className="text-xs font-semibold text-blue-accent mr-2">{getEndpointDisplay()}</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${useTLS ? 'bg-success-green/20 text-success-green' : 'bg-warning-yellow/20 text-warning-yellow'}`}>
-              {useTLS ? 'TLS' : 'Plaintext'}
-            </span>
+          <div className={styles.endpointInfo}>
+            <div className={styles.endpointName}>
+              {getNetworkDisplayName()}
+            </div>
+            {networkInfo && networkInfo.endpoints.length > 1 && (
+              <div className={styles.endpointDetails}>
+                <select
+                  value={activeEndpoint}
+                  onChange={(e) => handleEndpointChange(e.target.value)}
+                  className="bg-dark-bg text-xs border border-dark-border rounded px-1 py-0.5"
+                >
+                  {networkInfo.endpoints.map((e, index) => (
+                    <option key={index} value={e.url}>
+                      {e.url} {e.useTLS ? '(TLS)' : '(Plain)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {networkInfo && networkInfo.endpoints.length === 1 && (
+              <div className={styles.endpointDetails}>
+                <span className={styles.endpointUrl}>{activeEndpoint}</span>
+                <span className={`${styles.tag} ${useTLS ? styles.tagTls : styles.tagPlain}`}>
+                  {useTLS ? 'TLS' : 'Plaintext'}
+                </span>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="text-xs text-text-secondary truncate ml-2">
-          {endpoint}
         </div>
       </div>
       
       {!isMinimized && (
-        loading ? (
-          <div className="flex flex-col items-center justify-center p-8">
-            <LoadingSpinner size="md" />
-            <span className="text-text-secondary mt-2">Loading services...</span>
-          </div>
-        ) : error ? (
-          <div className="p-4 text-error-red text-sm">
-            {error}
-          </div>
-        ) : (
-          <ServiceList
-            services={services}
-            selectedService={selectedService}
-            selectedMethod={selectedMethod}
-            onServiceSelect={handleServiceSelect}
-            onMethodSelect={handleMethodSelect}
-            endpoint={endpoint}
-            defaultExpanded={defaultExpanded}
-          />
-        )
+        <div className={styles.content}>
+          {loading ? (
+            <div className={styles.loading}>
+              <LoadingSpinner size="md" />
+              <span>Loading services...</span>
+            </div>
+          ) : error ? (
+            <div className={styles.error}>
+              {error}
+            </div>
+          ) : (
+            <ServiceList
+              services={services}
+              selectedService={selectedService}
+              selectedMethod={selectedMethod}
+              onServiceSelect={handleServiceSelect}
+              onMethodSelect={handleMethodSelect}
+              endpoint={activeEndpoint}
+              defaultExpanded={defaultExpanded}
+            />
+          )}
+        </div>
       )}
     </div>
   );

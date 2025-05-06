@@ -1,20 +1,21 @@
 // components/MethodForm.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Service, Method, Field } from './GrpcExplorerApp';
 import LoadingSpinner from './LoadingSpinner';
-import _styles from './MethodForm.module.css';
+import { getExampleValue, getExampleArrayValue } from '@/utils/grpcHelpers';
+import styles from './MethodForm.module.css';
 
 interface MethodFormProps {
   service: Service | null;
   method: Method | null;
-  onExecute: (_params: Record<string, any>) => void;
+  onExecute: (params: Record<string, any>) => void;
   isLoading?: boolean;
   hideButtons?: boolean;
 }
 
 const MethodForm: React.FC<MethodFormProps> = ({ 
   service, 
-  method, 
+  method,
   onExecute,
   isLoading = false,
   hideButtons = false 
@@ -25,25 +26,7 @@ const MethodForm: React.FC<MethodFormProps> = ({
   const [jsonInput, setJsonInput] = useState<string>('{}');
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  // Use useCallback for functions that are dependencies in useEffect
-  const getExampleValue = useCallback((type: string): any => {
-    switch (type) {
-      case 'string': return "example";
-      case 'int32':
-      case 'int64':
-      case 'uint32':
-      case 'uint64': return 0;
-      case 'float':
-      case 'double': return 0.0;
-      case 'bool': return false;
-      default: return "";
-    }
-  }, []);
-
-  const getExampleArrayValue = useCallback((type: string): any[] => {
-    return [getExampleValue(type)];
-  }, [getExampleValue]);
-
+  // Initialize form with example values when method changes
   useEffect(() => {
     if (!method) return;
 
@@ -63,7 +46,7 @@ const MethodForm: React.FC<MethodFormProps> = ({
     }
 
     setJsonInput(JSON.stringify(exampleData, null, 2));
-  }, [method, getExampleArrayValue, getExampleValue]);
+  }, [method]);
 
   if (!service || !method) return null;
 

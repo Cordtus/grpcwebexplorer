@@ -52,12 +52,14 @@ yarn dev
 ## Troubleshooting
 
 ### Connection Issues
+
 - Verify server is running
 - Check endpoint format (`host:port`)
 - Confirm reflection is enabled
 - Verify TLS setting matches server configuration
 
 ### Execution Errors
+
 - Ensure all required parameters are provided
 - Check parameter types
 - Verify server access with grpcurl directly

@@ -1,10 +1,11 @@
 // components/MethodCard.tsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { Service, Method, Field as _Field } from './GrpcExplorerApp';
+import React, { useState, useEffect } from 'react';
+import { Service, Method } from './GrpcExplorerApp';
 import MethodForm from './MethodForm';
 import LoadingSpinner from './LoadingSpinner';
 import JsonViewer from './JsonViewer';
-import _styles from './MethodCard.module.css';
+import { fetchMethodFields, executeGrpcCall, getEndpointDisplay } from '@/utils/grpcHelpers';
+import styles from './MethodCard.module.css';
 
 interface MethodCardProps {
   service: Service;
@@ -38,27 +39,24 @@ const MethodCard: React.FC<MethodCardProps> = ({
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [showResponse, setShowResponse] = useState<boolean>(true);
 
-  // Move fetchMethodFields inside useEffect or use useCallback
+  // Fetch method fields when component mounts
   useEffect(() => {
-    // Define fetchMethodFields inside useEffect to avoid dependency issues
-    const fetchMethodFields = async () => {
+    const loadMethodFields = async () => {
       if (!method.fields) {
         try {
           setLoading(true);
           setError(null);
           
-          const res = await fetch(
-            `/api/method?service=${encodeURIComponent(service.service)}&method=${encodeURIComponent(method.name)}&endpoint=${encodeURIComponent(endpoint)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
+          const { error: fieldsError, fields } = await fetchMethodFields(
+            service, method, endpoint, useTLS, cacheEnabled
           );
           
-          const data = await res.json();
-          
-          if (data.error) {
-            setError(data.error);
-          } else {
+          if (fieldsError) {
+            setError(fieldsError);
+          } else if (fields) {
             setMethodWithFields({
               ...method,
-              fields: data.fields
+              fields
             });
           }
         } catch (err) {
@@ -73,8 +71,7 @@ const MethodCard: React.FC<MethodCardProps> = ({
       }
     };
 
-    // Call the function
-    fetchMethodFields();
+    loadMethodFields();
   }, [method, service, endpoint, useTLS, cacheEnabled]);
 
   const executeQuery = async (params: Record<string, any>) => {
@@ -84,45 +81,25 @@ const MethodCard: React.FC<MethodCardProps> = ({
       setError(null);
       setShowResponse(true);
 
-      const res = await fetch('/api/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          endpoint,
-          service: service.service,
-          method: method.name,
-          params,
-          useTLS,
-          useCache: cacheEnabled
-        }),
-      });
+      const { error: execError, data } = await executeGrpcCall(
+        endpoint, 
+        service.service, 
+        method.name, 
+        params, 
+        useTLS, 
+        cacheEnabled
+      );
 
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
+      if (execError) {
+        setError(execError);
       } else {
-        setResponse(data.response);
+        setResponse(data);
       }
     } catch (err) {
       console.error('Failed to execute query:', err);
       setError('Failed to execute query');
     } finally {
       setIsExecuting(false);
-    }
-  };
-
-  const getEndpointDisplay = () => {
-    try {
-      const parts = endpoint.split(':');
-      if (parts.length > 1) {
-        return parts[0];
-      }
-      return endpoint;
-    } catch {
-      return endpoint;
     }
   };
 
@@ -168,7 +145,7 @@ const MethodCard: React.FC<MethodCardProps> = ({
             <div className="flex text-xs text-text-secondary">
               <span className="truncate max-w-[200px]">{service.service}</span>
               <span className="mx-1">•</span>
-              <span className="text-blue-accent">{getEndpointDisplay()}</span>
+              <span className="text-blue-accent">{getEndpointDisplay(endpoint)}</span>
               <span className={`ml-1 px-1 rounded ${useTLS ? 'bg-success-green/20 text-success-green' : 'bg-warning-yellow/20 text-warning-yellow'}`}>
                 {useTLS ? 'TLS' : 'Plain'}
               </span>
