@@ -3,20 +3,21 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 // Track active child processes
-const activeProcesses = new Set();
+const activeProcesses = new Set<any>();
 
 // Handle cleanup on process exit
 if (typeof process !== 'undefined') {
   ['SIGINT', 'SIGTERM', 'SIGQUIT'].forEach(signal => {
     process.on(signal, () => {
       console.log(`\nReceived ${signal}, cleaning up child processes...`);
-      for (const proc of activeProcesses) {
+      // Convert Set to Array before iteration to avoid the TS error
+      Array.from(activeProcesses).forEach(proc => {
         try {
           proc.kill();
         } catch (err) {
           // Ignore errors during cleanup
         }
-      }
+      });
       process.exit(0);
     });
   });

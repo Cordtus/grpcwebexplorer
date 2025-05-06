@@ -1,4 +1,5 @@
 // app/api/service/route.ts
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
