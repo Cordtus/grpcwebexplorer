@@ -5,7 +5,7 @@ import MethodForm from './MethodForm';
 import LoadingSpinner from './LoadingSpinner';
 import JsonViewer from './JsonViewer';
 import { fetchMethodFields, executeGrpcCall, getEndpointDisplay } from '@/utils/grpcHelpers';
-import styles from './MethodCard.module.css';
+import  _styles  from './MethodCard.module.css';
 
 interface MethodCardProps {
   service: Service;

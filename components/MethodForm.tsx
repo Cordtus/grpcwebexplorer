@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Service, Method, Field } from './GrpcExplorerApp';
 import LoadingSpinner from './LoadingSpinner';
 import { getExampleValue, getExampleArrayValue } from '@/utils/grpcHelpers';
-import styles from './MethodForm.module.css';
+import _styles from './MethodForm.module.css';
 
 interface MethodFormProps {
   service: Service | null;
   method: Method | null;
-  onExecute: (params: Record<string, any>) => void;
+  onExecute: (_params: Record<string, any>) => void;
   isLoading?: boolean;
   hideButtons?: boolean;
 }

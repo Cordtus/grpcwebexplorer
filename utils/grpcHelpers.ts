@@ -1,5 +1,5 @@
 // utils/grpcHelpers.ts
-import { Service, Method, Field } from '@/components/GrpcExplorerApp';
+import { Service, Method, Field as _Field } from '@/components/GrpcExplorerApp';
 
 // Common API request helper
 export const executeGrpcCall = async (
