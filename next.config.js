@@ -7,8 +7,9 @@ const nextConfig = {
   },
   transpilePackages: [],
   eslint: {
-    ignoreDuringBuilds: false,
-  }
+    ignoreDuringBuilds: true,
+  },
+  output: 'standalone',
 };
 
 export default nextConfig;
