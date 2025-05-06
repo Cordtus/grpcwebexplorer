@@ -1,27 +1,32 @@
 // components/MethodForm.tsx
 import React, { useState, useEffect } from 'react';
 import { Service, Method, Field } from './GrpcExplorerApp';
-import styles from './MethodForm.module.css';
+import LoadingSpinner from './LoadingSpinner';
+import { getExampleValue, getExampleArrayValue } from '@/utils/grpcHelpers';
+import _styles from './MethodForm.module.css';
 
 interface MethodFormProps {
   service: Service | null;
   method: Method | null;
-  onExecute: (params: Record<string, any>) => void;
+  onExecute: (_params: Record<string, any>) => void;
+  isLoading?: boolean;
+  hideButtons?: boolean;
 }
 
-const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) => {
+const MethodForm: React.FC<MethodFormProps> = ({ 
+  service, 
+  method,
+  onExecute,
+  isLoading = false,
+  hideButtons = false 
+}) => {
   const [formState, setFormState] = useState<Record<string, any>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [jsonMode, setJsonMode] = useState<boolean>(false);
   const [jsonInput, setJsonInput] = useState<string>('{}');
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [isPanelMinimized, setIsPanelMinimized] = useState<boolean>(false);
-  const [isPanelFullWidth, setIsPanelFullWidth] = useState<boolean>(false);
 
-  const handleMinimizePanel = () => setIsPanelMinimized(!isPanelMinimized);
-  const handleMaximizePanel = () => setIsPanelFullWidth(!isPanelFullWidth);
-  const handleClosePanel = () => setIsPanelMinimized(true);
-
+  // Initialize form with example values when method changes
   useEffect(() => {
     if (!method) return;
 
@@ -35,8 +40,8 @@ const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) =
     if (method.fields?.length) {
       method.fields.forEach(field => {
         exampleData[field.name] = field.repeated
-        ? getExampleArrayValue(field.type)
-        : getExampleValue(field.type);
+          ? getExampleArrayValue(field.type)
+          : getExampleValue(field.type);
       });
     }
 
@@ -44,22 +49,6 @@ const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) =
   }, [method]);
 
   if (!service || !method) return null;
-
-  const getExampleValue = (type: string): any => {
-    switch (type) {
-      case 'string': return "example";
-      case 'int32':
-      case 'int64':
-      case 'uint32':
-      case 'uint64': return 0;
-      case 'float':
-      case 'double': return 0.0;
-      case 'bool': return false;
-      default: return "";
-    }
-  };
-
-  const getExampleArrayValue = (type: string): any[] => [getExampleValue(type)];
 
   const handleInputChange = (fieldName: string, value: string, field: Field) => {
     let parsedValue: any = value;
@@ -112,8 +101,8 @@ const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) =
 
   const toggleJsonMode = () => {
     if (!jsonMode) {
-      if (Object.keys(formState).length === 0 && method?.fields?.length > 0) {
-        const exampleData = {};
+      if (Object.keys(formState).length === 0 && method?.fields && method.fields.length > 0) {
+        const exampleData: Record<string, any> = {};
         method.fields.forEach(field => {
           exampleData[field.name] = field.repeated ? getExampleArrayValue(field.type) : getExampleValue(field.type);
         });
@@ -149,74 +138,135 @@ const MethodForm: React.FC<MethodFormProps> = ({ service, method, onExecute }) =
   };
 
   return (
-    <div className={`${styles.container} ${isPanelMinimized ? styles.minimized : ''} ${isPanelFullWidth ? styles.fullWidth : ''}`}>
-    <div className={styles.header}>
-    <div className={styles.headerLeft}>
-    <div className={styles.traffic}>
-    <button className={styles.trafficButton} style={{ backgroundColor: '#FF605C' }} onClick={handleClosePanel} title="Minimize panel" aria-label="Minimize panel" />
-    <button className={styles.trafficButton} style={{ backgroundColor: '#FFBD44' }} onClick={handleMinimizePanel} title={isPanelMinimized ? 'Restore panel' : 'Minimize panel'} aria-label={isPanelMinimized ? 'Restore panel' : 'Minimize panel'} />
-    <button className={styles.trafficButton} style={{ backgroundColor: '#00CA4E' }} onClick={handleMaximizePanel} title={isPanelFullWidth ? 'Restore panel size' : 'Maximize panel'} aria-label={isPanelFullWidth ? 'Restore panel size' : 'Maximize panel'} />
-    </div>
-    <div className={styles.headerTitle}>
-    <h2>{method.name}</h2>
-    <span className={styles.serviceName}>{service.service}</span>
-    </div>
-    </div>
-    <div className={styles.headerActions}>
-    <button className={styles.modeToggle} onClick={toggleJsonMode} disabled={jsonMode && jsonError !== null}>
-    {jsonMode ? 'Form Mode' : 'JSON Mode'}
-    </button>
-    </div>
-    </div>
-
-    <div className={styles.formContainer}>
-    {jsonMode ? (
-      <div className={styles.jsonContainer}>
-      <textarea className={`${styles.jsonEditor} ${jsonError ? styles.jsonError : ''}`} value={jsonInput} onChange={handleJsonInputChange} placeholder="Enter JSON request parameters..." rows={20} />
-      {jsonError && <div className={styles.errorMessage}>{jsonError}</div>}
+    <div className="flex flex-col h-full">
+      <div className="flex justify-between items-center px-4 py-2 bg-dark-highlight border-b border-dark-border">
+        <div className="text-sm text-text-primary font-medium">Request Parameters</div>
+        <button 
+          className="px-2 py-1 text-xs bg-dark-bg border border-dark-border rounded hover:bg-dark-highlight transition-colors"
+          onClick={toggleJsonMode}
+          disabled={jsonMode && jsonError !== null || isLoading}
+        >
+          {jsonMode ? 'Form Mode' : 'JSON Mode'}
+        </button>
       </div>
-    ) : (
-      <div className={styles.fieldsList}>
-      {method.fields?.length ? method.fields.map(field => (
-        <div key={field.name} className={styles.fieldContainer}>
-        <label className={styles.fieldLabel}>
-        {field.name}
-        <span className={styles.fieldType}>{field.repeated ? `${field.type}[]` : field.type}</span>
-        </label>
-        {field.options && <div className={styles.fieldDescription}>{field.options}</div>}
-        {field.repeated ? (
-          <div className={styles.arrayContainer}>
-          {(formState[field.name] || []).map((value: any, index: number) => (
-            <div key={index} className={styles.arrayItem}>
-            <input type="text" value={value} onChange={(e) => handleArrayChange(field.name, index, e.target.value, field)} className={styles.input} placeholder={`Enter ${field.type}...`} />
-            <button className={styles.removeButton} onClick={() => removeArrayItem(field.name, index)} type="button">×</button>
-            </div>
-          ))}
-          <button className={styles.addButton} onClick={() => addArrayItem(field.name)} type="button">+ Add Item</button>
-          </div>
-        ) : (
-          <div>
-          {field.type === 'bool' ? (
-            <select value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={styles.select}>
-            <option value="">Select...</option>
-            <option value="true">true</option>
-            <option value="false">false</option>
-            </select>
-          ) : (
-            <input type={["int32", "int64", "uint32", "uint64", "float", "double"].includes(field.type) ? 'number' : 'text'} value={formState[field.name] || ''} onChange={(e) => handleInputChange(field.name, e.target.value, field)} className={`${styles.input} ${formErrors[field.name] ? styles.inputError : ''}`} placeholder={`Enter ${field.type}...`} />
-          )}
-          {formErrors[field.name] && <div className={styles.errorMessage}>{formErrors[field.name]}</div>}
-          </div>
-        )}
+
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center flex-grow p-8">
+          <LoadingSpinner size="md" />
+          <p className="mt-4 text-text-secondary">Processing...</p>
         </div>
-      )) : <div className={styles.emptyFields}>No parameters required</div>}
-      </div>
-    )}
-    </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-auto p-4">
+            {jsonMode ? (
+              <div className="h-full flex flex-col">
+                <textarea 
+                  className={`flex-1 min-h-[200px] p-3 bg-dark-bg border ${jsonError ? 'border-error-red' : 'border-dark-border'} rounded font-mono text-sm resize-none`}
+                  value={jsonInput} 
+                  onChange={handleJsonInputChange} 
+                  placeholder="Enter JSON request parameters..." 
+                />
+                {jsonError && <div className="mt-2 text-sm text-error-red">{jsonError}</div>}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {method.fields?.length ? method.fields.map(field => (
+                  <div key={field.name} className="pb-3 border-b border-dark-border last:border-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-sm font-medium text-text-primary">{field.name}</label>
+                      <span className="text-xs px-1.5 py-0.5 bg-dark-bg rounded text-text-secondary font-mono">
+                        {field.repeated ? `${field.type}[]` : field.type}
+                      </span>
+                    </div>
+                    
+                    {field.options && (
+                      <div className="mb-2 p-2 bg-dark-bg rounded text-xs text-text-secondary font-mono overflow-x-auto">
+                        {field.options}
+                      </div>
+                    )}
+                    
+                    {field.repeated ? (
+                      <div className="space-y-2">
+                        {(formState[field.name] || []).map((value: any, index: number) => (
+                          <div key={index} className="flex gap-2">
+                            <input 
+                              type="text" 
+                              value={value} 
+                              onChange={(e) => handleArrayChange(field.name, index, e.target.value, field)} 
+                              className="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm outline-none focus:border-blue-accent" 
+                              placeholder={`Enter ${field.type}...`} 
+                            />
+                            <button 
+                              className="w-8 flex items-center justify-center bg-dark-bg border border-dark-border rounded hover:bg-dark-highlight text-error-red" 
+                              onClick={() => removeArrayItem(field.name, index)} 
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          className="w-full py-1.5 border border-dashed border-dark-border rounded text-xs text-text-secondary hover:bg-dark-highlight transition-colors" 
+                          onClick={() => addArrayItem(field.name)} 
+                          type="button"
+                        >
+                          + Add Item
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {field.type === 'bool' ? (
+                          <select 
+                            value={formState[field.name] || ''} 
+                            onChange={(e) => handleInputChange(field.name, e.target.value, field)} 
+                            className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm outline-none focus:border-blue-accent"
+                          >
+                            <option value="">Select...</option>
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                          </select>
+                        ) : (
+                          <input 
+                            type={["int32", "int64", "uint32", "uint64", "float", "double"].includes(field.type) ? 'number' : 'text'} 
+                            value={formState[field.name] || ''} 
+                            onChange={(e) => handleInputChange(field.name, e.target.value, field)} 
+                            className={`w-full px-3 py-2 bg-dark-bg border ${formErrors[field.name] ? 'border-error-red' : 'border-dark-border'} rounded text-sm outline-none focus:border-blue-accent`}
+                            placeholder={`Enter ${field.type}...`} 
+                          />
+                        )}
+                        {formErrors[field.name] && <div className="mt-1 text-xs text-error-red">{formErrors[field.name]}</div>}
+                      </div>
+                    )}
+                  </div>
+                )) : (
+                  <div className="py-8 text-center text-text-secondary">
+                    No parameters required
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-    <div className={styles.actionsContainer}>
-    <button className={styles.executeButton} onClick={handleSubmit} disabled={(jsonMode && jsonError !== null) || Object.keys(formErrors).length > 0}>Execute</button>
-    </div>
+          {!hideButtons && (
+            <div className="p-4 bg-dark-highlight border-t border-dark-border flex justify-end">
+              <button
+                className={`px-4 py-2 rounded text-white font-medium ${isLoading || (jsonMode && jsonError) || Object.keys(formErrors).length > 0 ? 'bg-blue-accent opacity-50 cursor-not-allowed' : 'bg-blue-accent hover:bg-blue-accent-hover'}`}
+                onClick={handleSubmit}
+                disabled={isLoading || (jsonMode && jsonError !== null) || Object.keys(formErrors).length > 0}
+              >
+                {isLoading ? (
+                  <span className="flex items-center">
+                    <LoadingSpinner size="sm" color="#ffffff" />
+                    <span className="ml-2">Executing...</span>
+                  </span>
+                ) : (
+                  'Execute'
+                )}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

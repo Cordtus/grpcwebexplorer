@@ -1,14 +1,29 @@
 // app/api/execute/route.ts
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
 
 const execAsync = promisify(exec);
+
+// Ensure output directory exists
+async function ensureOutputDir() {
+  const outputDir = path.join(process.cwd(), 'public', 'output');
+  try {
+    await fs.promises.mkdir(outputDir, { recursive: true });
+    return outputDir;
+  } catch (err) {
+    console.error('Failed to create output directory:', err);
+    throw err;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { endpoint, service, method, params, useTLS } = body;
+    const { endpoint, service, method, params, useTLS, useCache = true } = body;
 
     if (!endpoint || !service || !method) {
       return NextResponse.json(
@@ -17,7 +32,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Unique identifier for this request - used for caching
+    const safeEndpoint = endpoint.replace(/[:/.]/g, '_');
+    const safeService = service.replace(/[:.]/g, '_');
+    const safeMethod = method.replace(/[:.]/g, '_');
+    const paramsHash = JSON.stringify(params).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+    const cacheFileName = `${safeEndpoint}${useTLS ? '_tls' : ''}_${safeService}_${safeMethod}_${paramsHash}_result.json`;
+
     try {
+      // Check cache first if enabled
+      if (useCache) {
+        const outputDir = await ensureOutputDir();
+        const cacheFilePath = path.join(outputDir, cacheFileName);
+
+        try {
+          const stats = await fs.promises.stat(cacheFilePath);
+          const fileAge = Date.now() - stats.mtimeMs;
+          const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+          if (fileAge < maxAge) {
+            // Cache file exists and is not expired
+            const cachedData = await fs.promises.readFile(cacheFilePath, 'utf8');
+            return NextResponse.json({ response: JSON.parse(cachedData) });
+          }
+        } catch (err) {
+          // File doesn't exist or other error, proceed to fetch fresh data
+        }
+      }
+
       // Execute grpcurl command with the provided parameters
       const grpcurlCommand = buildGrpcurlCommand(endpoint, service, method, params, useTLS);
 
@@ -39,6 +81,18 @@ export async function POST(request: NextRequest) {
           { error: `Failed to parse response: ${stdout}` },
           { status: 500 }
         );
+      }
+
+      // Cache the result if caching is enabled
+      if (useCache) {
+        try {
+          const outputDir = await ensureOutputDir();
+          const cacheFilePath = path.join(outputDir, cacheFileName);
+          await fs.promises.writeFile(cacheFilePath, JSON.stringify(response, null, 2), 'utf8');
+        } catch (err) {
+          console.error('Failed to cache response:', err);
+          // Continue even if caching fails
+        }
       }
 
       return NextResponse.json({ response });
