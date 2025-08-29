@@ -1,0 +1,6 @@
+   import { ThemeProvider } from "@/components/theme-provider"; // shadcn generator
+   export const AppTheme = ({ children }: { children: React.ReactNode }) => (
+     <ThemeProvider defaultTheme="dark" storageKey="grpc-theme">
+       {children}
+     </ThemeProvider>
+   );

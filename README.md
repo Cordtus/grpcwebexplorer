@@ -1,319 +1,222 @@
 # gRPC Explorer Web UI
 
-Web interface for exploring and interacting with gRPC services using reflection.
+A modern web interface for exploring and interacting with gRPC services using reflection. Features a clean 3-panel layout for efficient service discovery and method testing.
 
-## Features
+## ✨ Features
 
-- Connect to gRPC servers with reflection enabled
-- Dynamic service and method discovery
-- Hierarchical navigation (chain > module > service > methods)
-- Parameter form generation based on protobuf definitions
-- TLS/non-TLS connection support
-- JSON response viewer with filtering and formatting
-- Supports multiple endpoints per network
+### Core Functionality
+- 🔌 **Multi-Network Support** - Connect to multiple gRPC endpoints simultaneously
+- 🎨 **Color-Coded Networks** - Visual differentiation between different networks
+- 🌳 **Hierarchical Method Browser** - Methods organized by their full path structure
+- 📝 **Dynamic Parameter Forms** - JSON editor for request parameters
+- 📊 **Response Visualization** - Clean JSON viewer with syntax highlighting
+- 🔐 **TLS/SSL Support** - Connect to secure and insecure endpoints
 
-## Prerequisites
+### User Experience
+- ⌨️ **Keyboard Shortcuts** - Quick actions for power users
+- 📥 **Import/Export** - Save and load method parameters
+- 📚 **Example Endpoints** - Pre-configured popular gRPC services
+- 💾 **Execution History** - Track your API calls (stored locally)
+- 🎯 **Smart Tab Management** - Method tabs with no duplicates
+- 🔍 **Search & Filter** - Find methods quickly
 
-- Node.js v14+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js v14 or later
 - Yarn (preferred) or npm
-- [grpcurl](https://github.com/fullstorydev/grpcurl) *make sure to configure in PATH*
 
-## Installation & Development
+### Installation
 
 ```bash
-# Clone repository
+# Clone the repository
 git clone <repo-url> grpc-explorer-web
 cd grpc-explorer-web
 
-# Install dependencies and bootstrap project
+# Install dependencies
 yarn install
-yarn bootstrap
 
 # Start development server
 yarn dev
 ```
 
-## Production Deployment
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The application can be built as a standalone Next.js application that includes its own server. Here's how to build and deploy it:
+## 🎮 Usage
 
-### Building for Production
+### Adding Networks
 
-```bash
-# Clean and build the production standalone version
-yarn build:prod
+1. Click **"Add Network"** button or press `Ctrl+N`
+2. Enter your gRPC endpoint (e.g., `grpc.example.com:443`)
+3. Toggle TLS/SSL if needed
+4. Choose from example endpoints for quick testing
 
-# Verify the build was successful
-ls -la .next/standalone/
+### Exploring Services
+
+1. **Left Panel**: Expand network tabs to see available services
+2. **Navigate**: Click through the hierarchical tree structure
+3. **Search**: Use the filter box to find specific methods
+
+### Testing Methods
+
+1. **Select**: Click any method to open it in the center panel
+2. **Parameters**: Edit JSON parameters in the right panel
+3. **Execute**: Click Execute or press `Ctrl+Enter`
+4. **View Response**: See results in the response tab
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+N` | Add new network |
+| `Ctrl+W` | Close current tab |
+| `Ctrl+Enter` | Execute method |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+Shift+E` | Export parameters |
+| `Ctrl+Shift+I` | Import parameters |
+| `Ctrl+Shift+?` | Show shortcuts help |
+
+## 🏗️ Architecture
+
+### UI Layout
+- **Left Panel (20%)**: Network explorer with collapsible tabs
+- **Center Panel (40%)**: Method descriptors and documentation
+- **Right Panel (40%)**: Parameter editor and response viewer
+
+### Tech Stack
+- **Framework**: Next.js 14 (App Router)
+- **UI Library**: React 18
+- **Styling**: Tailwind CSS + shadcn/ui
+- **State**: React hooks + localStorage
+- **Icons**: Lucide React
+
+### Project Structure
+```
+├── app/                    # Next.js app router
+│   ├── api/grpc/          # API routes for gRPC operations
+│   └── page.tsx           # Main page
+├── components/            # React components
+│   ├── NetworkPanel       # Left panel - network explorer
+│   ├── MethodTabsPanel    # Center panel - method tabs
+│   └── MethodInteractionPanel # Right panel - interaction
+├── lib/                   # Utilities and hooks
+│   ├── hooks/            # Custom React hooks
+│   ├── constants/        # App constants
+│   └── utils/            # Helper functions
+└── public/               # Static assets
 ```
 
-### Running the Production Build
+## 🔧 Configuration
 
-The standalone application must be run from within the `.next/standalone` directory:
+### Environment Variables
 
-```bash
-# Change to the standalone directory
-cd .next/standalone
+Create a `.env.local` file for configuration:
 
-# Start the production server
-NODE_ENV=production PORT=3000 node server.js
+```env
+# gRPC Configuration (optional)
+GRPC_ENDPOINTS=endpoint1:443,endpoint2:443
+
+# Cache settings (optional)
+CACHE_TTL=3600000
 ```
 
-Alternatively, you can create a simple launch script:
-
-```bash
-# Create a launch script (from project root)
-echo '#!/bin/bash
-cd .next/standalone
-NODE_ENV=production PORT=3000 node server.js' > start-prod.sh
-
-# Make it executable
-chmod +x start-prod.sh
-
-# Run it
-./start-prod.sh
-```
-
-### Deployment to a Server
-
-To deploy to a remote server:
+## 📦 Building for Production
 
 ```bash
 # Build the application
 yarn build:prod
 
-# Copy the standalone directory to your server
-# (Replace user@server:/path with your server details)
-rsync -avz --exclude node_modules .next/standalone/ user@server:/path/to/deployment/
+# The standalone build will be in .next/standalone/
+cd .next/standalone
 
-# SSH into your server and run the application
-ssh user@server "cd /path/to/deployment && NODE_ENV=production PORT=3000 node server.js"
+# Run the production server
+NODE_ENV=production PORT=3000 node server.js
 ```
 
-### Using PM2 for Process Management
+## 🚢 Deployment
 
-For production environments, you may want to use PM2 to manage the Node.js process:
+### Using PM2
 
 ```bash
-# Install PM2 globally on your server
+# Install PM2
 npm install -g pm2
 
-# Start the application with PM2
+# Start the application
 cd .next/standalone
-pm2 start server.js --name grpc-explorer -- PORT=3000 NODE_ENV=production
+pm2 start server.js --name grpc-explorer --env production
 
-# Make PM2 restart the app on server reboot
+# Save PM2 configuration
 pm2 save
 pm2 startup
 ```
 
-### Troubleshooting Production Builds
+### Using Docker
 
-If you encounter issues with the production build:
-
-1. **Missing static assets (404 errors)**:
-
-   ```bash
-   # Ensure static files are copied correctly
-   mkdir -p .next/standalone/public/_next
-   cp -r .next/static .next/standalone/public/_next/
-   cp -r public/* .next/standalone/public/
-   ```
-
-2. **Next.js configuration issues**:
-   - Verify your `next.config.js` includes `output: 'standalone'`
-   - Make sure the server can find static assets:
-
-   ```js
-   // next.config.js
-   const nextConfig = {
-     output: 'standalone',
-     // Other settings...
-   };
-   ```
-
-3. **Connection refused errors**:
-   - Ensure server.js is running inside the standalone directory
-   - Check the PORT environment variable is set correctly
-   - Verify no firewall is blocking the port
-
-**Important**: Due to Next.js limitations you *must* launch the production server from within the `.next/standalone` directory, not from the project root.
-
-<details>
-<summary>Running as systemd service</summary>
-
-## Deploying gRPC Explorer with systemd
-
-This guide explains how to set up the gRPC Explorer Web UI as a systemd service for reliable operation on Linux servers.
-
-### Prerequisites
-
-- A Linux server with systemd (Ubuntu, Debian, CentOS, Fedora, etc.)
-- Node.js v14+ installed
-- Git for cloning the repository
-- A user account to run the service (we'll use `grpc-user` in this example)
-
-### Create a system user (optional but recommended)
-
-For better security, create a dedicated system user to run the application:
-
-```bash
-sudo useradd --system --create-home --shell /bin/false grpc-user
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY public ./public
+EXPOSE 3000
+ENV NODE_ENV production
+CMD ["node", "server.js"]
 ```
 
-### Install and build the application
+### Using systemd
 
-```bash
-# Clone repository to /opt
-sudo git clone <repo-url> /opt/grpc-explorer
-cd /opt/grpc-explorer
+See the [systemd deployment guide](./docs/systemd-deployment.md) for detailed instructions.
 
-# Install dependencies and build
-sudo yarn install
-sudo yarn build:prod
+## 🎯 Roadmap
 
-# Set appropriate permissions
-sudo chown -R grpc-user:grpc-user /opt/grpc-explorer
-```
+### In Progress
+- [ ] Native gRPC client implementation (replacing mock data)
+- [ ] Real-time streaming support
+- [ ] Method documentation from proto comments
 
-### Create a systemd service file
+### Planned
+- [ ] Dark/light theme toggle
+- [ ] Request/response templates
+- [ ] Performance metrics
+- [ ] Collaboration features
+- [ ] Proto file upload support
 
-Create the service file at `/etc/systemd/system/grpc-explorer.service`:
+## ⚠️ Current Limitations
 
-```bash
-sudo nano /etc/systemd/system/grpc-explorer.service
-```
+1. **Mock Data**: Currently returns mock responses (gRPC integration pending)
+2. **No Streaming**: Server-streaming and bidirectional streaming not yet supported
+3. **No Authentication**: Token/certificate authentication not implemented
+4. **Browser Only**: No offline/desktop version available
 
-Paste the following content:
+## 🤝 Contributing
 
-```ini
-[Unit]
-Description=gRPC Explorer Web UI
-After=network.target
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-[Service]
-Type=simple
-User=grpc-user
-Group=grpc-user
-WorkingDirectory=/opt/grpc-explorer/.next/standalone
-ExecStart=/usr/bin/node server.js
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=grpc-explorer
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-# Security hardening (optional but recommended)
-ProtectSystem=full
-NoNewPrivileges=true
-PrivateTmp=true
+## 📝 License
 
-[Install]
-WantedBy=multi-user.target
-```
+MIT License - see [LICENSE](LICENSE) file for details
 
-### Enable and start the service
+## 🙏 Acknowledgments
 
-```bash
-# Reload systemd to recognize the new service
-sudo systemctl daemon-reload
+- [gRPC](https://grpc.io/) for the amazing RPC framework
+- [shadcn/ui](https://ui.shadcn.com/) for the beautiful UI components
+- [Next.js](https://nextjs.org/) for the React framework
+- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
 
-# Enable the service to start on boot
-sudo systemctl enable grpc-explorer
+## 📧 Support
 
-# Start the service
-sudo systemctl start grpc-explorer
+For issues and questions:
+- Open an issue on [GitHub](https://github.com/your-repo/issues)
+- Check existing issues before creating new ones
+- Provide detailed reproduction steps for bugs
 
-# Check status
-sudo systemctl status grpc-explorer
-```
+---
 
-### Configure firewall (if needed)
-
-If you have a firewall enabled, allow traffic on the port:
-
-```bash
-# For UFW (Ubuntu/Debian)
-sudo ufw allow 3000/tcp
-
-# For firewalld (CentOS/Fedora)
-sudo firewall-cmd --permanent --add-port=3000/tcp
-sudo firewall-cmd --reload
-```
-
-### Set up a reverse proxy (optional but recommended)
-
-For production use, it's recommended to set up Nginx or Apache as a reverse proxy:
-
-#### Nginx example
-
-```bash
-sudo nano /etc/nginx/sites-available/grpc-explorer
-```
-
-```nginx
-server {
-    listen 80;
-    server_name grpc-explorer.yourdomain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-```bash
-sudo ln -s /etc/nginx/sites-available/grpc-explorer /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-### Managing the service
-
-```bash
-# Stop the service
-sudo systemctl stop grpc-explorer
-
-# Restart the service
-sudo systemctl restart grpc-explorer
-
-# View logs
-sudo journalctl -u grpc-explorer
-
-# Follow logs in real-time
-sudo journalctl -u grpc-explorer -f
-```
-
-### Updating the application
-
-```bash
-cd /opt/grpc-explorer
-sudo git pull
-sudo yarn install
-sudo yarn build:prod
-sudo chown -R grpc-user:grpc-user /opt/grpc-explorer
-sudo systemctl restart grpc-explorer
-```
-
-#### Troubleshooting
-
-If the service fails to start:
-
-1. Check the logs: `sudo journalctl -u grpc-explorer -n 50`
-2. Verify the working directory: Make sure `/opt/grpc-explorer/.next/standalone` exists
-3. Check permissions: Ensure `grpc-user` has access to all required files
-4. Validate Node.js path: Confirm that `/usr/bin/node` exists (adjust path if needed)
-5. Test manually:
-
-   ```bash
-   sudo -u grpc-user bash -c "cd /opt/grpc-explorer/.next/standalone && NODE_ENV=production PORT=3000 node server.js"
-   ```
-
-</details>
+Built with ❤️ for the gRPC community
