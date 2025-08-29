@@ -1,18 +1,19 @@
 module.exports = {
   apps: [{
     name: 'grpc-explorer',
-    script: 'npm',
-    args: 'run start',
+    script: 'server.js',
+    cwd: './.next/standalone',
     instances: 1,
     autorestart: true,
     watch: false,
-    max_memory_restart: '300M',
+    max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000,
-      NODE_OPTIONS: '--max-old-space-size=512'
+      PORT: 3000
     },
-    no_treekill: true,
-    kill_timeout: 3000
+    error_file: './logs/err.log',
+    out_file: './logs/out.log',
+    log_file: './logs/combined.log',
+    time: true
   }]
 };

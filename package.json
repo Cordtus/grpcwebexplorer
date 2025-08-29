@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "init": "node scripts/init-project.js",
-    "setup": "node scripts/setup-dev.js",
-    "bootstrap": "node scripts/init-project.js && node scripts/setup-dev.js",
     "dev": "next dev",
     "build": "next build",
     "build:prod": "NEXT_TELEMETRY_DISABLED=1 next build",

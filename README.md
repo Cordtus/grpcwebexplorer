@@ -1,157 +1,165 @@
-# gRPC Explorer Web UI
+# gRPC Web Explorer
 
-A modern web interface for exploring and interacting with gRPC services using reflection. Features a clean 3-panel layout for efficient service discovery and method testing.
+A web-based interface for exploring and interacting with gRPC services through reflection. The application provides a three-panel layout for service discovery, method inspection, and real-time execution.
 
-## ✨ Features
+## Prerequisites
 
-### Core Functionality
-- 🔌 **Multi-Network Support** - Connect to multiple gRPC endpoints simultaneously
-- 🎨 **Color-Coded Networks** - Visual differentiation between different networks
-- 🌳 **Hierarchical Method Browser** - Methods organized by their full path structure
-- 📝 **Dynamic Parameter Forms** - JSON editor for request parameters
-- 📊 **Response Visualization** - Clean JSON viewer with syntax highlighting
-- 🔐 **TLS/SSL Support** - Connect to secure and insecure endpoints
+- Node.js 14.0 or higher
+- Yarn package manager
+- grpcurl installed locally (`brew install grpcurl` on macOS)
 
-### User Experience
-- ⌨️ **Keyboard Shortcuts** - Quick actions for power users
-- 📥 **Import/Export** - Save and load method parameters
-- 📚 **Example Endpoints** - Pre-configured popular gRPC services
-- 💾 **Execution History** - Track your API calls (stored locally)
-- 🎯 **Smart Tab Management** - Method tabs with no duplicates
-- 🔍 **Search & Filter** - Find methods quickly
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js v14 or later
-- Yarn (preferred) or npm
-
-### Installation
+## Installation
 
 ```bash
-# Clone the repository
-git clone <repo-url> grpc-explorer-web
-cd grpc-explorer-web
-
-# Install dependencies
+git clone <repository-url>
+cd grpcWebExplorer
 yarn install
+```
 
-# Start development server
+## Development
+
+Start the development server:
+
+```bash
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+The application will be available at `http://localhost:3000`
 
-## 🎮 Usage
-
-### Adding Networks
-
-1. Click **"Add Network"** button or press `Ctrl+N`
-2. Enter your gRPC endpoint (e.g., `grpc.example.com:443`)
-3. Toggle TLS/SSL if needed
-4. Choose from example endpoints for quick testing
-
-### Exploring Services
-
-1. **Left Panel**: Expand network tabs to see available services
-2. **Navigate**: Click through the hierarchical tree structure
-3. **Search**: Use the filter box to find specific methods
-
-### Testing Methods
-
-1. **Select**: Click any method to open it in the center panel
-2. **Parameters**: Edit JSON parameters in the right panel
-3. **Execute**: Click Execute or press `Ctrl+Enter`
-4. **View Response**: See results in the response tab
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+N` | Add new network |
-| `Ctrl+W` | Close current tab |
-| `Ctrl+Enter` | Execute method |
-| `Ctrl+Tab` | Next tab |
-| `Ctrl+Shift+Tab` | Previous tab |
-| `Ctrl+Shift+E` | Export parameters |
-| `Ctrl+Shift+I` | Import parameters |
-| `Ctrl+Shift+?` | Show shortcuts help |
-
-## 🏗️ Architecture
-
-### UI Layout
-- **Left Panel (20%)**: Network explorer with collapsible tabs
-- **Center Panel (40%)**: Method descriptors and documentation
-- **Right Panel (40%)**: Parameter editor and response viewer
-
-### Tech Stack
-- **Framework**: Next.js 14 (App Router)
-- **UI Library**: React 18
-- **Styling**: Tailwind CSS + shadcn/ui
-- **State**: React hooks + localStorage
-- **Icons**: Lucide React
-
-### Project Structure
-```
-├── app/                    # Next.js app router
-│   ├── api/grpc/          # API routes for gRPC operations
-│   └── page.tsx           # Main page
-├── components/            # React components
-│   ├── NetworkPanel       # Left panel - network explorer
-│   ├── MethodTabsPanel    # Center panel - method tabs
-│   └── MethodInteractionPanel # Right panel - interaction
-├── lib/                   # Utilities and hooks
-│   ├── hooks/            # Custom React hooks
-│   ├── constants/        # App constants
-│   └── utils/            # Helper functions
-└── public/               # Static assets
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env.local` file for configuration:
-
-```env
-# gRPC Configuration (optional)
-GRPC_ENDPOINTS=endpoint1:443,endpoint2:443
-
-# Cache settings (optional)
-CACHE_TTL=3600000
-```
-
-## 📦 Building for Production
+## Production Build
 
 ```bash
-# Build the application
 yarn build:prod
+```
 
-# The standalone build will be in .next/standalone/
+The production build generates a standalone Node.js application in `.next/standalone/`
+
+## Running in Production
+
+```bash
 cd .next/standalone
-
-# Run the production server
 NODE_ENV=production PORT=3000 node server.js
 ```
 
-## 🚢 Deployment
+## Usage
 
-### Using PM2
+### Connecting to gRPC Services
+
+1. Click "Add Network" in the application header
+2. Enter the gRPC endpoint (e.g., `grpc.example.com` or `grpc.example.com:443`)
+3. Configure TLS settings if required
+4. The application will automatically discover available services through reflection
+
+### Service Discovery
+
+The left panel displays connected networks and their services. Services are organized hierarchically and can be expanded to reveal available methods. The application caches service definitions by chain ID (for blockchain services) or by endpoint to improve performance.
+
+### Method Execution
+
+1. Select a method from the service tree
+2. The method descriptor appears in the center panel showing request/response types
+3. Enter JSON parameters in the right panel's editor
+4. Click "Execute" to invoke the method
+5. View the response in the results section below
+
+### Caching
+
+Service definitions are cached locally in `.cache/` directory with a 1-hour TTL. The cache uses chain IDs when available (fetched via `GetLatestBlock` for Cosmos-based chains) to ensure multiple endpoints for the same chain share cached data.
+
+### Keyboard Shortcuts
+
+- `Ctrl/Cmd + N`: Add new network
+- `Ctrl/Cmd + K`: Show keyboard shortcuts
+- `Ctrl/Cmd + H`: Show execution history
+- `Ctrl/Cmd + W`: Close active tab
+- `Ctrl/Cmd + Tab`: Cycle through tabs
+
+## Architecture
+
+### Technology Stack
+
+- **Framework**: Next.js 14 with App Router
+- **UI Components**: Tailwind CSS with shadcn/ui
+- **State Management**: React hooks and contexts
+- **gRPC Communication**: grpcurl via child process execution
+- **Caching**: File-based cache with LRU in-memory layer
+
+### Directory Structure
+
+```
+app/
+├── api/grpc/         # API routes for gRPC operations
+│   ├── services/     # Service discovery endpoint
+│   └── execute/      # Method execution endpoint
+components/
+├── NetworkPanel.tsx           # Left panel - service tree
+├── MethodTabsPanel.tsx        # Center panel - method descriptors
+└── MethodInteractionPanel.tsx # Right panel - parameter editor
+lib/
+├── grpc/             # gRPC client utilities
+├── hooks/            # Custom React hooks
+└── utils/            # Helper functions
+```
+
+### API Endpoints
+
+**POST /api/grpc/services**
+```json
+{
+  "endpoint": "grpc.example.com",
+  "tlsEnabled": true,
+  "forceRefresh": false
+}
+```
+
+Returns discovered services with their methods and chain ID if applicable.
+
+**POST /api/grpc/execute**
+```json
+{
+  "endpoint": "grpc.example.com",
+  "service": "cosmos.bank.v1beta1.Query",
+  "method": "Balance",
+  "params": {},
+  "tlsEnabled": true
+}
+```
+
+Executes the specified gRPC method and returns the response.
+
+## Configuration
+
+### Environment Variables
+
+Create `.env.local` for custom configuration:
 
 ```bash
-# Install PM2
-npm install -g pm2
+# Optional: Pre-configured endpoints
+GRPC_ENDPOINTS=endpoint1:443,endpoint2:9090
 
-# Start the application
-cd .next/standalone
-pm2 start server.js --name grpc-explorer --env production
+# Optional: Cache directory (defaults to .cache)
+CACHE_DIR=/path/to/cache
+```
 
-# Save PM2 configuration
+### Package Scripts
+
+- `yarn dev` - Start development server
+- `yarn build` - Build for production
+- `yarn build:prod` - Build standalone production bundle
+- `yarn start:prod` - Run production server
+- `yarn lint` - Run ESLint
+
+## Deployment
+
+### PM2
+
+```bash
+pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
 ```
 
-### Using Docker
+### Docker
 
 ```dockerfile
 FROM node:18-alpine
@@ -160,63 +168,72 @@ COPY .next/standalone ./
 COPY .next/static ./.next/static
 COPY public ./public
 EXPOSE 3000
-ENV NODE_ENV production
+ENV NODE_ENV=production
 CMD ["node", "server.js"]
 ```
 
-### Using systemd
+### systemd
 
-See the [systemd deployment guide](./docs/systemd-deployment.md) for detailed instructions.
+```ini
+[Unit]
+Description=gRPC Web Explorer
+After=network.target
 
-## 🎯 Roadmap
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/.next/standalone
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=NODE_ENV=production
+Environment=PORT=3000
 
-### In Progress
-- [ ] Native gRPC client implementation (replacing mock data)
-- [ ] Real-time streaming support
-- [ ] Method documentation from proto comments
+[Install]
+WantedBy=multi-user.target
+```
 
-### Planned
-- [ ] Dark/light theme toggle
-- [ ] Request/response templates
-- [ ] Performance metrics
-- [ ] Collaboration features
-- [ ] Proto file upload support
+## Testing Common Endpoints
 
-## ⚠️ Current Limitations
+### Cosmos Ecosystem
 
-1. **Mock Data**: Currently returns mock responses (gRPC integration pending)
-2. **No Streaming**: Server-streaming and bidirectional streaming not yet supported
-3. **No Authentication**: Token/certificate authentication not implemented
-4. **Browser Only**: No offline/desktop version available
+- `grpc.cosmos.directory:443` - Cosmos Hub
+- `grpc.juno.basementnodes.ca:443` - Juno Network
+- `grpc.noble.basementnodes.ca:443` - Noble Chain
+- `grpc.neutron.basementnodes.ca:443` - Neutron
 
-## 🤝 Contributing
+### Configuration for Testing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+All endpoints above use TLS by default. For local development servers, disable TLS and use appropriate ports (typically 9090 for gRPC).
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## Troubleshooting
 
-## 📝 License
+### grpcurl not found
 
-MIT License - see [LICENSE](LICENSE) file for details
+Install grpcurl:
+```bash
+# macOS
+brew install grpcurl
 
-## 🙏 Acknowledgments
+# Linux
+go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+```
 
-- [gRPC](https://grpc.io/) for the amazing RPC framework
-- [shadcn/ui](https://ui.shadcn.com/) for the beautiful UI components
-- [Next.js](https://nextjs.org/) for the React framework
-- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
+### Connection Issues
 
-## 📧 Support
+- Verify the endpoint is accessible: `grpcurl <endpoint> list`
+- Check TLS settings match the server configuration
+- Ensure the server has reflection enabled
+- For blockchain nodes, verify the gRPC port (usually 9090 or 443)
 
-For issues and questions:
-- Open an issue on [GitHub](https://github.com/your-repo/issues)
-- Check existing issues before creating new ones
-- Provide detailed reproduction steps for bugs
+### Cache Issues
 
----
+Clear the cache directory:
+```bash
+rm -rf .cache/
+```
 
-Built with ❤️ for the gRPC community
+Or use force refresh when connecting to update cached service definitions.
+
+## License
+
+MIT
