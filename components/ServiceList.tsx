@@ -1,16 +1,24 @@
-// components/ServiceList.tsx
 import React, { useState, useEffect } from 'react';
-import { Service, Method } from './GrpcExplorerApp';
-import LoadingSpinner from './LoadingSpinner';
-import styles from './ServiceList.module.css';
+import { ChevronRight, ChevronDown, Package, Layers, Box, Hash } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-interface ServiceListProps {
+export interface Service {
+  chain?: string;
+  module?: string;
+  service: string;
+  methods?: Array<{ name: string }>;
+}
+
+export interface Method {
+  name: string;
+}
+
+export interface ServiceListProps {
   services: Service[];
   selectedService: Service | null;
   selectedMethod: Method | null;
-  onServiceSelect: (_service: Service) => void;
-  onMethodSelect: (_method: Method, _service: Service) => void;
-  endpoint?: string;
+  onServiceSelect: (service: Service) => void;
+  onMethodSelect: (method: Method, service: Service) => void;
   defaultExpanded?: boolean;
   loading?: boolean;
 }
@@ -21,215 +29,185 @@ const ServiceList: React.FC<ServiceListProps> = ({
   selectedMethod,
   onServiceSelect,
   onMethodSelect,
-  defaultExpanded = false,
-  loading = false
+  defaultExpanded = true,
+  loading = false,
 }) => {
-  const [filter, setFilter] = useState<string>('');
-  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
   const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-  
-  // Expand all services by default if specified
+  const [expandedServices, setExpandedServices] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState('');
+
+  // Auto-expand on initial load
   useEffect(() => {
-    if (defaultExpanded && services.length > 0) {
-      const allChains = new Set<string>();
-      const allModules = new Set<string>();
-      
-      services.forEach(service => {
-        const chain = service.chain || 'default';
-        const moduleItem = service.module || 'default';
-        
-        allChains.add(chain);
-        allModules.add(`${chain}.${moduleItem}`);
+    if (defaultExpanded && services.length) {
+      const chains = new Set<string>();
+      const modules = new Set<string>();
+      services.forEach(svc => {
+        const chain = svc.chain || 'default';
+        const moduleId = svc.module || 'default';
+        chains.add(chain);
+        modules.add(`${chain}.${moduleId}`);
       });
-      
-      setExpandedChains(allChains);
-      setExpandedModules(allModules);
+      setExpandedChains(chains);
+      setExpandedModules(modules);
     }
   }, [services, defaultExpanded]);
 
-  // Toggle a service's expanded state
-  const toggleService = (serviceId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedServices(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(serviceId)) {
-        newSet.delete(serviceId);
-      } else {
-        newSet.add(serviceId);
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle a chain's expanded state
-  const toggleChain = (chainId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedChains(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(chainId)) {
-        newSet.delete(chainId);
-      } else {
-        newSet.add(chainId);
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle a module's expanded state
-  const toggleModule = (moduleId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedModules(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(moduleId)) {
-        newSet.delete(moduleId);
-      } else {
-        newSet.add(moduleId);
-      }
-      return newSet;
-    });
-  };
-
-  // Handle service click
-  const handleServiceClick = (service: Service, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onServiceSelect(service);
-    toggleService(service.service, e);
-  };
-
-  // Handle method click
-  const handleMethodClick = (method: Method, service: Service, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onMethodSelect(method, service);
-  };
-
-  // Filter services by search term
-  const filteredServices = services.filter((service) =>
-    service.service.toLowerCase().includes(filter.toLowerCase())
+  // Filter services
+  const filtered = services.filter(svc =>
+    svc.service.toLowerCase().includes(filter.toLowerCase())
   );
 
-  // Get the display name of a service
-  const getServiceDisplayName = (serviceName: string) => {
-    const parts = serviceName.split('.');
-    return parts[parts.length - 1];
-  };
-
-  // Group services by chain and module
-  const groupedServices: Record<string, Record<string, Service[]>> = {};
-
-  filteredServices.forEach(service => {
-    const chain = service.chain || 'default';
-    const moduleItem = service.module || 'default';
-
-    if (!groupedServices[chain]) {
-      groupedServices[chain] = {};
-    }
-
-    if (!groupedServices[chain][moduleItem]) {
-      groupedServices[chain][moduleItem] = [];
-    }
-
-    groupedServices[chain][moduleItem].push(service);
+  // Group by chain -> module
+  const grouped: Record<string, Record<string, Service[]>> = {};
+  filtered.forEach(svc => {
+    const chain = svc.chain || 'default';
+    const moduleId = svc.module || 'default';
+    if (!grouped[chain]) grouped[chain] = {};
+    if (!grouped[chain][moduleId]) grouped[chain][moduleId] = [];
+    grouped[chain][moduleId].push(svc);
   });
 
+  const toggle = (setFn: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
+    setFn(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-32">
+        <div className="text-sm text-muted-foreground">Loading services...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.container}>
-      <div className={styles.searchContainer}>
+    <div className="space-y-1">
+      {/* Filter input */}
+      <div className="mb-4">
         <input
           type="text"
+          placeholder="Filter services..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter services..."
-          className={styles.searchInput}
+          className="w-full px-3 py-1.5 text-sm bg-input border border-border rounded-md 
+                   focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
+                   transition-colors"
         />
       </div>
 
-      <div className={styles.serviceList}>
-        {loading ? (
-          <div className="flex flex-col items-center justify-center p-8">
-            <LoadingSpinner size="md" />
-            <span className="mt-2 text-text-secondary">Loading services...</span>
+      {/* Tree view */}
+      {Object.entries(grouped).map(([chain, modules]) => (
+        <div key={chain} className="select-none">
+          {/* Chain */}
+          <div
+            className="tree-item group"
+            onClick={() => toggle(setExpandedChains, chain)}
+          >
+            <ChevronRight className={cn(
+              "h-3 w-3 transition-transform",
+              expandedChains.has(chain) && "rotate-90"
+            )} />
+            <Package className="h-4 w-4 text-primary/70" />
+            <span className="text-sm font-medium">{chain}</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {Object.keys(modules).length} modules
+            </span>
           </div>
-        ) : filteredServices.length === 0 ? (
-          <div className={styles.emptyState}>
-            {filter ? 'No matching services found' : 'No services available'}
-          </div>
-        ) : (
-          Object.entries(groupedServices).map(([chain, modules]) => (
-            <div key={chain} className={styles.chainGroup}>
-              <div
-                className={styles.chainName}
-                onClick={(e) => toggleChain(chain, e)}
-              >
-                <span className={styles.expandIcon}>
-                  {expandedChains.has(chain) ? '▼' : '▶'}
-                </span>
-                <span>{chain}</span>
-              </div>
 
-              {expandedChains.has(chain) && (
-                <div className={styles.moduleList}>
-                  {Object.entries(modules).map(([moduleItem, moduleServices]) => (
-                    <div key={`${chain}.${moduleItem}`} className={styles.moduleGroup}>
-                      <div
-                        className={styles.moduleName}
-                        onClick={(e) => toggleModule(`${chain}.${moduleItem}`, e)}
-                      >
-                        <span className={styles.expandIcon}>
-                        {expandedModules.has(`${chain}.${moduleItem}`) ? '▼' : '▶'}
-                        </span>
-                        <span>{moduleItem}</span>
-                      </div>
+          {/* Modules */}
+          {expandedChains.has(chain) && (
+            <div className="ml-4 mt-1 space-y-1">
+              {Object.entries(modules).map(([moduleId, svcs]) => (
+                <div key={`${chain}.${moduleId}`}>
+                  <div
+                    className="tree-item group"
+                    onClick={() => toggle(setExpandedModules, `${chain}.${moduleId}`)}
+                  >
+                    <ChevronRight className={cn(
+                      "h-3 w-3 transition-transform",
+                      expandedModules.has(`${chain}.${moduleId}`) && "rotate-90"
+                    )} />
+                    <Layers className="h-4 w-4 text-accent/70" />
+                    <span className="text-sm">{moduleId}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {svcs.length} services
+                    </span>
+                  </div>
 
-                      {expandedModules.has(`${chain}.${moduleItem}`) && (
-                        <div className={styles.servicesList}>
-                          {moduleServices.map((service) => (
-                            <div key={service.service} className={styles.serviceItem}>
-                              <div
-                                className={`${styles.serviceName} ${
-                                  selectedService?.service === service.service ? styles.selected : ''
-                                }`}
-                                onClick={(e) => handleServiceClick(service, e)}
-                              >
-                                <span className={styles.expandIcon}>
-                                  {expandedServices.has(service.service) ? '▼' : '▶'}
-                                </span>
-                                <span>{getServiceDisplayName(service.service)}</span>
-                              </div>
+                  {/* Services */}
+                  {expandedModules.has(`${chain}.${moduleId}`) && (
+                    <div className="ml-4 mt-1 space-y-1">
+                      {svcs.map((svc) => (
+                        <div key={svc.service}>
+                          <div
+                            className={cn(
+                              "tree-item group",
+                              selectedService?.service === svc.service && "selected"
+                            )}
+                            onClick={() => {
+                              onServiceSelect(svc);
+                              toggle(setExpandedServices, svc.service);
+                            }}
+                          >
+                            <ChevronRight className={cn(
+                              "h-3 w-3 transition-transform",
+                              expandedServices.has(svc.service) && "rotate-90"
+                            )} />
+                            <Box className="h-4 w-4 text-secondary/70" />
+                            <span className="text-sm flex-1 truncate" title={svc.service}>
+                              {svc.service.split('.').pop()}
+                            </span>
+                            {svc.methods && (
+                              <span className="text-xs text-muted-foreground">
+                                {svc.methods.length}
+                              </span>
+                            )}
+                          </div>
 
-                              {expandedServices.has(service.service) && service.methods && (
-                                <div className={styles.methodList}>
-                                  {service.methods.map((method) => (
-                                    <div
-                                      key={`${service.service}.${method.name}`}
-                                      className={`${styles.methodItem} ${
-                                        selectedMethod?.name === method.name &&
-                                        selectedService?.service === service.service
-                                          ? styles.selectedMethod
-                                          : ''
-                                      }`}
-                                      onClick={(e) => handleMethodClick(method, service, e)}
-                                    >
-                                      {method.name}
-                                    </div>
-                                  ))}
-                                  {service.methods.length === 0 && (
-                                    <div className={styles.emptyMethods}>No methods available</div>
+                          {/* Methods */}
+                          {expandedServices.has(svc.service) && svc.methods && (
+                            <div className="ml-8 mt-1 space-y-1">
+                              {svc.methods.map((method) => (
+                                <div
+                                  key={method.name}
+                                  className={cn(
+                                    "tree-item group pl-6",
+                                    selectedMethod?.name === method.name && 
+                                    selectedService?.service === svc.service && 
+                                    "selected"
                                   )}
+                                  onClick={() => onMethodSelect(method, svc)}
+                                >
+                                  <Hash className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-sm">{method.name}</span>
                                 </div>
-                              )}
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </div>
+      ))}
+
+      {filtered.length === 0 && filter && (
+        <div className="text-center py-4">
+          <p className="text-sm text-muted-foreground">No services match "{filter}"</p>
+        </div>
+      )}
     </div>
   );
 };

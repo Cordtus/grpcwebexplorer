@@ -2,91 +2,276 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background-color: #1e1e1e;
-  --surface-color: #252525;
-  --border-color: #3c3c3c;
-  --primary-color: #0a84ff;
-  --text-color: #f0f0f0;
-  --text-secondary-color: #888;
-  --error-color: #FF605C;
-  --warning-color: #FFBD44;
-  --success-color: #00CA4E;
+@layer base {
+  :root {
+    /* Dark theme colors - gRPC Explorer specific */
+    --background: 0 0% 11.8%; /* #1e1e1e */
+    --foreground: 0 0% 94.1%; /* #f0f0f0 */
+    
+    --card: 0 0% 14.5%; /* #252525 */
+    --card-foreground: 0 0% 94.1%;
+    
+    --popover: 0 0% 17.6%; /* #2d2d2d */
+    --popover-foreground: 0 0% 94.1%;
+    
+    --primary: 211 100% 50%; /* #0a84ff */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 17.6%; /* #2d2d2d */
+    --secondary-foreground: 0 0% 94.1%;
+    
+    --muted: 0 0% 23.5%; /* #3c3c3c */
+    --muted-foreground: 0 0% 53.3%; /* #888 */
+    
+    --accent: 211 100% 50%; /* #0a84ff */
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 2 100% 68%; /* #FF605C */
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 23.5%; /* #3c3c3c */
+    --input: 0 0% 23.5%;
+    --ring: 211 100% 50%;
+    
+    --radius: 0.375rem;
+    
+    /* Custom properties for special effects */
+    --glass-bg: rgba(37, 37, 37, 0.55);
+    --glass-border: rgba(60, 60, 60, 0.5);
+    --hover-bg: rgba(45, 45, 45, 0.8);
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    
+    /* Traffic light colors */
+    --traffic-red: #FF605C;
+    --traffic-yellow: #FFBD44;
+    --traffic-green: #00CA4E;
+  }
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow: hidden;
-  height: 100vh;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-  sans-serif;
-}
-
-/* macOS-like scrollbar styles */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-/* Firefox scrollbar styles */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply h-full;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply bg-background text-foreground h-full overflow-hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  }
 }
 
 @layer components {
-  .btn {
-    @apply px-3 py-2 rounded border-none bg-blue-accent text-white text-sm cursor-pointer transition-colors;
+  /* Glass morphism effect */
+  .glass {
+    backdrop-filter: blur(8px) saturate(180%);
+    -webkit-backdrop-filter: blur(8px) saturate(180%);
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
   }
+  
+  /* Subtle glass effect for surfaces */
+  .glass-subtle {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    background-color: rgba(37, 37, 37, 0.8);
+  }
+  
+  /* Panel styling */
+  .panel {
+    @apply bg-card border-border;
+  }
+  
+  /* macOS-style titlebar */
+  .titlebar {
+    @apply glass border-b border-border;
+    -webkit-app-region: drag;
+  }
+  
+  .titlebar * {
+    -webkit-app-region: no-drag;
+  }
+  
+  /* Traffic light buttons */
+  .traffic-lights {
+    @apply flex items-center gap-2;
+  }
+  
+  .traffic-light {
+    @apply w-3 h-3 rounded-full transition-all duration-200;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  }
+  
+  .traffic-light:hover {
+    transform: scale(1.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+                0 0 4px currentColor;
+  }
+  
+  .traffic-light:active {
+    transform: scale(0.95);
+  }
+  
+  .traffic-light.red {
+    @apply bg-[var(--traffic-red)];
+  }
+  
+  .traffic-light.yellow {
+    @apply bg-[var(--traffic-yellow)];
+  }
+  
+  .traffic-light.green {
+    @apply bg-[var(--traffic-green)];
+  }
+  
+  /* Tab styling */
+  .tab {
+    @apply relative px-3 py-1.5 text-sm transition-all duration-200;
+    @apply hover:bg-secondary/50 cursor-pointer select-none;
+  }
+  
+  .tab.active {
+    @apply bg-secondary;
+  }
+  
+  .tab.active::after {
+    content: '';
+    @apply absolute bottom-0 left-0 right-0 h-[2px] bg-primary;
+  }
+  
+  /* Button variants */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+    @apply transition-colors duration-200;
+  }
+  
+  .btn-ghost {
+    @apply hover:bg-secondary/50 transition-colors duration-200;
+  }
+  
+  /* Input styling */
+  .input-dark {
+    @apply bg-input border-border focus:border-primary;
+    @apply transition-colors duration-200;
+  }
+  
+  /* Tree view styling */
+  .tree-item {
+    @apply flex items-center gap-2 px-2 py-1 rounded cursor-pointer;
+    @apply hover:bg-secondary/50 transition-colors duration-150;
+  }
+  
+  .tree-item.selected {
+    @apply bg-primary/20 text-primary;
+  }
+  
+  /* Code/JSON viewer */
+  .code-viewer {
+    @apply bg-background/50 border border-border rounded-md p-4;
+    @apply font-mono text-sm;
+  }
+  
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin text-primary;
+  }
+  
+  /* Divider */
+  .divider {
+    @apply h-px bg-border;
+  }
+}
 
-  .btn:hover {
-    @apply bg-blue-accent-hover;
+@layer utilities {
+  /* macOS-style scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    transition: background-color 0.2s;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  
+  /* Subtle shadow for depth */
+  .shadow-panel {
+    box-shadow: 0 2px 8px var(--shadow-color);
+  }
+  
+  /* Glow effect for active elements */
+  .glow-primary {
+    box-shadow: 0 0 10px rgba(10, 132, 255, 0.3);
+  }
+  
+  /* Smooth transitions */
+  .transition-smooth {
+    @apply transition-all duration-200 ease-in-out;
+  }
+  
+  /* Prevent text selection in UI elements */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+  
+  /* Draggable areas */
+  .draggable {
+    -webkit-app-region: drag;
+  }
+  
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
 
-  .btn:disabled {
-    @apply opacity-50 cursor-not-allowed;
+/* Animation keyframes */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-  .input-field {
-    @apply px-3 py-2 rounded border border-dark-border bg-dark-surface text-text-primary text-sm outline-none transition-colors w-full;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
+  to {
+    opacity: 1;
+  }
+}
 
-  .input-field:focus {
-    @apply border-blue-accent;
-  }
+/* Apply animations to dialogs and popovers */
+[data-state="open"] {
+  animation: fadeIn 200ms ease-out;
+}
 
-  .form-control {
-    @apply flex flex-col gap-1.5;
-  }
-
-  .field-label {
-    @apply flex justify-between items-center text-sm font-medium;
-  }
-
-  .field-type {
-    @apply text-xs text-text-secondary font-normal font-mono;
-  }
+[data-state="closed"] {
+  animation: fadeIn 200ms ease-out reverse;
 }

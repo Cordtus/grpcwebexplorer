@@ -1,753 +1,370 @@
-// components/GrpcExplorerApp.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import ServiceList from './ServiceList';
-import MethodForm from './MethodForm';
-import JsonViewer from './JsonViewer';
-import LoadingSpinner from './LoadingSpinner';
-import SettingsPanel from './SettingsPanel';
-import NetworkTab from './NetworkTab';
-import MethodCard from './MethodCard';
-import { getUserSettings, addEndpointToHistory, setUseTLS } from '@/utils/userSettings';
-import { fetchServiceMethods, fetchMethodFields } from '@/utils/grpcHelpers';
-import Image from 'next/image';
-import styles from './GrpcExplorerApp.module.css';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { ChevronDown, Plus, Network, Play, X, Loader2, Copy, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ExpandableBlock } from './ExpandableBlock';
+import NetworkBlock from './NetworkBlock';
+import MethodBlock from './MethodBlock';
+import MethodDescriptor from './MethodDescriptor';
+import ResultsPanel from './ResultsPanel';
+import AddNetworkDialog from './AddNetworkDialog';
 
-// Types
-export interface Service {
-  service: string;
-  path: string;
-  chain?: string;
-  module?: string;
-  methods?: Method[];
+interface GrpcNetwork {
+  id: string;
+  name: string;
+  endpoint: string;
+  tlsEnabled: boolean;
+  services: GrpcService[];
+  color: string;
+  loading?: boolean;
+  error?: string;
+  expanded?: boolean;
 }
 
-export interface Method {
+interface GrpcService {
   name: string;
+  fullName: string;
+  methods: GrpcMethod[];
+}
+
+interface GrpcMethod {
+  name: string;
+  fullName: string;
   requestType: string;
   responseType: string;
-  fields?: Field[];
+  requestStreaming: boolean;
+  responseStreaming: boolean;
+  options?: any;
+  description?: string;
 }
 
-export interface Field {
-  name: string;
-  type: string;
-  repeated: boolean;
-  id: number;
-  options?: string;
-}
-
-export interface Network {
+interface MethodInstance {
   id: string;
-  endpoint: string;
-  useTLS: boolean;
-  isMinimized: boolean;
-  isMaximized: boolean;
+  networkId: string;
+  method: GrpcMethod;
+  service: GrpcService;
+  color: string;
+  expanded?: boolean;
+  params?: Record<string, any>;
 }
 
-export interface MethodSession {
-  id: string;
-  service: Service;
-  method: Method;
-  endpoint: string;
-  useTLS: boolean;
-  isMinimized: boolean;
-  isMaximized: boolean;
+interface ExecutionResult {
+  methodId: string;
+  success: boolean;
+  data?: any;
+  error?: string;
+  timestamp: number;
+  duration?: number;
 }
 
-const GrpcExplorerApp: React.FC = () => {
-  // Legacy state
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingService, setLoadingService] = useState<boolean>(false);
-  const [loadingMethod, setLoadingMethod] = useState<boolean>(false);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<Method | null>(null);
-  const [response, setResponse] = useState<any>(null);
-  const [connected, setConnected] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // UI State
-  const [endpoint, setEndpoint] = useState<string>('');
-  const [useTLS, setUseTLSState] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  
-  // New multi-network state
-  const [networks, setNetworks] = useState<Network[]>([]);
-  const [_activeNetwork, setActiveNetwork] = useState<string | null>(null);
-  
-  // Method cards state
-  const [methodSessions, setMethodSessions] = useState<MethodSession[]>([]);
-  
-  // Form state
-  const [endpointHistory, setEndpointHistory] = useState<string[]>([]);
-  const [showEndpointHistory, setShowEndpointHistory] = useState<boolean>(false);
+// Color palette for networks
+const NETWORK_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#a855f7', // purple
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#84cc16', // lime
+];
 
-  // Settings state
-  const [cacheEnabled, setCacheEnabled] = useState<boolean>(true);
-  const [_expandServicesByDefault, setExpandServicesByDefault] = useState<boolean>(false);
-  const [_expandMethodsByDefault, setExpandMethodsByDefault] = useState<boolean>(false);
+export default function GrpcExplorerApp() {
+  const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
+  const [methodInstances, setMethodInstances] = useState<MethodInstance[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<MethodInstance | null>(null);
+  const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
+  const [showAddNetwork, setShowAddNetwork] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
 
-  // Legacy fetch services (for backward compatibility)
-  const fetchServices = useCallback(async (endpointUrl: string) => {
-    if (!endpointUrl) {
-      setServices([]);
-      setConnected(false);
-      return;
-    }
+  // Generate unique ID
+  const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch services from the specified endpoint
-      const res = await fetch(
-        `/api/services?endpoint=${encodeURIComponent(endpointUrl)}&useTLS=${useTLS}&useCache=${cacheEnabled}`
-      );
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        setConnected(false);
-        return;
-      }
-
-      setServices(data);
-      setConnected(true);
-    } catch (err) {
-      console.error('Failed to fetch services:', err);
-      setError('Failed to load services. Please check the console for details.');
-      setConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [useTLS, cacheEnabled]);
-
-  // Connect to an endpoint and create a new network tab
-  const connectToEndpoint = useCallback((endpointUrl: string, useTlsFlag: boolean) => {
-    if (!endpointUrl) return;
-    
-    // Check if this network already exists
-    const existingNetwork = networks.find(n => n.endpoint === endpointUrl);
-    
-    if (existingNetwork) {
-      // Network already exists, just make it active
-      setActiveNetwork(existingNetwork.id);
-      return;
-    }
-    
-    // Create a new network
-    const networkId = `network-${Date.now()}`;
-    const newNetwork: Network = {
-      id: networkId,
-      endpoint: endpointUrl,
-      useTLS: useTlsFlag,
-      isMinimized: false,
-      isMaximized: false
-    };
-    
-    setNetworks(prev => [...prev, newNetwork]);
-    setActiveNetwork(networkId);
-    
-    // Save endpoint to history
-    addEndpointToHistory(endpointUrl);
-    setUseTLS(useTlsFlag);
-    
-    // Update history list
-    const settings = getUserSettings();
-    setEndpointHistory(settings.endpoints.history);
+  // Get next color for network
+  const getNextColor = useCallback(() => {
+    const usedColors = networks.map(n => n.color);
+    const availableColor = NETWORK_COLORS.find(c => !usedColors.includes(c));
+    return availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length];
   }, [networks]);
 
-  // Handle endpoint saving
-  const handleEndpointSave = useCallback(() => {
-    if (endpoint) {
-      localStorage.setItem('grpcEndpoint', endpoint);
-      localStorage.setItem('grpcUseTLS', useTLS.toString());
-      
-      // Fetch services
-      fetchServices(endpoint);
-      
-      // Also use new method for multi-network support
-      connectToEndpoint(endpoint, useTLS);
-    }
-  }, [endpoint, useTLS, fetchServices, connectToEndpoint]);
+  // Add network
+  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean) => {
+    const id = generateId();
+    const color = getNextColor();
+    const name = endpoint.split('//').pop()?.split(':')[0] || endpoint;
 
-  // Load user settings and endpoint history
-  useEffect(() => {
-    // Load saved endpoint, TLS setting, and cache setting on component mount
-    const storedEndpoint = localStorage.getItem('grpcEndpoint') || '';
-    const storedUseTLS = localStorage.getItem('grpcUseTLS') === 'true';
-    
-    // Load from userSettingsService for new features
-    const settings = getUserSettings();
-    setCacheEnabled(settings.cache.enabled);
-    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
-    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
-    setEndpointHistory(settings.endpoints.history);
-
-    // Set from local storage for backward compatibility
-    setEndpoint(storedEndpoint);
-    setUseTLSState(storedUseTLS);
-
-    // If there's a stored endpoint, try to connect
-    if (storedEndpoint) {
-      setTimeout(() => handleEndpointSave(), 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Detect if endpoint likely requires TLS based on port number
-  useEffect(() => {
-    if (endpoint) {
-      // Try to parse the endpoint to extract port
-      const parts = endpoint.split(':');
-      const port = parts.length > 1 ? parts[parts.length - 1] : null;
-
-      // Common secure port numbers
-      const securePorts = ['443', '8443', '9443', '4443'];
-
-      if (port && securePorts.includes(port)) {
-        setUseTLSState(true);
-      }
-    }
-  }, [endpoint]);
-
-  // Handle the settings change event
-  const handleSettingsChanged = useCallback(() => {
-    const settings = getUserSettings();
-    setCacheEnabled(settings.cache.enabled);
-    setExpandServicesByDefault(settings.ui.expandServicesByDefault);
-    setExpandMethodsByDefault(settings.ui.expandMethodsByDefault);
-  }, []);
-
-  // Legacy service select (for backward compatibility)
-  const handleServiceSelect = useCallback(async (service: Service) => {
-    try {
-      setSelectedService(service);
-      setSelectedMethod(null);
-      setResponse(null);
-      setError(null);
-
-      // Fetch service methods if not already loaded
-      if (!service.methods) {
-        setLoadingService(true);
-        
-        const { error: methodsError, methods } = await fetchServiceMethods(
-          service, endpoint, useTLS, cacheEnabled
-        );
-
-        if (methodsError) {
-          setError(methodsError);
-          setLoadingService(false);
-          return;
-        }
-
-        // Update the service with methods
-        const updatedServices = services.map(s =>
-          s.service === service.service ? { ...s, methods } : s
-        );
-
-        setServices(updatedServices);
-        setSelectedService({ ...service, methods });
-      }
-    } catch (err) {
-      console.error('Failed to fetch service methods:', err);
-      setError('Failed to load service methods. Please check the console for details.');
-    } finally {
-      setLoadingService(false);
-    }
-  }, [services, endpoint, useTLS, cacheEnabled]);
-
-  // Legacy method select (for backward compatibility)
-  const handleMethodSelect = useCallback(async (method: Method) => {
-    try {
-      setSelectedMethod(method);
-      setResponse(null);
-      setError(null);
-
-      // Fetch method field definitions if not already loaded
-      if (!method.fields && selectedService) {
-        setLoadingMethod(true);
-        
-        const { error: fieldsError, fields } = await fetchMethodFields(
-          selectedService, method, endpoint, useTLS, cacheEnabled
-        );
-
-        if (fieldsError) {
-          setError(fieldsError);
-          setLoadingMethod(false);
-          return;
-        }
-
-        // Update the method with fields
-        if (selectedService.methods) {
-          const updatedMethods = selectedService.methods.map(m =>
-            m.name === method.name ? { ...m, fields } : m
-          );
-
-          setSelectedService({ ...selectedService, methods: updatedMethods });
-          setSelectedMethod({ ...method, fields });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch method fields:', err);
-      setError('Failed to load method fields. Please check the console for details.');
-    } finally {
-      setLoadingMethod(false);
-    }
-  }, [selectedService, endpoint, useTLS, cacheEnabled]);
-
-  // New method for handling method selection with multi-network support
-  const handleNetworkMethodSelect = useCallback((method: Method, service: Service, endpointUrl: string) => {
-    // Also trigger legacy method for backward compatibility
-    if (service && endpoint === endpointUrl) {
-      handleServiceSelect(service);
-      handleMethodSelect(method);
-    }
-    
-    // Find the network
-    const network = networks.find(n => n.endpoint === endpointUrl);
-    if (!network) return;
-    
-    // Check if this method session already exists
-    const sessionId = `${endpointUrl}-${service.service}-${method.name}`;
-    const existingSession = methodSessions.find(s => 
-      s.endpoint === endpointUrl && 
-      s.service.service === service.service && 
-      s.method.name === method.name
-    );
-    
-    if (existingSession) {
-      // Session already exists, update it if it's minimized
-      if (existingSession.isMinimized) {
-        setMethodSessions(prev => 
-          prev.map(s => s.id === existingSession.id 
-            ? { ...s, isMinimized: false } 
-            : s
-          )
-        );
-      }
-      return;
-    }
-    
-    // Create a new method session
-    const newSession: MethodSession = {
-      id: sessionId,
-      service,
-      method,
-      endpoint: endpointUrl,
-      useTLS: network.useTLS,
-      isMinimized: false,
-      isMaximized: false
+    const newNetwork: GrpcNetwork = {
+      id,
+      name,
+      endpoint,
+      tlsEnabled,
+      services: [],
+      color,
+      loading: true,
+      expanded: true
     };
-    
-    setMethodSessions(prev => [...prev, newSession]);
-  }, [networks, methodSessions, endpoint, handleServiceSelect, handleMethodSelect]);
 
-  // Legacy execute query (for backward compatibility)
-  const executeQuery = useCallback(async (params: Record<string, any>) => {
-    if (!selectedService || !selectedMethod) return;
+    setNetworks(prev => [...prev, newNetwork]);
 
+    // Fetch services via reflection
     try {
-      setResponse(null);
-      setError(null);
-      setLoadingMethod(true);
-
-      const res = await fetch('/api/execute', {
+      const response = await fetch('/api/grpc/services', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          endpoint,
-          service: selectedService.service,
-          method: selectedMethod.name,
-          params,
-          useTLS,
-          useCache: cacheEnabled
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, tlsEnabled })
       });
 
-      const data = await res.json();
+      if (!response.ok) throw new Error('Failed to fetch services');
 
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setResponse(data.response);
-      }
-    } catch (err) {
-      console.error('Failed to execute query:', err);
-      setError('Failed to execute query. Please check the console for details.');
-    } finally {
-      setLoadingMethod(false);
+      const data = await response.json();
+      
+      setNetworks(prev => prev.map(n => 
+        n.id === id 
+          ? { ...n, services: data.services || [], loading: false }
+          : n
+      ));
+    } catch (error) {
+      setNetworks(prev => prev.map(n => 
+        n.id === id 
+          ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
+          : n
+      ));
     }
-  }, [selectedService, selectedMethod, endpoint, useTLS, cacheEnabled]);
+  }, [getNextColor]);
 
-  // Multi-network management functions
-  const handleNetworkClose = useCallback((networkId: string) => {
+  // Remove network
+  const handleRemoveNetwork = useCallback((networkId: string) => {
     setNetworks(prev => prev.filter(n => n.id !== networkId));
-    
-    // Close all method sessions associated with this network
-    const network = networks.find(n => n.id === networkId);
-    if (network) {
-      setMethodSessions(prev => prev.filter(s => s.endpoint !== network.endpoint));
+    setMethodInstances(prev => prev.filter(m => m.networkId !== networkId));
+  }, []);
+
+  // Toggle network expansion
+  const toggleNetworkExpanded = useCallback((networkId: string) => {
+    setNetworks(prev => prev.map(n => 
+      n.id === networkId ? { ...n, expanded: !n.expanded } : n
+    ));
+  }, []);
+
+  // Add method instance to center panel
+  const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
+    // Check if method already exists
+    const exists = methodInstances.some(
+      m => m.networkId === network.id && 
+           m.method.fullName === method.fullName &&
+           m.service.fullName === service.fullName
+    );
+
+    if (!exists) {
+      const newInstance: MethodInstance = {
+        id: generateId(),
+        networkId: network.id,
+        method,
+        service,
+        color: network.color,
+        expanded: true,
+        params: {}
+      };
+
+      setMethodInstances(prev => [...prev, newInstance]);
+      setSelectedMethod(newInstance);
     }
-    
-    // Set next active network
-    setActiveNetwork(prev => {
-      if (prev !== networkId) return prev;
-      const remainingNetworks = networks.filter(n => n.id !== networkId);
-      return remainingNetworks.length > 0 ? remainingNetworks[0].id : null;
-    });
+  }, [methodInstances]);
+
+  // Remove method instance
+  const handleRemoveMethodInstance = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.filter(m => m.id !== instanceId));
+    if (selectedMethod?.id === instanceId) {
+      setSelectedMethod(null);
+    }
+  }, [selectedMethod]);
+
+  // Toggle method instance expansion
+  const toggleMethodExpanded = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.map(m => 
+      m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+    ));
+  }, []);
+
+  // Update method parameters
+  const handleUpdateParams = useCallback((instanceId: string, params: Record<string, any>) => {
+    setMethodInstances(prev => prev.map(m => 
+      m.id === instanceId ? { ...m, params } : m
+    ));
+  }, []);
+
+  // Execute method
+  const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
+    setIsExecuting(true);
+    setSelectedMethod(instance);
+
+    const startTime = Date.now();
+
+    try {
+      const network = networks.find(n => n.id === instance.networkId);
+      if (!network) throw new Error('Network not found');
+
+      const response = await fetch('/api/grpc/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: network.endpoint,
+          tlsEnabled: network.tlsEnabled,
+          service: instance.service.fullName,
+          method: instance.method.name,
+          params: instance.params
+        })
+      });
+
+      const data = await response.json();
+      const duration = Date.now() - startTime;
+
+      const result: ExecutionResult = {
+        methodId: instance.id,
+        success: response.ok,
+        data: data.result || data,
+        error: data.error,
+        timestamp: Date.now(),
+        duration
+      };
+
+      setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
+    } catch (error) {
+      const result: ExecutionResult = {
+        methodId: instance.id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: Date.now(),
+        duration: Date.now() - startTime
+      };
+
+      setExecutionResults(prev => [result, ...prev].slice(0, 50));
+    } finally {
+      setIsExecuting(false);
+    }
   }, [networks]);
 
-  const handleNetworkMinimize = useCallback((networkId: string) => {
-    setNetworks(prev => 
-      prev.map(n => n.id === networkId 
-        ? { ...n, isMinimized: !n.isMinimized } 
-        : n
-      )
-    );
-  }, []);
-
-  const handleNetworkMaximize = useCallback((networkId: string) => {
-    setNetworks(prev => 
-      prev.map(n => n.id === networkId 
-        ? { ...n, isMaximized: !n.isMaximized } 
-        : n.id !== networkId && n.isMaximized ? { ...n, isMaximized: false } : n
-      )
-    );
-  }, []);
-
-  const handleMethodSessionClose = useCallback((sessionId: string) => {
-    setMethodSessions(prev => prev.filter(s => s.id !== sessionId));
-  }, []);
-
-  const handleMethodSessionMinimize = useCallback((sessionId: string) => {
-    setMethodSessions(prev => 
-      prev.map(s => s.id === sessionId 
-        ? { ...s, isMinimized: !s.isMinimized } 
-        : s
-      )
-    );
-  }, []);
-
-  const handleMethodSessionMaximize = useCallback((sessionId: string) => {
-    setMethodSessions(prev => 
-      prev.map(s => s.id === sessionId 
-        ? { ...s, isMaximized: !s.isMaximized } 
-        : s.isMaximized ? { ...s, isMaximized: false } : s
-      )
-    );
-  }, []);
-
-  const handleEndpointHistorySelect = useCallback((historyEndpoint: string) => {
-    setEndpoint(historyEndpoint);
-    setShowEndpointHistory(false);
-  }, []);
-
-  // UI event handlers
-  const handleEndpointChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEndpoint(e.target.value);
-  };
-
-  const handleUseTLSChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUseTLSState(e.target.checked);
-  };
-
-  const handleRefresh = () => {
-    fetchServices(endpoint);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleEndpointSave();
-    }
-  };
-
-  const handleSettingsToggle = () => {
-    setIsSettingsOpen(!isSettingsOpen);
-  };
-
-  const handleSettingsClose = () => {
-    setIsSettingsOpen(false);
-    handleSettingsChanged();
-  };
-
-  const closeEndpointHistory = () => {
-    setShowEndpointHistory(false);
-  };
-
-  // Use either the classic UI or the new multi-network UI based on feature flags
-  const shouldUseMultiNetworkUI = networks.length > 0 && methodSessions.length > 0;
+  // Get latest result for selected method
+  const currentResult = useMemo(() => {
+    if (!selectedMethod) return null;
+    return executionResults.find(r => r.methodId === selectedMethod.id);
+  }, [selectedMethod, executionResults]);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.toolbar}>
-        <div className={styles.endpointContainer}>
-          <div className="flex items-center mr-3">
-            <Image 
-              src="/logo.svg" 
-              alt="gRPC Explorer Logo" 
-              width={24} 
-              height={24} 
-              className="mr-2"
-            />
-            <span className="font-medium text-text-primary">gRPC Explorer</span>
-          </div>
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={endpoint}
-              onChange={handleEndpointChange}
-              onKeyPress={handleKeyPress}
-              onFocus={() => endpointHistory.length > 0 && setShowEndpointHistory(true)}
-              placeholder="gRPC endpoint (host:port)"
-              className={styles.endpointInput}
-            />
-            {showEndpointHistory && endpointHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-dark-surface border border-dark-border rounded shadow-lg z-10">
-                <div className="flex justify-between items-center px-3 py-2 border-b border-dark-border">
-                  <span className="text-xs text-text-secondary">Recent Endpoints</span>
-                  <button onClick={closeEndpointHistory} className="text-text-secondary hover:text-text-primary text-xs">
-                    ✕
-                  </button>
-                </div>
-                <ul>
-                  {endpointHistory.map((historyItem, index) => (
-                    <li 
-                      key={index} 
-                      className="px-3 py-2 hover:bg-dark-highlight cursor-pointer text-sm"
-                      onClick={() => handleEndpointHistorySelect(historyItem)}
-                    >
-                      {historyItem}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <div className={styles.tlsContainer}>
-            <label className={styles.tlsLabel}>
-              <input
-                type="checkbox"
-                checked={useTLS}
-                onChange={handleUseTLSChange}
-                className={styles.tlsCheckbox}
-              />
-              Use TLS
-            </label>
-          </div>
-          <button
-            onClick={handleEndpointSave}
-            className={styles.button}
-            disabled={loading}
-          >
-            {loading ? 'Connecting...' : 'Connect'}
-          </button>
-        </div>
-        <div className="flex items-center">
-          <button
-            onClick={handleRefresh}
-            className={styles.refreshButton}
-            disabled={loading || !connected}
-          >
-            Refresh
-          </button>
-          <button
-            onClick={handleSettingsToggle}
-            className="ml-2 text-text-secondary hover:text-text-primary"
-            title="Settings"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className={styles.error}>
-          {error}
-          <button onClick={() => setError(null)} className={styles.closeButton}>
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className={styles.panelsContainer}>
-        {shouldUseMultiNetworkUI ? (
-          // New multi-network UI
-          <>
-            {/* Left Panel with Network Tabs */}
-            <div className={styles.leftPanel}>
-              <div className="flex flex-col h-full overflow-hidden">
-                {networks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-                    <Image 
-                      src="/icon.svg" 
-                      alt="gRPC Explorer" 
-                      width={64} 
-                      height={64} 
-                      className="mb-4 opacity-30"
-                    />
-                    <p className="text-text-secondary">
-                      Enter a gRPC endpoint and connect to browse available services
-                    </p>
-                  </div>
-                ) : (
-                  networks.map(network => (
-                    <NetworkTab
-                      key={network.id}
-                      endpoint={network.endpoint}
-                      useTLS={network.useTLS}
-                      cacheEnabled={cacheEnabled}
-                      onServiceSelect={handleServiceSelect}
-                      onMethodSelect={handleNetworkMethodSelect}
-                      selectedService={selectedService}
-                      selectedMethod={selectedMethod}
-                      isMinimized={network.isMinimized}
-                      onMinimize={() => handleNetworkMinimize(network.id)}
-                      onMaximize={() => handleNetworkMaximize(network.id)}
-                      onClose={() => handleNetworkClose(network.id)}
-                      defaultExpanded={_expandServicesByDefault}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Center Panel with Method Cards */}
-            <div className={styles.centerPanel}>
-              {methodSessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <Image 
-                    src="/icon.svg" 
-                    alt="gRPC Explorer" 
-                    width={64} 
-                    height={64} 
-                    className="mb-4 opacity-30"
-                  />
-                  <p className="text-center text-text-secondary">
-                    {networks.length > 0
-                      ? 'Select a method from the left panel to start'
-                      : 'Enter a gRPC endpoint and connect to browse available services'}
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 overflow-auto h-full">
-                  {methodSessions.map(session => (
-                    <MethodCard
-                      key={session.id}
-                      service={session.service}
-                      method={session.method}
-                      endpoint={session.endpoint}
-                      useTLS={session.useTLS}
-                      cacheEnabled={cacheEnabled}
-                      onClose={() => handleMethodSessionClose(session.id)}
-                      onMinimize={() => handleMethodSessionMinimize(session.id)}
-                      onMaximize={() => handleMethodSessionMaximize(session.id)}
-                      isMinimized={session.isMinimized}
-                      isMaximized={session.isMaximized}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Top Panel - Method Descriptor */}
+      <div className="h-48 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+        {selectedMethod ? (
+          <MethodDescriptor
+            method={selectedMethod.method}
+            service={selectedMethod.service}
+            color={selectedMethod.color}
+          />
         ) : (
-          // Classic UI (for backward compatibility)
-          <>
-            <div className={styles.leftPanel}>
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <LoadingSpinner size="lg" />
-                  <p className="mt-4 text-text-secondary">Loading services...</p>
-                </div>
-              ) : (
-                <ServiceList
-                  services={services}
-                  selectedService={selectedService}
-                  selectedMethod={selectedMethod}
-                  onServiceSelect={handleServiceSelect}
-                  onMethodSelect={handleMethodSelect}
-                  loading={loading}
-                  defaultExpanded={_expandServicesByDefault}
-                />
-              )}
+          <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <div className="text-center">
+              <Network className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Select a method to view its descriptor</p>
             </div>
-
-            <div className={styles.centerPanel}>
-              {loadingService ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <LoadingSpinner size="lg" />
-                  <p className="mt-4 text-text-secondary">Loading service methods...</p>
-                </div>
-              ) : loadingMethod ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <LoadingSpinner size="lg" />
-                  <p className="mt-4 text-text-secondary">Loading method details...</p>
-                </div>
-              ) : selectedMethod ? (
-                <MethodForm
-                  service={selectedService}
-                  method={selectedMethod}
-                  onExecute={executeQuery}
-                  isLoading={loadingMethod}
-                />
-              ) : (
-                <div className={styles.placeholder}>
-                  <Image
-                    src="/icon.svg"
-                    alt="gRPC Explorer"
-                    width={64}
-                    height={64}
-                    className="mb-4 opacity-30"
-                  />
-                  <p className="text-center">
-                    {services.length > 0
-                      ? 'Select a method from the left panel to start'
-                      : 'Enter a gRPC endpoint and connect to browse available services'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className={styles.rightPanel}>
-              {loadingMethod && selectedMethod ? (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <LoadingSpinner size="lg" />
-                  <p className="mt-4 text-text-secondary">Executing request...</p>
-                </div>
-              ) : response ? (
-                <JsonViewer data={response} />
-              ) : (
-                <div className={styles.placeholder}>
-                  <Image
-                    src="/icon.svg"
-                    alt="gRPC Explorer"
-                    width={64}
-                    height={64}
-                    className="mb-4 opacity-30"
-                  />
-                  <p className="text-center">Response will appear here</p>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
       </div>
-      
-      {/* Settings Panel */}
-      <SettingsPanel 
-        isOpen={isSettingsOpen} 
-        onClose={handleSettingsClose}
-        onSettingsChanged={handleSettingsChanged}
-      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Networks */}
+        <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+              <button
+                onClick={() => setShowAddNetwork(true)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {networks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No networks added</p>
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Add your first network
+                </button>
+              </div>
+            ) : (
+              networks.map(network => (
+                <NetworkBlock
+                  key={network.id}
+                  network={network}
+                  onToggle={() => toggleNetworkExpanded(network.id)}
+                  onRemove={() => handleRemoveNetwork(network.id)}
+                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Center Panel - Method Instances */}
+        <div className="flex-1 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {methodInstances.length} active
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {methodInstances.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No methods selected</p>
+                <p className="text-xs mt-1">Select methods from the networks panel</p>
+              </div>
+            ) : (
+              methodInstances.map(instance => (
+                <MethodBlock
+                  key={instance.id}
+                  instance={instance}
+                  isSelected={selectedMethod?.id === instance.id}
+                  onToggle={() => toggleMethodExpanded(instance.id)}
+                  onRemove={() => handleRemoveMethodInstance(instance.id)}
+                  onSelect={() => setSelectedMethod(instance)}
+                  onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                  onExecute={() => handleExecuteMethod(instance)}
+                  isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - Results */}
+        <div className="w-96 bg-white dark:bg-gray-950 overflow-hidden">
+          <ResultsPanel
+            result={currentResult || null}
+            isExecuting={isExecuting}
+            selectedMethod={selectedMethod}
+          />
+        </div>
+      </div>
+
+      {/* Add Network Dialog */}
+      {showAddNetwork && (
+        <AddNetworkDialog
+          onAdd={handleAddNetwork}
+          onClose={() => setShowAddNetwork(false)}
+        />
+      )}
     </div>
   );
-};
-
-export default GrpcExplorerApp;
+}

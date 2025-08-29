@@ -1,0 +1,169 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardContent, Button, Switch } from '@/lib/ui/components';
+import LoadingSpinner from './LoadingSpinner';
+import {
+  getUserSettings,
+  updateSetting,
+  clearMethodCache,
+  getCacheStats,
+  UserSettings,
+} from '@/utils/userSettings';
+
+export interface SettingsPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSettingsChanged: () => void;
+}
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  isOpen,
+  onClose,
+  onSettingsChanged,
+}) => {
+  const [settings, setSettings] = useState<UserSettings>(getUserSettings());
+  const [cacheStats, setCacheStats] = useState({ count: 0, sizeKB: 0 });
+  const [isClearing, setIsClearing] = useState(false);
+  const [tab, setTab] = useState<'general' | 'display'>('general');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSettings(getUserSettings());
+      setCacheStats(getCacheStats());
+    }
+  }, [isOpen]);
+
+  const handleToggle = <K extends keyof UserSettings>(
+    category: K,
+    key: keyof UserSettings[K]
+  ) => {
+    const updated = updateSetting(category, key, !settings[category][key]);
+    setSettings(updated);
+    onSettingsChanged();
+  };
+
+  const handleClear = () => {
+    setIsClearing(true);
+    clearMethodCache();
+    setCacheStats(getCacheStats());
+    setTimeout(() => setIsClearing(false), 300);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="w-full max-w-lg bg-dark-surface rounded-lg shadow-lg overflow-hidden">
+        <CardHeader className="flex justify-between items-center px-4 py-2 bg-dark-highlight border-b border-dark-border">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-2">
+              <span className="w-3 h-3 rounded-full bg-error-red"></span>
+              <span className="w-3 h-3 rounded-full bg-warning-yellow"></span>
+              <span className="w-3 h-3 rounded-full bg-success-green"></span>
+            </div>
+            <h2 className="text-text-primary font-semibold">Settings</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary"
+          >
+            ×
+          </button>
+        </CardHeader>
+        <div className="flex border-b border-dark-border">
+          <button
+            className={`flex-1 px-4 py-2 text-center text-sm font-medium transition-all
+              ${tab === 'general'
+                ? 'text-blue-accent border-b-2 border-blue-accent'
+                : 'text-text-secondary hover:text-text-primary'}`}
+            onClick={() => setTab('general')}
+          >
+            General
+          </button>
+          <button
+            className={`flex-1 px-4 py-2 text-center text-sm font-medium transition-all
+              ${tab === 'display'
+                ? 'text-blue-accent border-b-2 border-blue-accent'
+                : 'text-text-secondary hover:text-text-primary'}`}
+            onClick={() => setTab('display')}
+          >
+            Display
+          </button>
+        </div>
+        <CardContent className="p-5">
+          {tab === 'general' ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="text-text-primary">Enable Local Method Cache</span>
+                <Switch
+                  checked={settings.cache.enabled}
+                  onChange={() => handleToggle('cache', 'enabled')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-text-primary">Cache Expiration (days)</span>
+                <select
+                  value={settings.cache.expirationDays}
+                  onChange={e => updateSetting('cache', 'expirationDays', parseInt(e.target.value, 10))}
+                  className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-text-primary"
+                  disabled={!settings.cache.enabled}
+                >
+                  {[1,3,7,14,30].map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="bg-dark-bg rounded p-4">
+                <div className="flex justify-between text-text-secondary">
+                  <span>Cached Items</span>
+                  <span className="text-text-primary">{cacheStats.count}</span>
+                </div>
+                <div className="flex justify-between text-text-secondary">
+                  <span>Cache Size</span>
+                  <span className="text-text-primary">{cacheStats.sizeKB} KB</span>
+                </div>
+              </div>
+              <Button
+                onClick={handleClear}
+                disabled={isClearing || cacheStats.count === 0}
+                className={`w-full ${isClearing || cacheStats.count === 0 ? 'bg-dark-border text-text-secondary' : 'bg-error-red text-white hover:bg-opacity-90'}`}
+              >
+                {isClearing ? (
+                  <div className="flex items-center justify-center">
+                    <LoadingSpinner />
+                    <span className="ml-2">Clearing...</span>
+                  </div>
+                ) : 'Clear Cache'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="text-text-primary">Expand Service List by Default</span>
+                <Switch
+                  checked={settings.ui.expandServicesByDefault}
+                  onChange={() => handleToggle('ui', 'expandServicesByDefault')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-text-primary">Expand Method Cards by Default</span>
+                <Switch
+                  checked={settings.ui.expandMethodsByDefault}
+                  onChange={() => handleToggle('ui', 'expandMethodsByDefault')}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+        <div className="p-4 border-t border-dark-border">
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={onClose}
+          >Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SettingsPanel;
