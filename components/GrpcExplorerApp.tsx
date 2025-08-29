@@ -9,6 +9,7 @@ import MethodBlock from './MethodBlock';
 import MethodDescriptor from './MethodDescriptor';
 import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 interface GrpcNetwork {
   id: string;
@@ -251,29 +252,38 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Top Panel - Method Descriptor */}
-      <div className="h-48 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
-        {selectedMethod ? (
-          <MethodDescriptor
-            method={selectedMethod.method}
-            service={selectedMethod.service}
-            color={selectedMethod.color}
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-            <div className="text-center">
-              <Network className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Select a method to view its descriptor</p>
-            </div>
+    <div className="h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Vertical resizable group for top/bottom split */}
+      <ResizablePanelGroup direction="vertical" className="h-full">
+        {/* Top Panel - Method Descriptor */}
+        <ResizablePanel defaultSize={20} minSize={10} maxSize={40}>
+          <div className="h-full border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+            {selectedMethod ? (
+              <MethodDescriptor
+                method={selectedMethod.method}
+                service={selectedMethod.service}
+                color={selectedMethod.color}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <div className="text-center">
+                  <Network className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Select a method to view its descriptor</p>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </ResizablePanel>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Networks */}
-        <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
+        <ResizableHandle withHandle className="h-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+
+        {/* Bottom Panel - Main Content Area */}
+        <ResizablePanel defaultSize={80}>
+          {/* Horizontal resizable group for left/center/right split */}
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            {/* Left Panel - Networks */}
+            <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+              <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
@@ -310,10 +320,14 @@ export default function GrpcExplorerApp() {
               ))
             )}
           </div>
-        </div>
+              </div>
+            </ResizablePanel>
 
-        {/* Center Panel - Method Instances */}
-        <div className="flex-1 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+            <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+
+            {/* Center Panel - Method Instances */}
+            <ResizablePanel defaultSize={40} minSize={20}>
+              <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
@@ -346,17 +360,24 @@ export default function GrpcExplorerApp() {
               ))
             )}
           </div>
-        </div>
+              </div>
+            </ResizablePanel>
 
-        {/* Right Panel - Results */}
-        <div className="w-96 bg-white dark:bg-gray-950 overflow-hidden">
-          <ResultsPanel
-            result={currentResult || null}
-            isExecuting={isExecuting}
-            selectedMethod={selectedMethod}
-          />
-        </div>
-      </div>
+            <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+
+            {/* Right Panel - Results */}
+            <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden">
+                <ResultsPanel
+                  result={currentResult || null}
+                  isExecuting={isExecuting}
+                  selectedMethod={selectedMethod}
+                />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Add Network Dialog */}
       {showAddNetwork && (
