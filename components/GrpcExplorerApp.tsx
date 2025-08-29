@@ -1,447 +1,370 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import Image from 'next/image';
-import { Plus, Keyboard, History } from 'lucide-react';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { ChevronDown, Plus, Network, Play, X, Loader2, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getNetworkColor, MethodTab } from '@/lib/utils/colors';
-import { useKeyboardShortcuts, SHORTCUTS } from '@/lib/hooks/useKeyboardShortcuts';
-import { useExecutionHistory } from '@/lib/hooks/useExecutionHistory';
-import NetworkPanel from './NetworkPanel';
-import MethodTabsPanel from './MethodTabsPanel';
-import MethodInteractionPanel from './MethodInteractionPanel';
+import { ExpandableBlock } from './ExpandableBlock';
+import NetworkBlock from './NetworkBlock';
+import MethodBlock from './MethodBlock';
+import MethodDescriptor from './MethodDescriptor';
+import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
-import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
-import ExecutionHistoryDialog from './ExecutionHistoryDialog';
 
-interface NetworkData {
+interface GrpcNetwork {
   id: string;
   name: string;
   endpoint: string;
   tlsEnabled: boolean;
-  services: any[];
-  color: ReturnType<typeof getNetworkColor>;
+  services: GrpcService[];
+  color: string;
   loading?: boolean;
   error?: string;
+  expanded?: boolean;
 }
 
-const GrpcExplorerApp: React.FC = () => {
-  const [networks, setNetworks] = useState<NetworkData[]>([]);
-  const [methodTabs, setMethodTabs] = useState<MethodTab[]>([]);
-  const [activeMethodTabId, setActiveMethodTabId] = useState<string | null>(null);
-  const [methodDescriptors, setMethodDescriptors] = useState<Record<string, any>>({});
+interface GrpcService {
+  name: string;
+  fullName: string;
+  methods: GrpcMethod[];
+}
+
+interface GrpcMethod {
+  name: string;
+  fullName: string;
+  requestType: string;
+  responseType: string;
+  requestStreaming: boolean;
+  responseStreaming: boolean;
+  options?: any;
+  description?: string;
+}
+
+interface MethodInstance {
+  id: string;
+  networkId: string;
+  method: GrpcMethod;
+  service: GrpcService;
+  color: string;
+  expanded?: boolean;
+  params?: Record<string, any>;
+}
+
+interface ExecutionResult {
+  methodId: string;
+  success: boolean;
+  data?: any;
+  error?: string;
+  timestamp: number;
+  duration?: number;
+}
+
+// Color palette for networks
+const NETWORK_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#a855f7', // purple
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#84cc16', // lime
+];
+
+export default function GrpcExplorerApp() {
+  const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
+  const [methodInstances, setMethodInstances] = useState<MethodInstance[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<MethodInstance | null>(null);
+  const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
   const [showAddNetwork, setShowAddNetwork] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  
-  const { history, addExecution, clearHistory, exportHistory } = useExecutionHistory();
-  
+  const [isExecuting, setIsExecuting] = useState(false);
+
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Add a new network
-  const addNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean = true) => {
+
+  // Get next color for network
+  const getNextColor = useCallback(() => {
+    const usedColors = networks.map(n => n.color);
+    const availableColor = NETWORK_COLORS.find(c => !usedColors.includes(c));
+    return availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length];
+  }, [networks]);
+
+  // Add network
+  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean) => {
     const id = generateId();
-    const name = (() => {
-      try {
-        const url = new URL(endpoint.startsWith('http') ? endpoint : `https://${endpoint}`);
-        return url.hostname;
-      } catch {
-        return endpoint.split(':')[0];
-      }
-    })();
-    
-    const newNetwork: NetworkData = {
+    const color = getNextColor();
+    const name = endpoint.split('//').pop()?.split(':')[0] || endpoint;
+
+    const newNetwork: GrpcNetwork = {
       id,
       name,
       endpoint,
       tlsEnabled,
       services: [],
-      color: getNetworkColor(networks.length),
+      color,
       loading: true,
+      expanded: true
     };
-    
+
     setNetworks(prev => [...prev, newNetwork]);
-    
-    // Fetch services for this network
+
+    // Fetch services via reflection
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, useTLS: tlsEnabled }),
+        body: JSON.stringify({ endpoint, tlsEnabled })
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch services');
-      
+
       const data = await response.json();
-      
-      // Transform services to include full path in methods
-      const transformedServices = (data.services || []).map((service: any) => ({
-        ...service,
-        methods: service.methods?.map((method: any) => ({
-          ...method,
-          fullPath: `${service.service}.${method.name}`
-        }))
-      }));
       
       setNetworks(prev => prev.map(n => 
         n.id === id 
-          ? { ...n, services: transformedServices, loading: false }
+          ? { ...n, services: data.services || [], loading: false }
           : n
       ));
     } catch (error) {
       setNetworks(prev => prev.map(n => 
         n.id === id 
-          ? { ...n, error: error instanceof Error ? error.message : 'Failed to load', loading: false }
+          ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
           : n
       ));
     }
-  }, [networks.length]);
-  
-  // Remove a network
-  const removeNetwork = useCallback((networkId: string) => {
+  }, [getNextColor]);
+
+  // Remove network
+  const handleRemoveNetwork = useCallback((networkId: string) => {
     setNetworks(prev => prev.filter(n => n.id !== networkId));
-    // Also remove any method tabs from this network
-    setMethodTabs(prev => prev.filter(t => t.networkId !== networkId));
+    setMethodInstances(prev => prev.filter(m => m.networkId !== networkId));
   }, []);
-  
-  // Refresh a network's services
-  const refreshNetwork = useCallback(async (networkId: string) => {
-    const network = networks.find(n => n.id === networkId);
-    if (!network) return;
-    
+
+  // Toggle network expansion
+  const toggleNetworkExpanded = useCallback((networkId: string) => {
     setNetworks(prev => prev.map(n => 
-      n.id === networkId ? { ...n, loading: true } : n
+      n.id === networkId ? { ...n, expanded: !n.expanded } : n
     ));
-    
+  }, []);
+
+  // Add method instance to center panel
+  const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
+    // Check if method already exists
+    const exists = methodInstances.some(
+      m => m.networkId === network.id && 
+           m.method.fullName === method.fullName &&
+           m.service.fullName === service.fullName
+    );
+
+    if (!exists) {
+      const newInstance: MethodInstance = {
+        id: generateId(),
+        networkId: network.id,
+        method,
+        service,
+        color: network.color,
+        expanded: true,
+        params: {}
+      };
+
+      setMethodInstances(prev => [...prev, newInstance]);
+      setSelectedMethod(newInstance);
+    }
+  }, [methodInstances]);
+
+  // Remove method instance
+  const handleRemoveMethodInstance = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.filter(m => m.id !== instanceId));
+    if (selectedMethod?.id === instanceId) {
+      setSelectedMethod(null);
+    }
+  }, [selectedMethod]);
+
+  // Toggle method instance expansion
+  const toggleMethodExpanded = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.map(m => 
+      m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+    ));
+  }, []);
+
+  // Update method parameters
+  const handleUpdateParams = useCallback((instanceId: string, params: Record<string, any>) => {
+    setMethodInstances(prev => prev.map(m => 
+      m.id === instanceId ? { ...m, params } : m
+    ));
+  }, []);
+
+  // Execute method
+  const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
+    setIsExecuting(true);
+    setSelectedMethod(instance);
+
+    const startTime = Date.now();
+
     try {
-      const response = await fetch('/api/grpc/services', {
+      const network = networks.find(n => n.id === instance.networkId);
+      if (!network) throw new Error('Network not found');
+
+      const response = await fetch('/api/grpc/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: network.endpoint, useTLS: network.tlsEnabled }),
+        body: JSON.stringify({
+          endpoint: network.endpoint,
+          tlsEnabled: network.tlsEnabled,
+          service: instance.service.fullName,
+          method: instance.method.name,
+          params: instance.params
+        })
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch services');
-      
+
       const data = await response.json();
-      
-      // Transform services
-      const transformedServices = (data.services || []).map((service: any) => ({
-        ...service,
-        methods: service.methods?.map((method: any) => ({
-          ...method,
-          fullPath: `${service.service}.${method.name}`
-        }))
-      }));
-      
-      setNetworks(prev => prev.map(n => 
-        n.id === networkId 
-          ? { ...n, services: transformedServices, loading: false }
-          : n
-      ));
+      const duration = Date.now() - startTime;
+
+      const result: ExecutionResult = {
+        methodId: instance.id,
+        success: response.ok,
+        data: data.result || data,
+        error: data.error,
+        timestamp: Date.now(),
+        duration
+      };
+
+      setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
     } catch (error) {
-      setNetworks(prev => prev.map(n => 
-        n.id === networkId 
-          ? { ...n, error: error instanceof Error ? error.message : 'Failed to load', loading: false }
-          : n
-      ));
+      const result: ExecutionResult = {
+        methodId: instance.id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: Date.now(),
+        duration: Date.now() - startTime
+      };
+
+      setExecutionResults(prev => [result, ...prev].slice(0, 50));
+    } finally {
+      setIsExecuting(false);
     }
   }, [networks]);
-  
-  // Handle method selection
-  const handleMethodSelect = useCallback((network: NetworkData, service: any, method: any) => {
-    const tabId = `${network.id}-${service.service}-${method.name}`;
-    
-    // Check if tab already exists
-    const existingTab = methodTabs.find(t => t.id === tabId);
-    if (existingTab) {
-      setActiveMethodTabId(tabId);
-      return;
-    }
-    
-    // Create new tab
-    const newTab: MethodTab = {
-      id: tabId,
-      networkId: network.id,
-      networkName: network.name,
-      service: service.service,
-      method: method.name,
-      fullPath: method.fullPath || `${service.service}.${method.name}`,
-      color: network.color,
-    };
-    
-    setMethodTabs(prev => [...prev, newTab]);
-    setActiveMethodTabId(tabId);
-    
-    // TODO: Fetch method descriptor
-    // For now, using mock data
-    setMethodDescriptors(prev => ({
-      ...prev,
-      [tabId]: {
-        request: { 
-          example_field: "string",
-          nested: { field: "value" }
-        },
-        response: { 
-          result: "string",
-          data: ["array"] 
-        },
-        streaming: false
-      }
-    }));
-  }, [methodTabs]);
-  
-  // Close a method tab
-  const closeMethodTab = useCallback((tabId: string) => {
-    setMethodTabs(prev => prev.filter(t => t.id !== tabId));
-    if (activeMethodTabId === tabId) {
-      setActiveMethodTabId(methodTabs[0]?.id || null);
-    }
-  }, [activeMethodTabId, methodTabs]);
-  
-  // Execute a method
-  const executeMethod = useCallback(async (params: any) => {
-    const activeTab = methodTabs.find(t => t.id === activeMethodTabId);
-    if (!activeTab) throw new Error('No active method');
-    
-    const network = networks.find(n => n.id === activeTab.networkId);
-    if (!network) throw new Error('Network not found');
-    
-    const startTime = Date.now();
-    
-    // TODO: Make actual gRPC call
-    // For now, return mock response
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const response = {
-          success: true,
-          data: {
-            message: `Response from ${activeTab.method}`,
-            timestamp: new Date().toISOString(),
-            params: params,
-            network: network.name,
-            service: activeTab.service
-          }
-        };
-        
-        // Add to execution history
-        addExecution({
-          network: network.name,
-          service: activeTab.service,
-          method: activeTab.method,
-          params: params,
-          response: response,
-          duration: Date.now() - startTime
-        });
-        
-        resolve(response);
-      }, 1000);
-    });
-  }, [activeMethodTabId, methodTabs, networks, addExecution]);
-  
-  const activeMethod = methodTabs.find(t => t.id === activeMethodTabId) || null;
-  
-  // Setup keyboard shortcuts
-  useKeyboardShortcuts([
-    {
-      key: 'n',
-      ctrl: true,
-      handler: () => setShowAddNetwork(true),
-      description: SHORTCUTS.ADD_NETWORK.description
-    },
-    {
-      key: 'w',
-      ctrl: true,
-      handler: () => {
-        if (activeMethodTabId) {
-          closeMethodTab(activeMethodTabId);
-        }
-      },
-      description: SHORTCUTS.CLOSE_TAB.description
-    },
-    {
-      key: 'Tab',
-      ctrl: true,
-      handler: () => {
-        const currentIndex = methodTabs.findIndex(t => t.id === activeMethodTabId);
-        const nextIndex = (currentIndex + 1) % methodTabs.length;
-        if (methodTabs[nextIndex]) {
-          setActiveMethodTabId(methodTabs[nextIndex].id);
-        }
-      },
-      description: SHORTCUTS.NEXT_TAB.description
-    },
-    {
-      key: 'Tab',
-      ctrl: true,
-      shift: true,
-      handler: () => {
-        const currentIndex = methodTabs.findIndex(t => t.id === activeMethodTabId);
-        const prevIndex = currentIndex === 0 ? methodTabs.length - 1 : currentIndex - 1;
-        if (methodTabs[prevIndex]) {
-          setActiveMethodTabId(methodTabs[prevIndex].id);
-        }
-      },
-      description: SHORTCUTS.PREV_TAB.description
-    },
-    {
-      key: '?',
-      ctrl: true,
-      shift: true,
-      handler: () => setShowShortcuts(!showShortcuts),
-      description: 'Toggle shortcuts help'
-    }
-  ]);
-  
+
+  // Get latest result for selected method
+  const currentResult = useMemo(() => {
+    if (!selectedMethod) return null;
+    return executionResults.find(r => r.methodId === selectedMethod.id);
+  }, [selectedMethod, executionResults]);
+
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="h-12 px-4 flex items-center justify-between border-b border-border bg-card/50">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/icon.png"
-            alt="gRPC Explorer"
-            width={20}
-            height={20}
-            className="shrink-0"
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Top Panel - Method Descriptor */}
+      <div className="h-48 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+        {selectedMethod ? (
+          <MethodDescriptor
+            method={selectedMethod.method}
+            service={selectedMethod.service}
+            color={selectedMethod.color}
           />
-          <h1 className="text-sm font-semibold">gRPC Explorer</h1>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowHistory(true)}
-            className={cn(
-              "p-1.5 rounded",
-              "hover:bg-secondary/50 transition-colors",
-              "relative"
-            )}
-            title="Execution history"
-          >
-            <History className="h-4 w-4" />
-            {history.length > 0 && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 bg-primary rounded-full" />
-            )}
-          </button>
-          <button
-            onClick={() => setShowShortcuts(true)}
-            className={cn(
-              "p-1.5 rounded",
-              "hover:bg-secondary/50 transition-colors"
-            )}
-            title="Keyboard shortcuts (Ctrl+Shift+?)"
-          >
-            <Keyboard className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setShowAddNetwork(true)}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded text-sm",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              "transition-colors"
-            )}
-          >
-            <Plus className="h-4 w-4" />
-            Add Network
-          </button>
-        </div>
-      </header>
-      
-      {/* Main Content - 3 Panel Layout */}
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <div className="text-center">
+              <Network className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Select a method to view its descriptor</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Networks */}
-        <ResizablePanel 
-          defaultSize={20} 
-          minSize={15} 
-          maxSize={30}
-          className="min-w-[200px]"
-        >
-          <NetworkPanel
-            networks={networks}
-            onMethodSelect={handleMethodSelect}
-            onNetworkRemove={removeNetwork}
-            onNetworkRefresh={refreshNetwork}
+        <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+              <button
+                onClick={() => setShowAddNetwork(true)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {networks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No networks added</p>
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Add your first network
+                </button>
+              </div>
+            ) : (
+              networks.map(network => (
+                <NetworkBlock
+                  key={network.id}
+                  network={network}
+                  onToggle={() => toggleNetworkExpanded(network.id)}
+                  onRemove={() => handleRemoveNetwork(network.id)}
+                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Center Panel - Method Instances */}
+        <div className="flex-1 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {methodInstances.length} active
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {methodInstances.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No methods selected</p>
+                <p className="text-xs mt-1">Select methods from the networks panel</p>
+              </div>
+            ) : (
+              methodInstances.map(instance => (
+                <MethodBlock
+                  key={instance.id}
+                  instance={instance}
+                  isSelected={selectedMethod?.id === instance.id}
+                  onToggle={() => toggleMethodExpanded(instance.id)}
+                  onRemove={() => handleRemoveMethodInstance(instance.id)}
+                  onSelect={() => setSelectedMethod(instance)}
+                  onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                  onExecute={() => handleExecuteMethod(instance)}
+                  isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - Results */}
+        <div className="w-96 bg-white dark:bg-gray-950 overflow-hidden">
+          <ResultsPanel
+            result={currentResult || null}
+            isExecuting={isExecuting}
+            selectedMethod={selectedMethod}
           />
-        </ResizablePanel>
-        
-        <ResizableHandle className="w-[1px] bg-border hover:bg-primary/50 transition-colors" />
-        
-        {/* Center Panel - Method Tabs */}
-        <ResizablePanel 
-          defaultSize={40} 
-          minSize={30} 
-          maxSize={50}
-        >
-          <MethodTabsPanel
-            tabs={methodTabs}
-            activeTabId={activeMethodTabId}
-            onTabSelect={setActiveMethodTabId}
-            onTabClose={closeMethodTab}
-            methodDescriptors={methodDescriptors}
-          />
-        </ResizablePanel>
-        
-        <ResizableHandle className="w-[1px] bg-border hover:bg-primary/50 transition-colors" />
-        
-        {/* Right Panel - Method Interaction */}
-        <ResizablePanel 
-          defaultSize={40} 
-          minSize={30} 
-          maxSize={50}
-        >
-          <MethodInteractionPanel
-            activeMethod={activeMethod}
-            onExecute={executeMethod}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-      
+        </div>
+      </div>
+
       {/* Add Network Dialog */}
       {showAddNetwork && (
         <AddNetworkDialog
-          onAdd={(endpoint, tls) => {
-            addNetwork(endpoint, tls);
-            setShowAddNetwork(false);
-          }}
+          onAdd={handleAddNetwork}
           onClose={() => setShowAddNetwork(false)}
-        />
-      )}
-      
-      {/* Keyboard Shortcuts Dialog */}
-      {showShortcuts && (
-        <KeyboardShortcutsDialog
-          open={showShortcuts}
-          onClose={() => setShowShortcuts(false)}
-        />
-      )}
-      
-      {/* Execution History Dialog */}
-      {showHistory && (
-        <ExecutionHistoryDialog
-          open={showHistory}
-          onClose={() => setShowHistory(false)}
-          history={history}
-          onClear={clearHistory}
-          onExport={exportHistory}
-          onReplay={(record) => {
-            // Find the network and method, then set params
-            const network = networks.find(n => n.name === record.network);
-            if (network) {
-              const service = network.services.find(s => s.service === record.service);
-              if (service) {
-                const method = service.methods?.find((m: any) => m.name === record.method);
-                if (method) {
-                  handleMethodSelect(network, service, method);
-                  // TODO: Set the params in the interaction panel
-                }
-              }
-            }
-          }}
         />
       )}
     </div>
   );
-};
-
-export default GrpcExplorerApp;
+}

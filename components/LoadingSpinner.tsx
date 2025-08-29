@@ -1,38 +1,21 @@
-// components/LoadingSpinner.tsx
 import React from 'react';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface LoadingSpinnerProps {
-    size?: 'sm' | 'md' | 'lg';
-    color?: string;
+  className?: string;
 }
 
-const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
-    size = 'md',
-    color = '#0a84ff'
-}) => {
-    // Size mapping
-    const sizeMap = {
-        sm: '16px',
-        md: '24px',
-        lg: '32px'
-    };
-
-    const spinnerSize = sizeMap[size];
-
-    return (
-        <div className="flex items-center justify-center">
-        <div
-        className="animate-spin rounded-full border-t-transparent"
-        style={{
-            width: spinnerSize,
-            height: spinnerSize,
-            borderWidth: '2px',
-            borderColor: color,
-            borderTopColor: 'transparent'
-        }}
-        />
-        </div>
-    );
+const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ className }) => {
+  if (className) {
+    return <Loader2 className={cn("animate-spin", className)} aria-label="Loading" />;
+  }
+  
+  return (
+    <div className="flex justify-center items-center py-4">
+      <Loader2 className="w-6 h-6 animate-spin text-blue-accent" aria-label="Loading" />
+    </div>
+  );
 };
 
 export default LoadingSpinner;
