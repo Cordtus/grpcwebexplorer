@@ -1,9 +1,8 @@
 // utils/process.ts
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { type ChildProcess, spawn } from 'child_process';
 
 // Track active child processes
-const activeProcesses = new Set<any>();
+const activeProcesses = new Set<ChildProcess>();
 
 // Handle cleanup on process exit
 if (typeof process !== 'undefined') {
@@ -25,17 +24,28 @@ if (typeof process !== 'undefined') {
 
 /**
  * Execute a command and track the process
- * @param {string} command - Command to execute
+ * @param {string[]} command - Command to execute
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
-export async function execCommand(command: string): Promise<{stdout: string, stderr: string}> {
-  const childProcess = exec(command);
+export async function execCommand(command: string[], opts?: {
+  stdin?: string | undefined,
+}): Promise<{stdout: string, stderr: string}> {
+  const childProcess = spawn(command[0], command.slice(1));
   activeProcesses.add(childProcess);
   
   try {
     return await new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
+
+      if (opts?.stdin) {
+        childProcess.stdin?.write(opts.stdin, (err) => {
+          if (err) {
+            console.warn('failed to write to %s stdin', command, err);
+          }
+          childProcess.stdin?.end();
+        });
+      }
       
       childProcess.stdout?.on('data', (data) => {
         stdout += data;
@@ -61,6 +71,3 @@ export async function execCommand(command: string): Promise<{stdout: string, std
     activeProcesses.delete(childProcess);
   }
 }
-
-// For backwards compatibility
-export const execAsync = promisify(exec);
