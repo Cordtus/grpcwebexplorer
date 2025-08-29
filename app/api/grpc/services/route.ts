@@ -1,12 +1,12 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { execCommand } from '@/utils/process';
 import { getCache, setCache } from '@/lib/grpc/cache';
+import { runGrpcurl } from '@/utils/grpcurl';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { endpoint, tlsEnabled, forceRefresh } = body;
+    const { endpoint, tlsEnabled: tls, forceRefresh }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; } = body;
     
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint is required' }, { status: 400 });
@@ -16,16 +16,17 @@ export async function POST(req: Request) {
     let endpointWithPort = endpoint;
     if (!endpoint.includes(':')) {
       // Default to 443 for TLS, 9090 for plaintext
-      endpointWithPort = tlsEnabled !== false ? `${endpoint}:443` : `${endpoint}:9090`;
+      endpointWithPort = tls !== false ? `${endpoint}:443` : `${endpoint}:9090`;
     }
     
     // First, fetch the chain_id using GetLatestBlock
-    const tlsFlag = tlsEnabled === false ? '-plaintext ' : '';
     let chainId = '';
-    
     try {
-      const getLatestBlockCommand = `grpcurl ${tlsFlag}${endpointWithPort} cosmos.base.tendermint.v1beta1.Service.GetLatestBlock 2>/dev/null`;
-      const { stdout: blockOutput } = await execCommand(getLatestBlockCommand);
+      const { stdout: blockOutput } = await runGrpcurl({
+        endpoint: endpointWithPort,
+        tls,
+        args: 'cosmos.base.tendermint.v1beta1.Service.GetLatestBlock',
+      });
       
       // Parse the response to extract chain_id
       const blockData = JSON.parse(blockOutput);
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
     }
     
     // Create cache key based on chain_id if available, otherwise use endpoint
-    const cacheKey = chainId ? `services:chain:${chainId}` : `services:${endpointWithPort}:${tlsEnabled !== false}`;
+    const cacheKey = chainId ? `services:chain:${chainId}` : `services:${endpointWithPort}:${tls !== false}`;
     
     // Check cache first unless force refresh is requested
     if (!forceRefresh) {
@@ -54,18 +55,24 @@ export async function POST(req: Request) {
     }
     
     // Use grpcurl to list services
-    const listCommand = `grpcurl ${tlsFlag}${endpointWithPort} list 2>/dev/null`;
-    
     try {
-      const { stdout } = await execCommand(listCommand);
+      const { stdout } = await runGrpcurl({
+        endpoint: endpointWithPort,
+        tls,
+        args: 'list',
+      });
+
       const serviceNames = stdout.trim().split('\n').filter(Boolean);
       
       // Now fetch methods for each service
       const services = await Promise.all(
         serviceNames.map(async (serviceName) => {
           try {
-            const describeCommand = `grpcurl ${tlsFlag}${endpointWithPort} describe ${serviceName} 2>/dev/null`;
-            const { stdout: describeOutput } = await execCommand(describeCommand);
+            const { stdout: describeOutput } = await runGrpcurl({
+              endpoint: endpointWithPort,
+              tls,
+              args: ['describe', serviceName],
+            });
             
             // Parse the describe output to extract methods
             const methods = [];

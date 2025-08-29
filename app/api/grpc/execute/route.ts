@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { execCommand } from '@/utils/process';
+import { runGrpcurl } from '@/utils/grpcurl';
 
 export async function POST(req: Request) {
   try {
@@ -24,11 +24,13 @@ export async function POST(req: Request) {
     const jsonInput = JSON.stringify(params || {});
     
     // Use grpcurl to execute the method
-    const tlsFlag = tlsEnabled === false ? '-plaintext ' : '';
-    const grpcurlCommand = `echo '${jsonInput}' | grpcurl ${tlsFlag}-d @ ${endpointWithPort} ${fullMethodName} 2>&1`;
-    
     try {
-      const { stdout } = await execCommand(grpcurlCommand);
+      const { stdout } = await runGrpcurl({
+        endpoint: endpointWithPort,
+        tls: tlsEnabled === true,
+        args: fullMethodName,
+        stdin: jsonInput,
+      });
       
       // Try to parse the response as JSON
       try {
