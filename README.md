@@ -28,17 +28,20 @@ The application will be available at `http://localhost:3000`
 
 ## Production Build
 
+Build the application for production:
+
 ```bash
 yarn build:prod
 ```
 
-The production build generates a standalone Node.js application in `.next/standalone/`
-
 ## Running in Production
 
+Start the production server:
+
 ```bash
-cd .next/standalone
-NODE_ENV=production PORT=3000 node server.js
+yarn start
+# Or with custom port
+PORT=3001 yarn start
 ```
 
 ## Usage
@@ -145,11 +148,62 @@ CACHE_DIR=/path/to/cache
 
 - `yarn dev` - Start development server
 - `yarn build` - Build for production
-- `yarn build:prod` - Build standalone production bundle
-- `yarn start:prod` - Run production server
+- `yarn build:prod` - Build production with telemetry disabled
+- `yarn start` - Run production server
 - `yarn lint` - Run ESLint
+- `yarn docker:build` - Build Docker image
+- `yarn docker:up` - Start Docker container
+- `yarn docker:down` - Stop Docker container
+- `yarn docker:logs` - View Docker logs
 
-## Deployment
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+The easiest way to deploy the application:
+
+```bash
+# Build and start the container
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
+```
+
+The application will be available at `http://localhost:3000`
+
+### Using Docker Directly
+
+Build the Docker image:
+
+```bash
+docker build -t grpc-explorer .
+```
+
+Run the container:
+
+```bash
+docker run -d \
+  --name grpc-explorer \
+  -p 3000:3000 \
+  -v grpc-cache:/app/.cache \
+  -e NODE_ENV=production \
+  grpc-explorer
+```
+
+### Docker Configuration
+
+The Docker setup includes:
+- Multi-stage build for optimized image size
+- grpcurl pre-installed for gRPC communication
+- Persistent cache volume for service definitions
+- Production-optimized Node.js configuration
+- Automatic container restart on failure
+
+## Alternative Deployment Methods
 
 ### PM2
 
@@ -157,19 +211,6 @@ CACHE_DIR=/path/to/cache
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
-```
-
-### Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY .next/standalone ./
-COPY .next/static ./.next/static
-COPY public ./public
-EXPOSE 3000
-ENV NODE_ENV=production
-CMD ["node", "server.js"]
 ```
 
 ### systemd

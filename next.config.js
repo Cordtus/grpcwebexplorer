@@ -9,10 +9,8 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  output: 'standalone',
-  // Ensure static assets are correctly served
-  assetPrefix: process.env.NODE_ENV === 'production' ? undefined : undefined,
-  // Configure static folder properly
+  // Remove standalone for now - it requires additional setup for static assets
+  // output: 'standalone',
   images: {
     unoptimized: true,
   },

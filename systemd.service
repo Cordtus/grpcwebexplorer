@@ -6,8 +6,8 @@ After=network.target
 Type=simple
 User=grpc-user
 Group=grpc-user
-WorkingDirectory=/opt/grpc-explorer/.next/standalone
-ExecStart=/usr/bin/node server.js
+WorkingDirectory=/opt/grpc-explorer
+ExecStart=/usr/bin/yarn start
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Restart=on-failure

@@ -1,8 +1,8 @@
 module.exports = {
   apps: [{
     name: 'grpc-explorer',
-    script: 'server.js',
-    cwd: './.next/standalone',
+    script: 'yarn',
+    args: 'start',
     instances: 1,
     autorestart: true,
     watch: false,

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  grpc-explorer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grpc-explorer
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      # Persist cache between container restarts
+      - grpc-cache:/app/.cache
+    restart: unless-stopped
+    networks:
+      - grpc-network
+
+volumes:
+  grpc-cache:
+    driver: local
+
+networks:
+  grpc-network:
+    driver: bridge

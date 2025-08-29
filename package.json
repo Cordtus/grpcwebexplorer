@@ -8,8 +8,11 @@
     "build": "next build",
     "build:prod": "NEXT_TELEMETRY_DISABLED=1 next build",
     "start": "next start",
-    "start:prod": "cd .next/standalone && NODE_ENV=production PORT=3000 node server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.13.3",
