@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Install dependencies for grpcurl
 RUN apk add --no-cache curl
@@ -23,7 +23,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN yarn build
 
 # Production stage
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Install grpcurl in production image
 RUN apk add --no-cache curl
