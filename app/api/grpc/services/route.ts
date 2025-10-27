@@ -2,7 +2,7 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { getCache, setCache } from '@/lib/grpc/cache';
-import { fetchServicesViaReflection } from '@/utils/grpcReflection';
+import { fetchServicesViaReflection, type GrpcService } from '@/utils/grpcReflection';
 
 export async function POST(req: Request) {
   try {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     }
 
     // Try each endpoint until one works
-    let services = [];
+    let services: GrpcService[] = [];
     let lastError: any = null;
     let successfulEndpoint = null;
 
