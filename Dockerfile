@@ -1,12 +1,6 @@
 # Build stage
 FROM node:22-alpine AS builder
 
-# Install dependencies for grpcurl
-RUN apk add --no-cache curl
-
-# Download and install grpcurl
-RUN curl -sSL https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/grpcurl_1.8.9_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin
-
 WORKDIR /app
 
 # Copy package files
@@ -24,10 +18,6 @@ RUN yarn build
 
 # Production stage
 FROM node:22-alpine
-
-# Install grpcurl in production image
-RUN apk add --no-cache curl
-RUN curl -sSL https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/grpcurl_1.8.9_linux_x86_64.tar.gz | tar -xz -C /usr/local/bin
 
 WORKDIR /app
 
@@ -51,5 +41,8 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Copy start server script
+COPY start-server.js ./
+
 # Start the application
-CMD ["yarn", "start"]
+CMD ["node", "start-server.js"]

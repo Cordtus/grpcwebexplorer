@@ -9,8 +9,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Remove standalone for now - it requires additional setup for static assets
-  // output: 'standalone',
+  output: 'standalone',
   images: {
     unoptimized: true,
   },

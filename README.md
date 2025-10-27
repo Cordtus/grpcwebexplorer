@@ -1,144 +1,30 @@
 # gRPC Web Explorer
 
-A web-based interface for exploring and interacting with gRPC services through reflection.
+Web-based interface for exploring and interacting with gRPC services via reflection. Features multi-network support, hierarchical method browsing, and real-time method execution.
 
-## Prerequisites
+## Setup
 
-- Node.js 14.0 or higher
-- Yarn package manager
-- grpcurl (`brew install grpcurl` on macOS)
-
-## Installation
+**Requirements**: Node.js 20+, Yarn
 
 ```bash
-git clone <repository-url>
-cd grpcWebExplorer
 yarn install
+yarn dev          # Development server at http://localhost:3000
+yarn build:prod   # Production build
+yarn start:prod   # Production server
 ```
 
-## Running the Application
-
-### Development Mode
-
+**Docker**:
 ```bash
-yarn dev
-```
-
-Access at `http://localhost:3000`
-
-### Production Mode
-
-```bash
-yarn build:prod
-yarn start
-```
-
-## Docker Deployment
-
-### Quick Start
-
-```bash
-docker-compose up -d
-```
-
-Access at `http://localhost:3000`
-
-### Docker Commands
-
-```bash
-docker-compose up -d     # Start container
-docker-compose logs -f   # View logs
-docker-compose down      # Stop container
+yarn docker:up    # Start container
+yarn docker:down  # Stop container
 ```
 
 ## Usage
 
-### Connecting to Services
+1. Click "Add Network" or select from Cosmos chain registry
+2. Enter gRPC endpoint (e.g., `grpc.cosmos.directory:443`)
+3. Enable TLS toggle for port 443 endpoints
+4. Select methods from left panel, enter JSON parameters, execute
+5. Use resizable 3-panel layout: services (left), method details (center), execution (right)
 
-1. Click "Add Network"
-2. Enter gRPC endpoint (e.g., `grpc.example.com:443`)
-3. Configure TLS if needed
-4. Services will be discovered automatically via reflection
-
-### Executing Methods
-
-1. Select a method from the left panel
-2. Enter parameters in JSON format on the right panel
-3. Click "Execute"
-4. View response below
-
-### Panel Layout
-
-The interface has resizable panels:
-- **Left**: Service/method tree
-- **Top**: Method descriptor
-- **Center**: Selected methods
-- **Right**: Parameters and results
-
-Drag the dividers to resize panels according to your needs.
-
-### Keyboard Shortcuts
-
-- `Ctrl/Cmd + N`: Add network
-- `Ctrl/Cmd + K`: Show shortcuts
-- `Ctrl/Cmd + H`: Execution history
-- `Ctrl/Cmd + W`: Close tab
-- `Ctrl/Cmd + Tab`: Switch tabs
-
-## Example Endpoints
-
-### Cosmos Ecosystem
-
-- `grpc.juno.basementnodes.ca:443`
-- `grpc.noble.basementnodes.ca:443`
-- `grpc.neutron.basementnodes.ca:443`
-- `grpc.cosmos.directory:443`
-
-All use TLS by default. For local nodes, typically use port 9090 without TLS.
-
-## Alternative Deployment
-
-### PM2
-
-```bash
-pm2 start ecosystem.config.js
-pm2 save
-pm2 startup
-```
-
-### systemd
-
-Copy `systemd.service` to `/etc/systemd/system/grpc-explorer.service` and:
-
-```bash
-systemctl enable grpc-explorer
-systemctl start grpc-explorer
-```
-
-## Troubleshooting
-
-### grpcurl not found
-
-```bash
-# macOS
-brew install grpcurl
-
-# Linux
-go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-```
-
-### Connection Issues
-
-- Verify endpoint: `grpcurl <endpoint> list`
-- Check TLS settings match server
-- Ensure server has reflection enabled
-
-### Clear Cache
-
-```bash
-rm -rf .cache/
-```
-
-## License
-
-MIT
+**Keyboard shortcuts**: `Cmd/Ctrl+N` (add network), `Cmd/Ctrl+K` (shortcuts), `Cmd/Ctrl+H` (history)

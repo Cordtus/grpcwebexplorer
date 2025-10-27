@@ -14,6 +14,16 @@ export interface NetworkTab {
 		method: string;
 		module?: string;
 	} | undefined;
+	status?: {
+		total: number;
+		successful: number;
+		failed: number;
+		withMethods: number;
+		withoutMethods: number;
+		completionRate: number;
+		endpoint: string | null;
+	};
+	warnings?: string[];
 }
 
 interface TabManagerContextType {
