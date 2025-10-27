@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { ChevronDown, Plus, Network, Play, X, Loader2, Copy, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExpandableBlock } from './ExpandableBlock';
 import NetworkBlock from './NetworkBlock';
@@ -9,6 +9,8 @@ import MethodBlock from './MethodBlock';
 import MethodDescriptor from './MethodDescriptor';
 import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
+import MenuBar from './MenuBar';
+import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 
@@ -79,6 +81,8 @@ export default function GrpcExplorerApp() {
   const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
   const [showAddNetwork, setShowAddNetwork] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [descriptorCollapsed, setDescriptorCollapsed] = useState(false);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -278,12 +282,29 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Vertical resizable group for top/bottom split */}
-      <ResizablePanelGroup direction="vertical" className="h-full">
-        {/* Top Panel - Method Descriptor */}
-        <ResizablePanel defaultSize={20} minSize={10} maxSize={40}>
-          <div className="h-full border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      {/* Menu Bar */}
+      <MenuBar
+        onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+        onShowSettings={() => {/* TODO: implement settings */}}
+      />
+
+      {/* Method Descriptor - Collapsible */}
+      {!descriptorCollapsed && (
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Method Descriptor
+            </h3>
+            <button
+              onClick={() => setDescriptorCollapsed(true)}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Collapse descriptor panel"
+            >
+              <ChevronUp className="h-4 w-4 text-gray-500" />
+            </button>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
             {selectedMethod ? (
               <MethodDescriptor
                 method={selectedMethod.method}
@@ -291,24 +312,38 @@ export default function GrpcExplorerApp() {
                 color={selectedMethod.color}
               />
             ) : (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+              <div className="h-32 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 <div className="text-center">
-                  <Network className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">Select a method to view its descriptor</p>
                 </div>
               </div>
             )}
           </div>
-        </ResizablePanel>
+        </div>
+      )}
 
-        <ResizableHandle withHandle className="h-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+      {/* Collapse button when panel is collapsed */}
+      {descriptorCollapsed && (
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+          <button
+            onClick={() => setDescriptorCollapsed(false)}
+            className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+            title="Expand descriptor panel"
+          >
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {selectedMethod ? `${selectedMethod.service.name}.${selectedMethod.method.name}` : 'Method Descriptor'}
+            </span>
+            <ChevronDown className="h-4 w-4 text-gray-500" />
+          </button>
+        </div>
+      )}
 
-        {/* Bottom Panel - Main Content Area */}
-        <ResizablePanel defaultSize={80}>
-          {/* Horizontal resizable group for left/center/right split */}
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            {/* Left Panel - Networks */}
-            <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+      {/* Main Content Area - 3 Panel Layout */}
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left Panel - Networks */}
+          <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
               <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
@@ -402,8 +437,7 @@ export default function GrpcExplorerApp() {
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
 
       {/* Add Network Dialog */}
       {showAddNetwork && (
@@ -412,6 +446,11 @@ export default function GrpcExplorerApp() {
           onClose={() => setShowAddNetwork(false)}
         />
       )}
+
+      <KeyboardShortcutsDialog
+        open={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
     </div>
   );
 }
