@@ -1,6 +1,6 @@
 // Service discovery using gRPC reflection
+// NOTE: No server-side caching - clients cache responses in localStorage
 import { NextResponse } from 'next/server';
-import { getCache, setCache } from '@/lib/grpc/cache';
 import { fetchServicesViaReflection, type GrpcService } from '@/utils/grpcReflection';
 
 export const runtime = 'nodejs';
@@ -66,28 +66,8 @@ export async function POST(req: Request) {
       ? roundRobinEndpoints
       : [{ address: endpointWithPort, tls }];
 
-    // Create cache key (simple for now, can add chain_id detection later)
-    const cacheKey = isChainMarker
-      ? `services:chain:${chainName}`
-      : `services:${endpointWithPort}:${tls !== false}`;
-
-    // Check cache first unless force refresh is requested
-    if (!forceRefresh) {
-      const cached = await getCache<any[]>(cacheKey);
-      if (cached) {
-        const cacheAge = Date.now() - cached.timestamp;
-        if (cacheAge < 60 * 60 * 1000) { // 1 hour
-          console.log(`Returning cached services for ${chainName || endpointWithPort}`);
-          return NextResponse.json({
-            services: cached.data,
-            cached: true,
-            chainId: chainName,
-          });
-        }
-      }
-    }
-
     // Try each endpoint until one works
+    // NOTE: No server-side caching - client handles caching in localStorage
     let services: GrpcService[] = [];
     let lastError: any = null;
     let successfulEndpoint = null;
@@ -143,18 +123,10 @@ export async function POST(req: Request) {
       endpoint: successfulEndpoint,
     };
 
-    // Cache the results
-    await setCache({
-      key: cacheKey,
-      data: servicesWithMethods,
-      timestamp: Date.now(),
-    });
-
     console.log(`Final status: ${JSON.stringify(status)}`);
 
     return NextResponse.json({
       services: servicesWithMethods,
-      cached: false,
       chainId: chainName,
       status,
       warnings: status.failed > 0

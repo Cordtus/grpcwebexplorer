@@ -1,9 +1,10 @@
 // app/api/grpc/reflect/route.ts
 // gRPC reflection endpoint for service discovery
+// NOTE: Test endpoint only - UI uses /api/grpc/services instead
+// No caching - meant for testing purposes
 
 import { NextResponse } from 'next/server';
 import { GrpcReflectionClient } from '@/lib/grpc/reflection';
-import { grpcCache } from '@/lib/grpc/cache';
 
 export const runtime = 'nodejs';
 
@@ -45,24 +46,7 @@ export async function POST(req: Request) {
 
     console.log(`[Reflection] Discovering services for ${endpoint} (TLS: ${tls})`);
 
-    // Generate cache key based on endpoint + TLS
-    // We'll try to fetch chain_id later for better caching
-    const baseCacheKey = `reflect:${endpoint}:${tls}`;
-
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
-      const cached = grpcCache.get(baseCacheKey);
-      if (cached) {
-        console.log(`[Reflection] Cache hit for ${endpoint}`);
-        return NextResponse.json({
-          ...cached,
-          cached: true,
-          cacheKey: baseCacheKey,
-        });
-      }
-    }
-
-    // Initialize reflection client
+    // Initialize reflection client (no caching for test endpoint)
     const reflectionClient = new GrpcReflectionClient({
       endpoint,
       tls,
@@ -76,9 +60,8 @@ export async function POST(req: Request) {
 
       const services = reflectionClient.getServices();
 
-      // Try to fetch chain_id for better cache key (Cosmos-specific)
+      // Try to fetch chain_id (Cosmos-specific)
       let chainId: string | null = null;
-      let enhancedCacheKey = baseCacheKey;
 
       try {
         const descriptor = reflectionClient.findMethodDescriptor(
@@ -101,7 +84,6 @@ export async function POST(req: Request) {
                    extractField(response, 'block.header.chain_id');
 
           if (chainId) {
-            enhancedCacheKey = `reflect:${chainId}`;
             console.log(`[Reflection] Detected chain_id: ${chainId}`);
           }
         }
@@ -116,17 +98,7 @@ export async function POST(req: Request) {
         tls,
         chainId,
         timestamp: Date.now(),
-        cached: false,
-        cacheKey: enhancedCacheKey,
       };
-
-      // Cache the result
-      grpcCache.set(enhancedCacheKey, responseData);
-
-      // Also cache with base key for quick lookup
-      if (enhancedCacheKey !== baseCacheKey) {
-        grpcCache.set(baseCacheKey, responseData);
-      }
 
       return NextResponse.json(responseData);
 

@@ -4,6 +4,7 @@ import LoadingSpinner from './LoadingSpinner';
 import { RefreshCw } from 'lucide-react';
 import { useTabManager } from '@/lib/contexts/TabManager';
 import { cn } from '@/lib/utils';
+import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 
 export interface NetworkTabProps {
   endpoint: string;
@@ -25,12 +26,33 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
   const [selectedService, setSelectedService] = useState<any | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<any | null>(null);
 
-  const fetchServices = useCallback(async () => {
+  const fetchServices = useCallback(async (forceRefresh: boolean = false) => {
     if (!endpoint) return;
-    
+
+    // Check client-side cache first
+    if (!forceRefresh) {
+      const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+      const cached = getFromCache<any>(cacheKey);
+
+      if (cached) {
+        console.log(`Using cached services for ${endpoint}`);
+        setServices(cached.services || []);
+        setError(null);
+
+        if (activeTabId) {
+          updateTab(activeTabId, {
+            services: cached.services || [],
+            status: cached.status,
+            warnings: cached.warnings
+          });
+        }
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
@@ -50,6 +72,10 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
 
       setServices(data.services || []);
 
+      // Save to client-side cache
+      const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+      saveToCache(cacheKey, data);
+
       // Show completion status and warnings
       if (data.status) {
         console.log(`Service loading completed:`, data.status);
@@ -60,7 +86,6 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
 
       if (data.warnings && data.warnings.length > 0) {
         console.warn('Service loading warnings:', data.warnings);
-        // You could display these warnings in the UI
         setError(data.warnings.join('\n'));
       }
 
@@ -129,9 +154,10 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
             </div>
           </div>
           <button
-            onClick={fetchServices}
+            onClick={() => fetchServices(true)}
             disabled={loading}
             className="btn-ghost p-2 rounded-md"
+            title="Refresh (bypasses cache)"
           >
             <RefreshCw className={cn(
               "h-4 w-4",

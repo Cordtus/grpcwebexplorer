@@ -10,6 +10,7 @@ import MethodDescriptor from './MethodDescriptor';
 import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 
 interface GrpcNetwork {
   id: string;
@@ -108,6 +109,20 @@ export default function GrpcExplorerApp() {
 
     setNetworks(prev => [...prev, newNetwork]);
 
+    // Check client-side cache first
+    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+    const cached = getFromCache<any>(cacheKey);
+
+    if (cached) {
+      console.log(`Using cached services for ${endpoint}`);
+      setNetworks(prev => prev.map(n =>
+        n.id === id
+          ? { ...n, services: cached.services || [], loading: false }
+          : n
+      ));
+      return;
+    }
+
     // Fetch services via reflection
     try {
       const response = await fetch('/api/grpc/services', {
@@ -119,15 +134,18 @@ export default function GrpcExplorerApp() {
       if (!response.ok) throw new Error('Failed to fetch services');
 
       const data = await response.json();
-      
-      setNetworks(prev => prev.map(n => 
-        n.id === id 
+
+      // Save to client-side cache
+      saveToCache(cacheKey, data);
+
+      setNetworks(prev => prev.map(n =>
+        n.id === id
           ? { ...n, services: data.services || [], loading: false }
           : n
       ));
     } catch (error) {
-      setNetworks(prev => prev.map(n => 
-        n.id === id 
+      setNetworks(prev => prev.map(n =>
+        n.id === id
           ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
           : n
       ));
