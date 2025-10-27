@@ -19,6 +19,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Check if endpoint is a chain marker (should have been resolved by now)
+    if (endpoint.startsWith('chain:')) {
+      return NextResponse.json(
+        {
+          error: 'Invalid endpoint format',
+          details: 'Chain marker was not resolved to actual endpoint. This is a bug - please refresh the network.'
+        },
+        { status: 400 }
+      );
+    }
+
     // Parse endpoint to ensure it has a port
     let endpointWithPort = endpoint;
     if (!endpoint.includes(':')) {

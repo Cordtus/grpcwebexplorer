@@ -138,9 +138,17 @@ export default function GrpcExplorerApp() {
       // Save to client-side cache
       saveToCache(cacheKey, data);
 
+      // Update network with actual endpoint (in case chain marker was used)
+      const actualEndpoint = data.status?.endpoint || endpoint;
+
       setNetworks(prev => prev.map(n =>
         n.id === id
-          ? { ...n, services: data.services || [], loading: false }
+          ? {
+              ...n,
+              services: data.services || [],
+              endpoint: actualEndpoint,  // Use actual endpoint that worked
+              loading: false
+            }
           : n
       ));
     } catch (error) {
