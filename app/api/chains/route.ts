@@ -1,7 +1,8 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { fetchChainList, fetchChainData } from '@/lib/services/chainRegistry';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/chains - Fetch list of chains from registry
