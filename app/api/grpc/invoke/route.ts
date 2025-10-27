@@ -1,10 +1,10 @@
 // app/api/grpc/invoke/route.ts
 // gRPC method invocation endpoint
 
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import { GrpcReflectionClient, invokeGrpcMethod } from '@/lib/grpc/reflection';
+
+export const runtime = 'nodejs';
 
 interface MethodInvocationRequest {
   endpoint: string;

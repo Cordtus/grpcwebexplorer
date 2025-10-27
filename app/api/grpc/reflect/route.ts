@@ -1,11 +1,11 @@
 // app/api/grpc/reflect/route.ts
 // gRPC reflection endpoint for service discovery
 
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import { GrpcReflectionClient } from '@/lib/grpc/reflection';
 import { grpcCache } from '@/lib/grpc/cache';
+
+export const runtime = 'nodejs';
 
 interface ServiceDiscoveryRequest {
   endpoint: string;

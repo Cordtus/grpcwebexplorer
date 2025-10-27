@@ -1,8 +1,9 @@
 // Service discovery using gRPC reflection
-export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { getCache, setCache } from '@/lib/grpc/cache';
 import { fetchServicesViaReflection, type GrpcService } from '@/utils/grpcReflection';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {

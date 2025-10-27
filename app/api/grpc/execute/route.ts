@@ -1,9 +1,10 @@
 // app/api/grpc/execute/route.ts
 // gRPC method execution via reflection service
 
-export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { NativeReflectionClient } from '@/lib/grpc/native-reflection';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const startTime = Date.now();

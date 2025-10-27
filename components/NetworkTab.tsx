@@ -35,7 +35,7 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, useTLS: tlsEnabled }),
+        body: JSON.stringify({ endpoint, tlsEnabled }),
       });
 
       if (!response.ok) {
