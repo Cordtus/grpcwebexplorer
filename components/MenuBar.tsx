@@ -13,6 +13,7 @@ interface MenuBarProps {
 export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts }: MenuBarProps) {
   const [cacheStats, setCacheStats] = useState({ count: 0, sizeKB: 0 });
   const [showCacheMenu, setShowCacheMenu] = useState(false);
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
   // Update cache stats
   const updateCacheStats = () => {
@@ -99,7 +100,7 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts }: Men
         <button
           onClick={onShowKeyboardShortcuts}
           className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
-          title="Keyboard shortcuts (Cmd/Ctrl+K)"
+          title={`Keyboard shortcuts (${isMac ? 'Cmd' : 'Ctrl'}+Shift+?)`}
         >
           <HelpCircle className="h-4 w-4" />
         </button>

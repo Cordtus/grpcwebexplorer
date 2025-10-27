@@ -50,3 +50,4 @@ desktop.ini
 CLAUDE.md
 .cache/
 *.bak
+.playwright-mcp/

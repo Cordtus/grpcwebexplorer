@@ -11,8 +11,10 @@ import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
 import MenuBar from './MenuBar';
 import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
+import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
+import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 
 interface GrpcNetwork {
   id: string;
@@ -82,10 +84,48 @@ export default function GrpcExplorerApp() {
   const [showAddNetwork, setShowAddNetwork] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [descriptorCollapsed, setDescriptorCollapsed] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Register keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      ctrl: true,
+      handler: () => setShowAddNetwork(true),
+      description: 'Add new network'
+    },
+    {
+      key: 'w',
+      ctrl: true,
+      handler: () => {
+        if (selectedMethod) {
+          handleRemoveMethodInstance(selectedMethod.id);
+        }
+      },
+      description: 'Close current tab'
+    },
+    {
+      key: 'Enter',
+      ctrl: true,
+      handler: () => {
+        if (selectedMethod && !isExecuting) {
+          handleExecuteMethod(selectedMethod);
+        }
+      },
+      description: 'Execute method'
+    },
+    {
+      key: '?',
+      ctrl: true,
+      shift: true,
+      handler: () => setShowKeyboardShortcuts(true),
+      description: 'Show keyboard shortcuts'
+    }
+  ]);
 
   // Get next color for network
   const getNextColor = useCallback(() => {
@@ -286,25 +326,50 @@ export default function GrpcExplorerApp() {
       {/* Menu Bar */}
       <MenuBar
         onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
-        onShowSettings={() => {/* TODO: implement settings */}}
+        onShowSettings={() => setShowSettings(true)}
       />
 
-      {/* Method Descriptor - Collapsible */}
-      {!descriptorCollapsed && (
+      {/* Method Descriptor - Three size states */}
+      {descriptorSize !== 'minimized' && (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Method Descriptor
             </h3>
-            <button
-              onClick={() => setDescriptorCollapsed(true)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-              title="Collapse descriptor panel"
-            >
-              <ChevronUp className="h-4 w-4 text-gray-500" />
-            </button>
+            <div className="flex items-center gap-1">
+              {descriptorSize === 'expanded' && (
+                <button
+                  onClick={() => setDescriptorSize('small')}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                  title="Make descriptor smaller"
+                >
+                  <ChevronUp className="h-4 w-4 text-gray-500" />
+                </button>
+              )}
+              {descriptorSize === 'small' && (
+                <>
+                  <button
+                    onClick={() => setDescriptorSize('expanded')}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                    title="Expand descriptor"
+                  >
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  </button>
+                  <button
+                    onClick={() => setDescriptorSize('minimized')}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                    title="Minimize descriptor"
+                  >
+                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <div className="max-h-60 overflow-y-auto">
+          <div className={cn(
+            "overflow-y-auto",
+            descriptorSize === 'expanded' ? 'max-h-96' : 'max-h-48'
+          )}>
             {selectedMethod ? (
               <MethodDescriptor
                 method={selectedMethod.method}
@@ -312,7 +377,10 @@ export default function GrpcExplorerApp() {
                 color={selectedMethod.color}
               />
             ) : (
-              <div className="h-32 flex items-center justify-center text-gray-500 dark:text-gray-400">
+              <div className={cn(
+                "flex items-center justify-center text-gray-500 dark:text-gray-400",
+                descriptorSize === 'expanded' ? 'h-64' : 'h-32'
+              )}>
                 <div className="text-center">
                   <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">Select a method to view its descriptor</p>
@@ -323,11 +391,11 @@ export default function GrpcExplorerApp() {
         </div>
       )}
 
-      {/* Collapse button when panel is collapsed */}
-      {descriptorCollapsed && (
+      {/* Minimized bar when panel is minimized */}
+      {descriptorSize === 'minimized' && (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
           <button
-            onClick={() => setDescriptorCollapsed(false)}
+            onClick={() => setDescriptorSize('small')}
             className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
             title="Expand descriptor panel"
           >
@@ -450,6 +518,11 @@ export default function GrpcExplorerApp() {
       <KeyboardShortcutsDialog
         open={showKeyboardShortcuts}
         onClose={() => setShowKeyboardShortcuts(false)}
+      />
+
+      <SettingsDialog
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </div>
   );
