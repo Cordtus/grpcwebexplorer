@@ -43,15 +43,33 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
       }
 
       const data = await response.json();
-      
+
       if (data.error) {
         throw new Error(data.error);
       }
 
       setServices(data.services || []);
-      
+
+      // Show completion status and warnings
+      if (data.status) {
+        console.log(`Service loading completed:`, data.status);
+        if (data.status.completionRate < 100) {
+          console.warn(`Only ${data.status.completionRate}% of services loaded successfully (${data.status.successful}/${data.status.total})`);
+        }
+      }
+
+      if (data.warnings && data.warnings.length > 0) {
+        console.warn('Service loading warnings:', data.warnings);
+        // You could display these warnings in the UI
+        setError(data.warnings.join('\n'));
+      }
+
       if (activeTabId) {
-        updateTab(activeTabId, { services: data.services || [] });
+        updateTab(activeTabId, {
+          services: data.services || [],
+          status: data.status,
+          warnings: data.warnings
+        });
       }
     } catch (err) {
       console.error('Error fetching services:', err);

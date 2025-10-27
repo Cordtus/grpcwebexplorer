@@ -1,151 +1,169 @@
+// Service discovery using gRPC reflection
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { getCache, setCache } from '@/lib/grpc/cache';
-import { runGrpcurl } from '@/utils/grpcurl';
+import { fetchServicesViaReflection } from '@/utils/grpcReflection';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { endpoint, tlsEnabled: tls, forceRefresh }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; } = body;
-    
+
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint is required' }, { status: 400 });
     }
-    
-    // Parse endpoint to ensure it has a port
+
+    // Check if this is a chain marker for round-robin mode
     let endpointWithPort = endpoint;
-    if (!endpoint.includes(':')) {
-      // Default to 443 for TLS, 9090 for plaintext
-      endpointWithPort = tls !== false ? `${endpoint}:443` : `${endpoint}:9090`;
-    }
-    
-    // First, fetch the chain_id using GetLatestBlock
-    let chainId = '';
-    try {
-      const { stdout: blockOutput } = await runGrpcurl({
-        endpoint: endpointWithPort,
-        tls,
-        args: 'cosmos.base.tendermint.v1beta1.Service.GetLatestBlock',
-      });
-      
-      // Parse the response to extract chain_id
-      const blockData = JSON.parse(blockOutput);
-      if (blockData?.sdkBlock?.header?.chainId || blockData?.block?.header?.chainId) {
-        chainId = blockData?.sdkBlock?.header?.chainId || blockData?.block?.header?.chainId;
-        console.log(`Detected chain_id: ${chainId} for endpoint ${endpointWithPort}`);
+    let isChainMarker = false;
+    let chainName = '';
+    let roundRobinEndpoints: Array<{ address: string; tls: boolean }> = [];
+
+    if (endpoint.startsWith('chain:')) {
+      isChainMarker = true;
+      chainName = endpoint.replace('chain:', '');
+      console.log(`Chain marker detected: ${chainName} - will use round-robin across all endpoints`);
+
+      // Fetch endpoints from chain registry
+      try {
+        const chainResponse = await fetch(`https://raw.githubusercontent.com/cosmos/chain-registry/master/${chainName}/chain.json`);
+        if (chainResponse.ok) {
+          const chainData = await chainResponse.json();
+          const grpcEndpoints = chainData.apis?.grpc || [];
+
+          roundRobinEndpoints = grpcEndpoints.map((ep: any) => {
+            let address = ep.address.replace(/^https?:\/\//, '');
+            if (!address.includes(':')) {
+              address = `${address}:9090`;
+            }
+            const port = address.split(':')[1];
+            const tlsEnabled = port === '443';
+            return { address, tls: tlsEnabled };
+          });
+
+          console.log(`Loaded ${roundRobinEndpoints.length} endpoints for chain ${chainName} from registry`);
+
+          if (roundRobinEndpoints.length === 0) {
+            return NextResponse.json({ error: `No gRPC endpoints found for chain ${chainName}` }, { status: 404 });
+          }
+        } else {
+          return NextResponse.json({ error: `Chain ${chainName} not found in registry` }, { status: 404 });
+        }
+      } catch (error) {
+        console.error(`Error fetching chain data for ${chainName}:`, error);
+        return NextResponse.json({ error: `Failed to fetch chain data for ${chainName}` }, { status: 500 });
       }
-    } catch (err) {
-      console.warn(`Could not fetch chain_id for ${endpointWithPort}, using endpoint as cache key`);
+    } else {
+      // Parse endpoint to ensure it has a port
+      if (!endpoint.includes(':')) {
+        endpointWithPort = tls !== false ? `${endpoint}:443` : `${endpoint}:9090`;
+      }
     }
-    
-    // Create cache key based on chain_id if available, otherwise use endpoint
-    const cacheKey = chainId ? `services:chain:${chainId}` : `services:${endpointWithPort}:${tls !== false}`;
-    
+
+    // Determine which endpoints to try
+    const endpointsToTry = roundRobinEndpoints.length > 0
+      ? roundRobinEndpoints
+      : [{ address: endpointWithPort, tls }];
+
+    // Create cache key (simple for now, can add chain_id detection later)
+    const cacheKey = isChainMarker
+      ? `services:chain:${chainName}`
+      : `services:${endpointWithPort}:${tls !== false}`;
+
     // Check cache first unless force refresh is requested
     if (!forceRefresh) {
       const cached = await getCache<any[]>(cacheKey);
       if (cached) {
-        // Check if cache is less than 1 hour old
         const cacheAge = Date.now() - cached.timestamp;
-        if (cacheAge < 60 * 60 * 1000) {
-          console.log(`Returning cached services for ${chainId || endpointWithPort}`);
-          return NextResponse.json({ services: cached.data, cached: true, chainId });
+        if (cacheAge < 60 * 60 * 1000) { // 1 hour
+          console.log(`Returning cached services for ${chainName || endpointWithPort}`);
+          return NextResponse.json({
+            services: cached.data,
+            cached: true,
+            chainId: chainName,
+          });
         }
       }
     }
-    
-    // Use grpcurl to list services
-    try {
-      const { stdout } = await runGrpcurl({
-        endpoint: endpointWithPort,
-        tls,
-        args: 'list',
-      });
 
-      const serviceNames = stdout.trim().split('\n').filter(Boolean);
-      
-      // Now fetch methods for each service
-      const services = await Promise.all(
-        serviceNames.map(async (serviceName) => {
-          try {
-            const { stdout: describeOutput } = await runGrpcurl({
-              endpoint: endpointWithPort,
-              tls,
-              args: ['describe', serviceName],
-            });
-            
-            // Parse the describe output to extract methods
-            const methods = [];
-            const lines = describeOutput.split('\n');
-            
-            // Look for rpc method definitions
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i].trim();
-              if (line.startsWith('rpc ')) {
-                // Parse method signature like: rpc Balance ( .cosmos.bank.v1beta1.QueryBalanceRequest ) returns ( .cosmos.bank.v1beta1.QueryBalanceResponse );
-                const match = line.match(/rpc\s+(\w+)\s*\(\s*([^)]+)\s*\)\s+returns\s+\(\s*([^)]+)\s*\)/);
-                if (match) {
-                  const [, methodName, requestType, responseType] = match;
-                  methods.push({
-                    name: methodName,
-                    fullName: `${serviceName}.${methodName}`,
-                    requestType: requestType.trim().replace(/^\./, ''),
-                    responseType: responseType.trim().replace(/^\./, ''),
-                    requestStreaming: false,
-                    responseStreaming: false,
-                    description: ''
-                  });
-                }
-              }
-            }
-            
-            // Extract service name parts for display
-            const parts = serviceName.split('.');
-            const shortName = parts[parts.length - 1];
-            
-            return {
-              name: shortName,
-              fullName: serviceName,
-              methods
-            };
-          } catch (err) {
-            console.error(`Error describing service ${serviceName}:`, err);
-            return {
-              name: serviceName.split('.').pop() || serviceName,
-              fullName: serviceName,
-              methods: []
-            };
-          }
-        })
-      );
-      
-      // Filter out services with no methods
-      const servicesWithMethods = services.filter(s => s.methods.length > 0);
-      
-      // Cache the results
-      await setCache({
-        key: cacheKey,
-        data: servicesWithMethods,
-        timestamp: Date.now()
-      });
-      
-      return NextResponse.json({ services: servicesWithMethods, cached: false, chainId });
-    } catch (err: any) {
-      console.error('Error listing services with grpcurl:', err);
-      
-      // If grpcurl fails, return a helpful error message
-      if (err.message.includes('command not found')) {
-        return NextResponse.json({ 
-          error: 'grpcurl is not installed. Please install it to use this feature.' 
-        }, { status: 500 });
+    // Try each endpoint until one works
+    let services = [];
+    let lastError: any = null;
+    let successfulEndpoint = null;
+
+    for (let i = 0; i < Math.min(endpointsToTry.length, 5); i++) {
+      const { address, tls: tlsEnabled } = endpointsToTry[i];
+
+      try {
+        console.log(`Attempting to fetch services from ${address} (TLS: ${tlsEnabled})...`);
+
+        services = await fetchServicesViaReflection({
+          endpoint: address,
+          tls: tlsEnabled,
+          timeout: 15000, // 15 second timeout
+        });
+
+        successfulEndpoint = address;
+        console.log(`Successfully fetched ${services.length} services from ${address}`);
+        break; // Success! Exit loop
+      } catch (err: any) {
+        console.error(`Failed to fetch from ${address}:`, err.message);
+        lastError = err;
+
+        // If this isn't the last endpoint, try the next one
+        if (i < Math.min(endpointsToTry.length, 5) - 1) {
+          console.log(`Trying next endpoint...`);
+          continue;
+        }
       }
-      
-      return NextResponse.json({ 
-        error: `Failed to connect to gRPC endpoint: ${err.message}` 
+    }
+
+    // If all endpoints failed, return error
+    if (services.length === 0 && lastError) {
+      return NextResponse.json({
+        error: `Failed to fetch services: ${lastError.message}`,
+        details: `Tried ${Math.min(endpointsToTry.length, 5)} endpoint(s)`,
       }, { status: 500 });
     }
+
+    // Filter out services with no methods
+    const servicesWithMethods = services.filter(s => s.methods.length > 0);
+
+    // Prepare status
+    const status = {
+      total: services.length,
+      successful: servicesWithMethods.length,
+      failed: services.length - servicesWithMethods.length,
+      withMethods: servicesWithMethods.length,
+      withoutMethods: services.length - servicesWithMethods.length,
+      completionRate: services.length > 0
+        ? Math.round((servicesWithMethods.length / services.length) * 100)
+        : 0,
+      endpoint: successfulEndpoint,
+    };
+
+    // Cache the results
+    await setCache({
+      key: cacheKey,
+      data: servicesWithMethods,
+      timestamp: Date.now(),
+    });
+
+    console.log(`Final status: ${JSON.stringify(status)}`);
+
+    return NextResponse.json({
+      services: servicesWithMethods,
+      cached: false,
+      chainId: chainName,
+      status,
+      warnings: status.failed > 0
+        ? [`${status.failed} services had no methods or failed to load.`]
+        : [],
+    });
   } catch (err: any) {
-    console.error('Error in /api/grpc/services:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    console.error('Error in services route:', err);
+    return NextResponse.json({
+      error: err.message || 'Failed to fetch services',
+    }, { status: 500 });
   }
 }

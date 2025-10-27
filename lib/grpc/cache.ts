@@ -63,3 +63,18 @@ export function writeToCache<T>(entry: CacheEntry<T>): void {
 // Re‐export under the names your client code expects:
 export const getCache = getFromCache;
 export const setCache = writeToCache;
+
+// Create a simple cache object interface for convenience
+export const grpcCache = {
+  get<T>(key: string): T | undefined {
+    const entry = getFromCache<T>(key);
+    return entry?.data;
+  },
+  set<T>(key: string, data: T): void {
+    writeToCache({
+      key,
+      data,
+      timestamp: Date.now(),
+    });
+  },
+};

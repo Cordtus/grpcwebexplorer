@@ -4,9 +4,8 @@ A web-based interface for exploring and interacting with gRPC services through r
 
 ## Prerequisites
 
-- Node.js 14.0 or higher
+- Node.js 20.0 or higher
 - Yarn package manager
-- grpcurl (`brew install grpcurl` on macOS)
 
 ## Installation
 
@@ -117,21 +116,11 @@ systemctl start grpc-explorer
 
 ## Troubleshooting
 
-### grpcurl not found
-
-```bash
-# macOS
-brew install grpcurl
-
-# Linux
-go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-```
-
 ### Connection Issues
 
-- Verify endpoint: `grpcurl <endpoint> list`
-- Check TLS settings match server
-- Ensure server has reflection enabled
+- Check TLS settings match server (port 443 typically uses TLS, port 9090 typically does not)
+- Ensure server has gRPC reflection enabled
+- Verify network connectivity to the endpoint
 
 ### Clear Cache
 

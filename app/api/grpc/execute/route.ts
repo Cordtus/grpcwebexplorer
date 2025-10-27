@@ -1,88 +1,72 @@
+// app/api/grpc/execute/route.ts
+// gRPC method execution via reflection service
+
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { runGrpcurl } from '@/utils/grpcurl';
+import { NativeReflectionClient } from '@/lib/grpc/native-reflection';
 
 export async function POST(req: Request) {
+  const startTime = Date.now();
+
   try {
     const { endpoint, service, method, params, tlsEnabled } = await req.json();
-    
+
     if (!endpoint || !service || !method) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Missing required parameters: endpoint, service, method' },
+        { status: 400 }
+      );
     }
-    
+
     // Parse endpoint to ensure it has a port
     let endpointWithPort = endpoint;
     if (!endpoint.includes(':')) {
-      // Default to 443 for TLS, 9090 for plaintext
       endpointWithPort = tlsEnabled !== false ? `${endpoint}:443` : `${endpoint}:9090`;
     }
-    
-    // Construct the full method name
-    const fullMethodName = `${service}/${method}`;
-    
-    // Prepare the JSON input for grpcurl
-    const jsonInput = JSON.stringify(params || {});
-    
-    // Use grpcurl to execute the method
+
+    console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort}`);
+
+    // Create native reflection client
+    const client = new NativeReflectionClient({
+      endpoint: endpointWithPort,
+      tls: tlsEnabled !== false,
+      timeout: 15000,
+    });
+
     try {
-      const { stdout } = await runGrpcurl({
+      // Initialize
+      await client.initialize();
+
+      // Invoke method
+      const result = await client.invokeMethod(service, method, params || {}, 10000);
+
+      const executionTime = Date.now() - startTime;
+
+      console.log(`[Execute] ${service}.${method} completed in ${executionTime}ms`);
+
+      return NextResponse.json({
+        success: true,
+        result,
+        executionTime,
+        service,
+        method,
         endpoint: endpointWithPort,
-        tls: tlsEnabled === true,
-        args: fullMethodName,
-        stdin: jsonInput,
       });
-      
-      // Try to parse the response as JSON
-      try {
-        const result = JSON.parse(stdout);
-        return NextResponse.json({ 
-          success: true,
-          result 
-        });
-      } catch (parseErr) {
-        // If not JSON, return the raw output
-        return NextResponse.json({ 
-          success: true,
-          result: stdout 
-        });
-      }
-    } catch (err: any) {
-      console.error('Error executing gRPC method:', err);
-      
-      // Parse error message for better user feedback
-      const errorMessage = err.message || err.toString();
-      
-      if (errorMessage.includes('unknown service')) {
-        return NextResponse.json({ 
-          success: false,
-          error: `Unknown service: ${service}` 
-        }, { status: 404 });
-      }
-      
-      if (errorMessage.includes('unknown method')) {
-        return NextResponse.json({ 
-          success: false,
-          error: `Unknown method: ${method} in service ${service}` 
-        }, { status: 404 });
-      }
-      
-      if (errorMessage.includes('connection refused')) {
-        return NextResponse.json({ 
-          success: false,
-          error: `Failed to connect to ${endpointWithPort}. Please check the endpoint is correct and accessible.` 
-        }, { status: 503 });
-      }
-      
-      return NextResponse.json({ 
-        success: false,
-        error: errorMessage 
-      }, { status: 500 });
+
+    } finally {
+      client.close();
     }
+
   } catch (err: any) {
-    console.error('Error in /api/grpc/execute:', err);
-    return NextResponse.json({ 
+    const executionTime = Date.now() - startTime;
+
+    console.error('[Execute] Error:', err);
+
+    return NextResponse.json({
       success: false,
-      error: err.message || 'Internal server error' 
+      error: err.message || 'Failed to invoke method',
+      executionTime,
+      details: err.stack,
     }, { status: 500 });
   }
 }
