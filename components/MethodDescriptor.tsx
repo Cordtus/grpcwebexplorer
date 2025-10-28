@@ -51,6 +51,9 @@ export default function MethodDescriptor({ method, service, color }: MethodDescr
     const requestTypeName = method.requestType.split('.').pop() || method.requestType;
     const responseTypeName = method.responseType.split('.').pop() || method.responseType;
 
+    // Extract package name from service
+    const packageName = service.fullName.split('.').slice(0, -1).join('.');
+
     // Example inputs based on common patterns
     const exampleInput = requestTypeName.includes('Empty') || requestTypeName === 'google.protobuf.Empty'
       ? '{}'
@@ -59,19 +62,29 @@ export default function MethodDescriptor({ method, service, color }: MethodDescr
 }`;
 
     if (method.responseStreaming) {
-      return `import { credentials } from '@grpc/grpc-js';
-import { ${service.name}Client } from './generated/${service.name.toLowerCase()}_grpc_pb';
+      return `import grpc from '@grpc/grpc-js';
+import protoLoader from '@grpc/proto-loader';
 
-const client = new ${service.name}Client(
+const packageDefinition = protoLoader.loadSync('path/to/proto.proto', {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true
+});
+
+const proto = grpc.loadPackageDefinition(packageDefinition);
+
+const client = new proto.${packageName}.${service.name}(
   'localhost:9090',
-  credentials.createInsecure()
+  grpc.credentials.createInsecure()
 );
 
 const request = ${exampleInput};
 
 const stream = client.${method.name}(request);
 
-stream.on('data', (response: ${responseTypeName}) => {
+stream.on('data', (response) => {
   console.log(response);
 });
 
@@ -83,13 +96,23 @@ stream.on('error', (err) => {
   console.error('Error:', err);
 });`;
     } else {
-      return `import { credentials } from '@grpc/grpc-js';
+      return `import grpc from '@grpc/grpc-js';
+import protoLoader from '@grpc/proto-loader';
 import { promisify } from 'util';
-import { ${service.name}Client } from './generated/${service.name.toLowerCase()}_grpc_pb';
 
-const client = new ${service.name}Client(
+const packageDefinition = protoLoader.loadSync('path/to/proto.proto', {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true
+});
+
+const proto = grpc.loadPackageDefinition(packageDefinition);
+
+const client = new proto.${packageName}.${service.name}(
   'localhost:9090',
-  credentials.createInsecure()
+  grpc.credentials.createInsecure()
 );
 
 const ${method.name.toLowerCase()} = promisify(
@@ -98,7 +121,7 @@ const ${method.name.toLowerCase()} = promisify(
 
 const request = ${exampleInput};
 
-const response: ${responseTypeName} = await ${method.name.toLowerCase()}(request);
+const response = await ${method.name.toLowerCase()}(request);
 console.log(response);`;
     }
   };
