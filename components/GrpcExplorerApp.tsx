@@ -412,100 +412,12 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-      {/* Menu Bar */}
-      <MenuBar
-        onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
-        onShowSettings={() => setShowSettings(true)}
-      />
-
-      {/* Method Descriptor - Three size states */}
-      {descriptorSize !== 'minimized' && (
-        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black" style={{ marginLeft: '30%' }}>
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Method Descriptor
-            </h3>
-            <div className="flex items-center gap-1">
-              {descriptorSize === 'expanded' && (
-                <button
-                  onClick={() => setDescriptorSize('small')}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                  title="Make descriptor smaller"
-                >
-                  <ChevronUp className="h-4 w-4 text-gray-500" />
-                </button>
-              )}
-              {descriptorSize === 'small' && (
-                <>
-                  <button
-                    onClick={() => setDescriptorSize('expanded')}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                    title="Expand descriptor"
-                  >
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  </button>
-                  <button
-                    onClick={() => setDescriptorSize('minimized')}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                    title="Minimize descriptor"
-                  >
-                    <ChevronUp className="h-4 w-4 text-gray-500" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <div className={cn(
-            "overflow-y-auto",
-            descriptorSize === 'expanded' ? 'max-h-96' : 'max-h-48'
-          )}>
-            {selectedMethod ? (
-              <MethodDescriptor
-                method={selectedMethod.method}
-                service={selectedMethod.service}
-                color={selectedMethod.color}
-              />
-            ) : (
-              <div className={cn(
-                "flex items-center justify-center text-gray-500 dark:text-gray-400",
-                descriptorSize === 'expanded' ? 'h-64' : 'h-32'
-              )}>
-                <div className="text-center">
-                  <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Select a method to view its descriptor</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Minimized bar when panel is minimized */}
-      {descriptorSize === 'minimized' && (
-        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black" style={{ marginLeft: '30%' }}>
-          <button
-            onClick={() => setDescriptorSize('small')}
-            className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-            title="Expand descriptor panel"
-          >
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {selectedMethod ? `${selectedMethod.service.name}.${selectedMethod.method.name}` : 'Method Descriptor'}
-            </span>
-            <ChevronDown className="h-4 w-4 text-gray-500" />
-          </button>
-        </div>
-      )}
-
-      {/* Main Content Area - 3 Panel Layout */}
-      <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Left Panel - Networks */}
-          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
-              <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 overflow-y-auto">
-          <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-            <div className="flex items-center justify-between p-4">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
+      {/* Left Panel - Networks (Full Height) */}
+      <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between p-4">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
               <button
                 onClick={() => setShowAddNetwork(true)}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -515,38 +427,124 @@ export default function GrpcExplorerApp() {
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
-            {networks.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No networks added</p>
-                <button
-                  onClick={() => setShowAddNetwork(true)}
-                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Add your first network
-                </button>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {networks.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No networks added</p>
+              <button
+                onClick={() => setShowAddNetwork(true)}
+                className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Add your first network
+              </button>
+            </div>
+          ) : (
+            networks.map(network => (
+              <NetworkBlock
+                key={network.id}
+                network={network}
+                onToggle={() => toggleNetworkExpanded(network.id)}
+                onRemove={() => handleRemoveNetwork(network.id)}
+                onRefresh={() => handleRefreshNetwork(network.id)}
+                onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
+      <div className="flex-1 flex flex-col">
+        {/* Menu Bar */}
+        <MenuBar
+          onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+          onShowSettings={() => setShowSettings(true)}
+        />
+
+        {/* Method Descriptor - Three size states */}
+        {descriptorSize !== 'minimized' && (
+          <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Method Descriptor
+              </h3>
+              <div className="flex items-center gap-1">
+                {descriptorSize === 'expanded' && (
+                  <button
+                    onClick={() => setDescriptorSize('small')}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                    title="Make descriptor smaller"
+                  >
+                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                  </button>
+                )}
+                {descriptorSize === 'small' && (
+                  <>
+                    <button
+                      onClick={() => setDescriptorSize('expanded')}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                      title="Expand descriptor"
+                    >
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </button>
+                    <button
+                      onClick={() => setDescriptorSize('minimized')}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                      title="Minimize descriptor"
+                    >
+                      <ChevronUp className="h-4 w-4 text-gray-500" />
+                    </button>
+                  </>
+                )}
               </div>
-            ) : (
-              networks.map(network => (
-                <NetworkBlock
-                  key={network.id}
-                  network={network}
-                  onToggle={() => toggleNetworkExpanded(network.id)}
-                  onRemove={() => handleRemoveNetwork(network.id)}
-                  onRefresh={() => handleRefreshNetwork(network.id)}
-                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+            </div>
+            <div className={cn(
+              "overflow-y-auto",
+              descriptorSize === 'expanded' ? 'max-h-96' : 'max-h-48'
+            )}>
+              {selectedMethod ? (
+                <MethodDescriptor
+                  method={selectedMethod.method}
+                  service={selectedMethod.service}
+                  color={selectedMethod.color}
                 />
-              ))
-            )}
+              ) : (
+                <div className={cn(
+                  "flex items-center justify-center text-gray-500 dark:text-gray-400",
+                  descriptorSize === 'expanded' ? 'h-64' : 'h-32'
+                )}>
+                  <div className="text-center">
+                    <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">Select a method to view its descriptor</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-              </div>
-            </ResizablePanel>
+        )}
 
-            <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+        {/* Minimized bar when panel is minimized */}
+        {descriptorSize === 'minimized' && (
+          <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+            <button
+              onClick={() => setDescriptorSize('small')}
+              className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+              title="Expand descriptor panel"
+            >
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {selectedMethod ? `${selectedMethod.service.name}.${selectedMethod.method.name}` : 'Method Descriptor'}
+              </span>
+              <ChevronDown className="h-4 w-4 text-gray-500" />
+            </button>
+          </div>
+        )}
 
+        {/* Center and Right Panels */}
+        <div className="flex-1 min-h-0">
+          <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Center Panel - Method Instances */}
-            <ResizablePanel defaultSize={35} minSize={20}>
+            <ResizablePanel defaultSize={50} minSize={30}>
               <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
@@ -597,8 +595,9 @@ export default function GrpcExplorerApp() {
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
+      </div>
 
-      {/* Add Network Dialog */}
+      {/* Dialogs */}
       {showAddNetwork && (
         <AddNetworkDialog
           onAdd={handleAddNetwork}
