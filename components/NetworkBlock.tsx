@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, Search, Loader2, AlertCircle, Server } from 'lucide-react';
+import { ChevronRight, Search, Loader2, AlertCircle, Server, RefreshCw, Clock } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
 import { MessageTypeDefinition } from './ProtobufFormGenerator';
@@ -35,12 +35,15 @@ interface GrpcNetwork {
   loading?: boolean;
   error?: string;
   expanded?: boolean;
+  cached?: boolean;
+  cacheTimestamp?: number;
 }
 
 interface NetworkBlockProps {
   network: GrpcNetwork;
   onToggle: () => void;
   onRemove: () => void;
+  onRefresh: () => void;
   onSelectMethod: (service: GrpcService, method: GrpcMethod) => void;
 }
 
@@ -108,14 +111,28 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
   );
 }
 
-export default function NetworkBlock({ 
-  network, 
-  onToggle, 
-  onRemove, 
-  onSelectMethod 
+export default function NetworkBlock({
+  network,
+  onToggle,
+  onRemove,
+  onRefresh,
+  onSelectMethod
 }: NetworkBlockProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedNamespaces, setExpandedNamespaces] = useState<Set<string>>(new Set());
+
+  // Format cache age
+  const getCacheAge = () => {
+    if (!network.cacheTimestamp) return null;
+    const ageMs = Date.now() - network.cacheTimestamp;
+    const ageMins = Math.round(ageMs / 1000 / 60);
+    if (ageMins < 1) return 'just now';
+    if (ageMins === 1) return '1 min ago';
+    if (ageMins < 60) return `${ageMins} mins ago`;
+    const ageHours = Math.round(ageMins / 60);
+    if (ageHours === 1) return '1 hour ago';
+    return `${ageHours} hours ago`;
+  };
 
   // Group services by namespace
   const namespaceGroups = useMemo(() => 
@@ -149,6 +166,8 @@ export default function NetworkBlock({
     setExpandedNamespaces(newExpanded);
   };
 
+  const cacheAge = getCacheAge();
+
   return (
     <ExpandableBlock
       title={network.name}
@@ -156,9 +175,39 @@ export default function NetworkBlock({
       isExpanded={network.expanded || false}
       onToggle={onToggle}
       color={network.color}
-      badge={network.services.length > 0 ? `${network.services.length} services` : undefined as any}
+      badge={
+        network.services.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <span>{network.services.length} services</span>
+            {network.cached && cacheAge && (
+              <span className="flex items-center gap-1 text-xs opacity-75">
+                <Clock className="h-3 w-3" />
+                {cacheAge}
+              </span>
+            )}
+          </div>
+        ) : undefined as any
+      }
       icon={<Server className="h-4 w-4" style={{ color: network.color }} />}
       onRemove={onRemove}
+      actions={
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRefresh();
+          }}
+          disabled={network.loading}
+          className={cn(
+            "p-1.5 rounded-md transition-colors",
+            network.loading
+              ? "text-gray-400 cursor-not-allowed"
+              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+          )}
+          title="Refresh services (clear cache)"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", network.loading && "animate-spin")} />
+        </button>
+      }
       className="shadow-sm"
     >
       {network.loading ? (

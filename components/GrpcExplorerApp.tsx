@@ -27,6 +27,8 @@ interface GrpcNetwork {
   loading?: boolean;
   error?: string;
   expanded?: boolean;
+  cached?: boolean;
+  cacheTimestamp?: number;
 }
 
 interface GrpcService {
@@ -161,16 +163,23 @@ export default function GrpcExplorerApp() {
     const cached = getFromCache<any>(cacheKey);
 
     if (cached) {
-      console.log(`Using cached services for ${endpoint}`);
+      console.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
       setNetworks(prev => prev.map(n =>
         n.id === id
-          ? { ...n, services: cached.services || [], loading: false }
+          ? {
+              ...n,
+              services: cached.services || [],
+              loading: false,
+              cached: true,
+              cacheTimestamp: cached.timestamp || Date.now()
+            }
           : n
       ));
       return;
     }
 
     // Fetch services via reflection
+    console.log(`⟳ Fetching fresh services from ${endpoint}...`);
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
@@ -181,12 +190,15 @@ export default function GrpcExplorerApp() {
       if (!response.ok) throw new Error('Failed to fetch services');
 
       const data = await response.json();
+      const now = Date.now();
 
-      // Save to client-side cache
-      saveToCache(cacheKey, data);
+      // Save to client-side cache with timestamp
+      saveToCache(cacheKey, { ...data, timestamp: now });
 
       // Update network with actual endpoint (in case chain marker was used)
       const actualEndpoint = data.status?.endpoint || endpoint;
+
+      console.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
 
       setNetworks(prev => prev.map(n =>
         n.id === id
@@ -194,7 +206,9 @@ export default function GrpcExplorerApp() {
               ...n,
               services: data.services || [],
               endpoint: actualEndpoint,  // Use actual endpoint that worked
-              loading: false
+              loading: false,
+              cached: false,
+              cacheTimestamp: now
             }
           : n
       ));
@@ -213,9 +227,82 @@ export default function GrpcExplorerApp() {
     setMethodInstances(prev => prev.filter(m => m.networkId !== networkId));
   }, []);
 
+  // Refresh network (force fetch from server, bypass cache)
+  const handleRefreshNetwork = useCallback(async (networkId: string) => {
+    const network = networks.find(n => n.id === networkId);
+    if (!network) return;
+
+    // Clear cache for this endpoint
+    const cacheKey = getServicesCacheKey(network.endpoint, network.tlsEnabled);
+    const { removeFromCache } = await import('@/lib/utils/client-cache');
+    removeFromCache(cacheKey);
+
+    console.log(`🔄 Force refreshing ${network.endpoint}...`);
+
+    // Set loading state
+    setNetworks(prev => prev.map(n => {
+      if (n.id === networkId) {
+        const { error, ...rest } = n;
+        return { ...rest, loading: true };
+      }
+      return n;
+    }));
+
+    // Fetch fresh data
+    try {
+      const response = await fetch('/api/grpc/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: network.endpoint,
+          tlsEnabled: network.tlsEnabled,
+          forceRefresh: true
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch services');
+
+      const data = await response.json();
+      const now = Date.now();
+
+      // Save to cache
+      const { saveToCache } = await import('@/lib/utils/client-cache');
+      saveToCache(cacheKey, { ...data, timestamp: now });
+
+      const actualEndpoint = data.status?.endpoint || network.endpoint;
+      console.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
+
+      setNetworks(prev => prev.map(n => {
+        if (n.id === networkId) {
+          const { error, ...rest } = n;
+          return {
+            ...rest,
+            services: data.services || [],
+            endpoint: actualEndpoint,
+            loading: false,
+            cached: false,
+            cacheTimestamp: now
+          };
+        }
+        return n;
+      }));
+    } catch (error) {
+      console.error(`✗ Refresh failed for ${network.endpoint}:`, error);
+      setNetworks(prev => prev.map(n =>
+        n.id === networkId
+          ? {
+              ...n,
+              error: error instanceof Error ? error.message : 'Refresh failed',
+              loading: false
+            }
+          : n
+      ));
+    }
+  }, [networks]);
+
   // Toggle network expansion
   const toggleNetworkExpanded = useCallback((networkId: string) => {
-    setNetworks(prev => prev.map(n => 
+    setNetworks(prev => prev.map(n =>
       n.id === networkId ? { ...n, expanded: !n.expanded } : n
     ));
   }, []);
@@ -447,6 +534,7 @@ export default function GrpcExplorerApp() {
                   network={network}
                   onToggle={() => toggleNetworkExpanded(network.id)}
                   onRemove={() => handleRemoveNetwork(network.id)}
+                  onRefresh={() => handleRefreshNetwork(network.id)}
                   onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
                 />
               ))

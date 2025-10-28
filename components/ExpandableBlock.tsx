@@ -11,13 +11,14 @@ interface ExpandableBlockProps {
   onToggle: () => void;
   children: React.ReactNode;
   color?: string;
-  badge?: string | number;
+  badge?: string | number | React.ReactNode;
   icon?: React.ReactNode;
   className?: string;
   headerClassName?: string;
   contentClassName?: string;
   isActive?: boolean;
   onRemove?: () => void;
+  actions?: React.ReactNode;
 }
 
 export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
@@ -33,7 +34,8 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
   headerClassName,
   contentClassName,
   isActive = false,
-  onRemove
+  onRemove,
+  actions
 }) => {
   return (
     <div 
@@ -84,7 +86,9 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
               {badge}
             </span>
           )}
-          
+
+          {actions}
+
           {onRemove && (
             <button
               onClick={(e) => {
