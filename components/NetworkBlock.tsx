@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronRight, Search, Loader2, AlertCircle, Server } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
+import { MessageTypeDefinition } from './ProtobufFormGenerator';
 
 interface GrpcService {
   name: string;
@@ -20,6 +21,8 @@ interface GrpcMethod {
   responseStreaming: boolean;
   options?: any;
   description?: string;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
 interface GrpcNetwork {

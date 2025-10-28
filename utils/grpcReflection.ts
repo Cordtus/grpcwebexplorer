@@ -26,8 +26,8 @@ export interface GrpcMethod {
   requestStreaming: boolean;
   responseStreaming: boolean;
   description: string;
-  requestTypeDefinition?: MessageTypeDefinition;
-  responseTypeDefinition?: MessageTypeDefinition;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
 export interface GrpcService {
@@ -44,44 +44,62 @@ export interface ReflectionOptions {
 
 /**
  * Extract message type definition from protobuf root
+ * Always returns a valid MessageTypeDefinition - never undefined
+ * Methods with no parameters will have an empty fields array
  */
-function extractMessageTypeDefinition(root: any, typeName: string): MessageTypeDefinition | undefined {
+function extractMessageTypeDefinition(root: any, typeName: string): MessageTypeDefinition {
   try {
     const message = root.lookupType(typeName);
-    if (!message || !message.fields) {
-      return undefined;
+    if (!message) {
+      // Return empty message definition if lookup fails
+      console.warn(`Could not lookup type ${typeName}, returning empty definition`);
+      return {
+        name: typeName.split('.').pop() || typeName,
+        fullName: typeName,
+        fields: [],
+      };
     }
 
     const fields: MessageField[] = [];
-    for (const [fieldName, field] of Object.entries(message.fields as any)) {
-      const fieldType = (field as any).type;
-      const rule = (field as any).rule;
-      const comment = (field as any).comment || '';
 
-      // Check if this is a nested message type
-      const isNested = fieldType && typeof fieldType === 'string' && !['string', 'int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64', 'bool', 'bytes', 'double', 'float'].includes(fieldType);
+    // message.fields can be undefined or an empty object for messages with no fields
+    if (message.fields && Object.keys(message.fields).length > 0) {
+      for (const [fieldName, field] of Object.entries(message.fields as any)) {
+        const fieldType = (field as any).type;
+        const rule = (field as any).rule;
+        const comment = (field as any).comment || '';
 
-      // Check if this is an enum
-      let enumValues: string[] | undefined;
-      if (isNested) {
-        try {
-          const nestedType = root.lookup(fieldType);
-          if (nestedType && (nestedType as any).valuesById) {
-            enumValues = Object.values((nestedType as any).valuesById) as string[];
+        // Check if this is a nested message type
+        const isNested = fieldType && typeof fieldType === 'string' && !['string', 'int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64', 'bool', 'bytes', 'double', 'float'].includes(fieldType);
+
+        // Check if this is an enum
+        let enumValues: string[] | undefined;
+        if (isNested) {
+          try {
+            const nestedType = root.lookup(fieldType);
+            if (nestedType && (nestedType as any).valuesById) {
+              enumValues = Object.values((nestedType as any).valuesById) as string[];
+            }
+          } catch (e) {
+            // Not an enum, must be a nested message
           }
-        } catch (e) {
-          // Not an enum, must be a nested message
         }
-      }
 
-      fields.push({
-        name: fieldName,
-        type: fieldType,
-        rule: rule === 'repeated' ? 'repeated' : rule === 'required' ? 'required' : 'optional',
-        comment,
-        nested: isNested && !enumValues,
-        enumValues,
-      });
+        const fieldDef: MessageField = {
+          name: fieldName,
+          type: fieldType,
+          rule: rule === 'repeated' ? 'repeated' : rule === 'required' ? 'required' : 'optional',
+          comment,
+          nested: isNested && !enumValues,
+        };
+
+        // Only add enumValues if it's defined (don't set to undefined)
+        if (enumValues) {
+          fieldDef.enumValues = enumValues;
+        }
+
+        fields.push(fieldDef);
+      }
     }
 
     return {
@@ -91,7 +109,12 @@ function extractMessageTypeDefinition(root: any, typeName: string): MessageTypeD
     };
   } catch (error) {
     console.error(`Failed to extract message type definition for ${typeName}:`, error);
-    return undefined;
+    // Return empty definition on error rather than undefined
+    return {
+      name: typeName.split('.').pop() || typeName,
+      fullName: typeName,
+      fields: [],
+    };
   }
 }
 

@@ -21,7 +21,7 @@ export interface MessageTypeDefinition {
 }
 
 interface ProtobufFormGeneratorProps {
-  messageType?: MessageTypeDefinition;
+  messageType: MessageTypeDefinition;
   value: Record<string, any>;
   onChange: (value: Record<string, any>) => void;
   readonly?: boolean;
@@ -33,8 +33,8 @@ const ProtobufFormGenerator: React.FC<ProtobufFormGeneratorProps> = ({
   onChange,
   readonly = false,
 }) => {
-  // If no message type definition, show empty state
-  if (!messageType || !messageType.fields || messageType.fields.length === 0) {
+  // If no fields, show empty state (methods with no parameters)
+  if (!messageType.fields || messageType.fields.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-gray-500 dark:text-gray-400">
         <div className="text-center">
@@ -169,7 +169,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
                       type={field.type}
                       value={item}
                       onChange={(v) => onArrayItemChange(index, v)}
-                      enumValues={field.enumValues}
+                      {...(field.enumValues && { enumValues: field.enumValues })}
                       readonly={readonly}
                       placeholder={`Item ${index + 1}`}
                     />
@@ -250,7 +250,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
         type={field.type}
         value={value}
         onChange={onChange}
-        enumValues={field.enumValues}
+        {...(field.enumValues && { enumValues: field.enumValues })}
         readonly={readonly}
         placeholder={`Enter ${field.name}`}
       />

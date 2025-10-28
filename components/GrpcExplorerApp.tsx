@@ -15,6 +15,7 @@ import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { MessageTypeDefinition } from './ProtobufFormGenerator';
 
 interface GrpcNetwork {
   id: string;
@@ -43,6 +44,8 @@ interface GrpcMethod {
   responseStreaming: boolean;
   options?: any;
   description?: string;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
 interface MethodInstance {

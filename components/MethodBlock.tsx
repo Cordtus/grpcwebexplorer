@@ -15,8 +15,8 @@ interface GrpcMethod {
   responseStreaming: boolean;
   options?: any;
   description?: string;
-  requestTypeDefinition?: MessageTypeDefinition;
-  responseTypeDefinition?: MessageTypeDefinition;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
 interface GrpcService {
