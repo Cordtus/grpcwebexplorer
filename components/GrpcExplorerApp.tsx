@@ -503,13 +503,18 @@ export default function GrpcExplorerApp() {
               "overflow-y-auto",
               descriptorSize === 'expanded' ? 'max-h-96' : 'max-h-48'
             )}>
-              {selectedMethod ? (
-                <MethodDescriptor
-                  method={selectedMethod.method}
-                  service={selectedMethod.service}
-                  color={selectedMethod.color}
-                />
-              ) : (
+              {selectedMethod ? (() => {
+                const network = networks.find(n => n.id === selectedMethod.networkId);
+                return (
+                  <MethodDescriptor
+                    method={selectedMethod.method}
+                    service={selectedMethod.service}
+                    color={selectedMethod.color}
+                    {...(network?.endpoint && { endpoint: network.endpoint })}
+                    {...(network?.tlsEnabled !== undefined && { tlsEnabled: network.tlsEnabled })}
+                  />
+                );
+              })() : (
                 <div className={cn(
                   "flex items-center justify-center text-gray-500 dark:text-gray-400",
                   descriptorSize === 'expanded' ? 'h-64' : 'h-32'

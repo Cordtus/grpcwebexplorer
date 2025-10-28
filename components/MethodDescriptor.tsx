@@ -25,10 +25,13 @@ interface MethodDescriptorProps {
   method: GrpcMethod;
   service: GrpcService;
   color: string;
+  endpoint?: string;
+  tlsEnabled?: boolean;
 }
 
-export default function MethodDescriptor({ method, service, color }: MethodDescriptorProps) {
+export default function MethodDescriptor({ method, service, color, endpoint, tlsEnabled }: MethodDescriptorProps) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'curl' | 'javascript'>('curl');
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -40,10 +43,11 @@ export default function MethodDescriptor({ method, service, color }: MethodDescr
   const protoDefinition = `rpc ${method.name}(${method.requestStreaming ? 'stream ' : ''}${method.requestType}) returns (${method.responseStreaming ? 'stream ' : ''}${method.responseType});`;
 
   // Generate curl example
+  const plaintextFlag = tlsEnabled ? '' : '  -plaintext \\\n';
+  const exampleEndpoint = endpoint || 'localhost:9090';
   const curlExample = `grpcurl \\
-  -plaintext \\
-  -d '{"example": "data"}' \\
-  localhost:50051 \\
+${plaintextFlag}  -d '{"example": "data"}' \\
+  ${exampleEndpoint} \\
   ${service.fullName}/${method.name}`;
 
   // Generate code example with realistic inputs
@@ -230,54 +234,51 @@ console.log(response);`;
         {/* Examples */}
         <div className="flex flex-col">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-              Quick Examples
-            </h3>
-          </div>
-          <div className="flex-1 space-y-2 overflow-auto">
-            {/* CURL */}
-            <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">cURL</span>
-                <button
-                  onClick={() => handleCopy(curlExample, 'curl')}
-                  className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                >
-                  {copied === 'curl' ? (
-                    <Check className="h-3 w-3 text-green-500" />
-                  ) : (
-                    <Copy className="h-3 w-3 text-gray-400" />
-                  )}
-                </button>
-              </div>
-              <pre className="text-[10px] text-gray-700 dark:text-gray-300 font-mono overflow-x-auto">
-                {curlExample}
-              </pre>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('curl')}
+                className={cn(
+                  "px-2 py-1 text-[10px] font-semibold rounded transition-colors",
+                  activeTab === 'curl'
+                    ? "bg-gray-700 dark:bg-gray-600 text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                )}
+              >
+                cURL
+              </button>
+              <button
+                onClick={() => setActiveTab('javascript')}
+                className={cn(
+                  "px-2 py-1 text-[10px] font-semibold rounded transition-colors",
+                  activeTab === 'javascript'
+                    ? "bg-gray-700 dark:bg-gray-600 text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                )}
+              >
+                JavaScript
+              </button>
             </div>
-
-            {/* JavaScript/Node.js */}
-            <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">JavaScript/Node.js</span>
-                <button
-                  onClick={() => handleCopy(codeExample, 'code')}
-                  className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                >
-                  {copied === 'code' ? (
-                    <Check className="h-3 w-3 text-green-500" />
-                  ) : (
-                    <Copy className="h-3 w-3 text-gray-400" />
-                  )}
-                </button>
-              </div>
-              <pre className="text-[10px] text-gray-700 dark:text-gray-300 font-mono overflow-x-auto">
-                {codeExample}
-              </pre>
-              <div className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
-                Proto files: <a href="https://github.com/cosmos/cosmos-sdk/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">cosmos-sdk</a>, <a href="https://github.com/cosmos/ibc-go/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">ibc-go</a>, or chain repo
-              </div>
-            </div>
+            <button
+              onClick={() => handleCopy(activeTab === 'curl' ? curlExample : codeExample, activeTab)}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            >
+              {copied === activeTab ? (
+                <Check className="h-3 w-3 text-green-500" />
+              ) : (
+                <Copy className="h-3 w-3 text-gray-400" />
+              )}
+            </button>
           </div>
+          <div className="flex-1 p-3 bg-gray-900 dark:bg-black rounded-lg overflow-auto max-h-[200px]">
+            <pre className="text-[10px] text-gray-300 font-mono whitespace-pre">
+              {activeTab === 'curl' ? curlExample : codeExample}
+            </pre>
+          </div>
+          {activeTab === 'javascript' && (
+            <div className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
+              Proto files: <a href="https://github.com/cosmos/cosmos-sdk/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">cosmos-sdk</a>, <a href="https://github.com/cosmos/ibc-go/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">ibc-go</a>, or chain repo
+            </div>
+          )}
         </div>
       </div>
 
