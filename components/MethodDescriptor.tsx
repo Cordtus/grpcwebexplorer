@@ -134,10 +134,10 @@ console.log(response);`;
 
   return (
     <div className="h-full flex flex-col p-4">
-      {/* Header */}
+      {/* Header with Type Flow */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div 
+          <div
             className="h-2 w-2 rounded-full"
             style={{ backgroundColor: color }}
           />
@@ -148,23 +148,41 @@ console.log(response);`;
             {service.fullName}
           </span>
         </div>
-        
-        <div className="flex items-center gap-2">
-          {method.requestStreaming && (
-            <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-              Client Stream
-            </span>
-          )}
-          {method.responseStreaming && (
-            <span className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
-              Server Stream
-            </span>
-          )}
+
+        <div className="flex items-center gap-3">
+          {/* Type Flow - inline with header */}
+          <div className="flex items-center gap-2">
+            <div className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded">
+              <code className="text-[10px] font-mono text-blue-700 dark:text-blue-400">
+                {method.requestType.split('.').pop()}
+              </code>
+            </div>
+            <ArrowRight className="h-3 w-3 text-gray-400" />
+            <div className="px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded">
+              <code className="text-[10px] font-mono text-green-700 dark:text-green-400">
+                {method.responseType.split('.').pop()}
+              </code>
+            </div>
+          </div>
+
+          {/* Streaming badges */}
+          <div className="flex items-center gap-2">
+            {method.requestStreaming && (
+              <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                Client Stream
+              </span>
+            )}
+            {method.responseStreaming && (
+              <span className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                Server Stream
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Content Grid */}
-      <div className="flex-1 grid grid-cols-3 gap-4 overflow-hidden">
+      {/* Content Grid - 2 columns */}
+      <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
         {/* Proto Definition */}
         <div className="flex flex-col">
           <div className="flex items-center justify-between mb-2">
@@ -187,47 +205,6 @@ console.log(response);`;
             <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
               {protoDefinition}
             </pre>
-          </div>
-        </div>
-
-        {/* Type Flow */}
-        <div className="flex flex-col">
-          <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            Type Flow
-          </h3>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex items-center gap-3">
-              <div className="text-center">
-                <div className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <code className="text-xs font-mono text-blue-700 dark:text-blue-400">
-                    {method.requestType.split('.').pop()}
-                  </code>
-                </div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Request</p>
-              </div>
-              
-              <ArrowRight className="h-4 w-4 text-gray-400" />
-              
-              <div className="text-center">
-                <div className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">
-                  <code className="text-xs font-mono text-gray-700 dark:text-gray-300">
-                    {method.name}
-                  </code>
-                </div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Method</p>
-              </div>
-              
-              <ArrowRight className="h-4 w-4 text-gray-400" />
-              
-              <div className="text-center">
-                <div className="px-3 py-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                  <code className="text-xs font-mono text-green-700 dark:text-green-400">
-                    {method.responseType.split('.').pop()}
-                  </code>
-                </div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Response</p>
-              </div>
-            </div>
           </div>
         </div>
 
