@@ -108,7 +108,15 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (endpoint.trim()) {
-			onAdd(endpoint.trim(), tlsEnabled);
+			let finalEndpoint = endpoint.trim();
+
+			// Auto-detect chain names: if it's not in endpoint format and matches a chain, prefix with "chain:"
+			if (!isEndpointFormat(finalEndpoint) && chains.includes(finalEndpoint.toLowerCase())) {
+				finalEndpoint = `chain:${finalEndpoint.toLowerCase()}`;
+				console.log(`Auto-detected chain name, using: ${finalEndpoint}`);
+			}
+
+			onAdd(finalEndpoint, tlsEnabled);
 			// Reset form
 			setEndpoint('');
 			setTlsEnabled(true);

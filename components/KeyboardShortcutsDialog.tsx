@@ -33,16 +33,18 @@ const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = ({ open,
       SHORTCUTS.IMPORT,
     ],
     'Help': [
-      { key: '?', ctrl: true, shift: true, description: 'Show keyboard shortcuts' },
+      SHORTCUTS.SHOW_SHORTCUTS,
     ],
   };
 
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
   const formatShortcut = (shortcut: { key: string; ctrl?: boolean; shift?: boolean; alt?: boolean }) => {
     const parts = [];
-    if (shortcut.ctrl) parts.push('Ctrl');
+    if (shortcut.ctrl) parts.push(isMac ? 'Cmd' : 'Ctrl');
     if (shortcut.shift) parts.push('Shift');
-    if (shortcut.alt) parts.push('Alt');
-    parts.push(shortcut.key === 'Tab' ? 'Tab' : shortcut.key.toUpperCase());
+    if (shortcut.alt) parts.push(isMac ? 'Option' : 'Alt');
+    parts.push(shortcut.key === 'Tab' ? 'Tab' : shortcut.key === 'Enter' ? 'Enter' : shortcut.key.toUpperCase());
     return parts.join(' + ');
   };
 

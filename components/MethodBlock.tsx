@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Play, Code, AlertCircle, Loader2 } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
+import ProtobufFormGenerator, { MessageTypeDefinition } from './ProtobufFormGenerator';
 
 interface GrpcMethod {
   name: string;
@@ -14,6 +15,8 @@ interface GrpcMethod {
   responseStreaming: boolean;
   options?: any;
   description?: string;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
 interface GrpcService {
@@ -43,187 +46,6 @@ interface MethodBlockProps {
   isExecuting: boolean;
 }
 
-// Field type definitions for protobuf types
-const PROTOBUF_TYPES = {
-  // Scalar types
-  'double': { type: 'number', validation: 'float', description: '64-bit floating point' },
-  'float': { type: 'number', validation: 'float', description: '32-bit floating point' },
-  'int32': { type: 'number', validation: 'integer', description: '32-bit signed integer' },
-  'int64': { type: 'string', validation: 'bigint', description: '64-bit signed integer (as string)' },
-  'uint32': { type: 'number', validation: 'unsigned', description: '32-bit unsigned integer' },
-  'uint64': { type: 'string', validation: 'bigint', description: '64-bit unsigned integer (as string)' },
-  'sint32': { type: 'number', validation: 'integer', description: '32-bit signed integer (efficient negative)' },
-  'sint64': { type: 'string', validation: 'bigint', description: '64-bit signed integer (efficient negative)' },
-  'fixed32': { type: 'number', validation: 'unsigned', description: '32-bit fixed unsigned' },
-  'fixed64': { type: 'string', validation: 'bigint', description: '64-bit fixed unsigned' },
-  'sfixed32': { type: 'number', validation: 'integer', description: '32-bit fixed signed' },
-  'sfixed64': { type: 'string', validation: 'bigint', description: '64-bit fixed signed' },
-  'bool': { type: 'boolean', validation: 'boolean', description: 'Boolean value' },
-  'string': { type: 'string', validation: 'string', description: 'UTF-8 string' },
-  'bytes': { type: 'string', validation: 'base64', description: 'Base64 encoded bytes' },
-};
-
-// Mock field extraction from request type (would come from reflection API)
-function extractFieldsFromType(requestType: string): Field[] {
-  // This would normally come from gRPC reflection
-  // For now, return common patterns
-  
-  const fields: Field[] = [];
-  
-  // Common Cosmos SDK patterns
-  if (requestType.includes('QueryBalanceRequest')) {
-    fields.push(
-      { name: 'address', type: 'string', required: true, description: 'The address to query balance for' },
-      { name: 'denom', type: 'string', required: true, description: 'The denomination to query' }
-    );
-  } else if (requestType.includes('QueryAccountRequest')) {
-    fields.push(
-      { name: 'address', type: 'string', required: true, description: 'The address to query' }
-    );
-  } else if (requestType.includes('PageRequest')) {
-    fields.push(
-      { name: 'key', type: 'bytes', required: false, description: 'Key for pagination' },
-      { name: 'offset', type: 'uint64', required: false, description: 'Offset for pagination' },
-      { name: 'limit', type: 'uint64', required: false, description: 'Maximum number of results' },
-      { name: 'count_total', type: 'bool', required: false, description: 'Count total results' },
-      { name: 'reverse', type: 'bool', required: false, description: 'Reverse order' }
-    );
-  } else {
-    // Default structure for unknown types
-    fields.push(
-      { name: 'request', type: 'object', required: false, description: 'Request payload (JSON)' }
-    );
-  }
-  
-  return fields;
-}
-
-interface Field {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-  repeated?: boolean;
-  nested?: Field[];
-}
-
-function FieldInput({ 
-  field, 
-  value, 
-  onChange, 
-  path = [] 
-}: { 
-  field: Field; 
-  value: any; 
-  onChange: (value: any) => void;
-  path?: string[];
-}) {
-  const [error, setError] = useState<string | null>(null);
-  const [localValue, setLocalValue] = useState(value || '');
-
-  const validateField = (val: any) => {
-    const typeInfo = PROTOBUF_TYPES[field.type as keyof typeof PROTOBUF_TYPES];
-    if (!typeInfo) return true;
-
-    try {
-      switch (typeInfo.validation) {
-        case 'integer':
-          if (val && !Number.isInteger(Number(val))) {
-            setError('Must be an integer');
-            return false;
-          }
-          break;
-        case 'float':
-          if (val && isNaN(Number(val))) {
-            setError('Must be a number');
-            return false;
-          }
-          break;
-        case 'unsigned':
-          if (val && Number(val) < 0) {
-            setError('Must be positive');
-            return false;
-          }
-          break;
-        case 'boolean':
-          if (val && !['true', 'false'].includes(val.toString().toLowerCase())) {
-            setError('Must be true or false');
-            return false;
-          }
-          break;
-        case 'base64':
-          if (val && !/^[A-Za-z0-9+/]*={0,2}$/.test(val)) {
-            setError('Must be valid base64');
-            return false;
-          }
-          break;
-      }
-      setError(null);
-      return true;
-    } catch {
-      setError('Invalid value');
-      return false;
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setLocalValue(val);
-    
-    if (validateField(val)) {
-      onChange(val);
-    }
-  };
-
-  const typeInfo = PROTOBUF_TYPES[field.type as keyof typeof PROTOBUF_TYPES];
-  const inputType = typeInfo?.type === 'number' ? 'number' : 
-                    typeInfo?.type === 'boolean' ? 'checkbox' : 'text';
-
-  if (field.type === 'object') {
-    return (
-      <div className="space-y-2">
-        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-          {field.name}
-          {field.required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-        <textarea
-          value={localValue}
-          onChange={handleChange}
-          placeholder="Enter JSON object"
-          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900 font-mono"
-          rows={4}
-        />
-        <p className="text-[10px] text-gray-500 dark:text-gray-400">{field.description}</p>
-        {error && <p className="text-[10px] text-red-500">{error}</p>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-        {field.name}
-        {field.required && <span className="text-red-500 ml-1">*</span>}
-        <span className="ml-2 text-[10px] text-gray-500">({field.type})</span>
-      </label>
-      <input
-        type={inputType}
-        value={localValue}
-        onChange={handleChange}
-        placeholder={field.description}
-        className={cn(
-          "w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900",
-          error ? "border-red-500" : "border-gray-200 dark:border-gray-700"
-        )}
-      />
-      {!error && (
-        <p className="text-[10px] text-gray-500 dark:text-gray-400">{field.description}</p>
-      )}
-      {error && <p className="text-[10px] text-red-500">{error}</p>}
-    </div>
-  );
-}
-
 export default function MethodBlock({
   instance,
   isSelected,
@@ -235,28 +57,45 @@ export default function MethodBlock({
   isExecuting
 }: MethodBlockProps) {
   const [params, setParams] = useState<Record<string, any>>(instance.params || {});
-  
-  // Extract fields from request type
-  const fields = useMemo(() => 
-    extractFieldsFromType(instance.method.requestType),
-    [instance.method.requestType]
-  );
 
   // Update parent when params change
   useEffect(() => {
     onUpdateParams(params);
-  }, [params, onUpdateParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
-  const handleFieldChange = (fieldName: string, value: any) => {
-    setParams(prev => ({
-      ...prev,
-      [fieldName]: value
-    }));
+  const handleParamsChange = (newParams: Record<string, any>) => {
+    setParams(newParams);
   };
 
+  // Check if method has required fields
+  const hasRequiredFields = useMemo(() => {
+    const definition = instance.method.requestTypeDefinition;
+    if (!definition || !definition.fields || definition.fields.length === 0) {
+      return false;
+    }
+    return definition.fields.some(f => f.rule === 'required');
+  }, [instance.method.requestTypeDefinition]);
+
+  // Validate required fields are filled
   const isValid = useMemo(() => {
-    return fields.filter(f => f.required).every(f => params[f.name]);
-  }, [fields, params]);
+    const definition = instance.method.requestTypeDefinition;
+    if (!definition || !definition.fields || definition.fields.length === 0) {
+      // No fields required, always valid
+      return true;
+    }
+
+    const requiredFields = definition.fields.filter(f => f.rule === 'required');
+    if (requiredFields.length === 0) {
+      return true;
+    }
+
+    // Check all required fields have values
+    return requiredFields.every(f => {
+      const value = params[f.name];
+      return value !== undefined && value !== null && value !== '';
+    });
+  }, [instance.method.requestTypeDefinition, params]);
 
   return (
     <div onClick={onSelect} className="cursor-pointer">
@@ -308,17 +147,14 @@ export default function MethodBlock({
             </div>
           </div>
 
-          {/* Parameter inputs */}
+          {/* Parameter inputs - using ProtobufFormGenerator */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Parameters</h4>
-            {fields.map(field => (
-              <FieldInput
-                key={field.name}
-                field={field}
-                value={params[field.name]}
-                onChange={(value) => handleFieldChange(field.name, value)}
-              />
-            ))}
+            <ProtobufFormGenerator
+              messageType={instance.method.requestTypeDefinition}
+              value={params}
+              onChange={handleParamsChange}
+            />
           </div>
 
           {/* Execute button */}
@@ -348,7 +184,7 @@ export default function MethodBlock({
             )}
           </button>
 
-          {!isValid && (
+          {!isValid && hasRequiredFields && (
             <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertCircle className="h-3 w-3" />
               <span>Fill in required fields</span>
