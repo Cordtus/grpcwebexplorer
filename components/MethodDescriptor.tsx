@@ -46,20 +46,64 @@ export default function MethodDescriptor({ method, service, color }: MethodDescr
   localhost:50051 \\
   ${service.fullName}/${method.name}`;
 
-  // Generate code example
-  const codeExample = `// JavaScript/Node.js example
-const client = new ${service.name}Client('localhost:50051', credentials);
+  // Generate code example with realistic inputs
+  const generateCodeExample = () => {
+    const requestTypeName = method.requestType.split('.').pop() || method.requestType;
+    const responseTypeName = method.responseType.split('.').pop() || method.responseType;
 
-const request = new ${method.requestType}();
-// Set request fields...
+    // Example inputs based on common patterns
+    const exampleInput = requestTypeName.includes('Empty') || requestTypeName === 'google.protobuf.Empty'
+      ? '{}'
+      : `{
+  // ${requestTypeName} fields
+}`;
 
-${method.responseStreaming ? 
-`const stream = client.${method.name}(request);
-stream.on('data', (response) => {
-  console.log('Response:', response);
-});` : 
-`const response = await client.${method.name}(request);
-console.log('Response:', response);`}`;
+    if (method.responseStreaming) {
+      return `import { credentials } from '@grpc/grpc-js';
+import { ${service.name}Client } from './generated/${service.name.toLowerCase()}_grpc_pb';
+
+const client = new ${service.name}Client(
+  'localhost:9090',
+  credentials.createInsecure()
+);
+
+const request = ${exampleInput};
+
+const stream = client.${method.name}(request);
+
+stream.on('data', (response: ${responseTypeName}) => {
+  console.log(response);
+});
+
+stream.on('end', () => {
+  console.log('Stream ended');
+});
+
+stream.on('error', (err) => {
+  console.error('Error:', err);
+});`;
+    } else {
+      return `import { credentials } from '@grpc/grpc-js';
+import { promisify } from 'util';
+import { ${service.name}Client } from './generated/${service.name.toLowerCase()}_grpc_pb';
+
+const client = new ${service.name}Client(
+  'localhost:9090',
+  credentials.createInsecure()
+);
+
+const ${method.name.toLowerCase()} = promisify(
+  client.${method.name}.bind(client)
+);
+
+const request = ${exampleInput};
+
+const response: ${responseTypeName} = await ${method.name.toLowerCase()}(request);
+console.log(response);`;
+    }
+  };
+
+  const codeExample = generateCodeExample();
 
   return (
     <div className="h-full flex flex-col p-4">
@@ -188,10 +232,10 @@ console.log('Response:', response);`}`;
               </pre>
             </div>
 
-            {/* Code */}
+            {/* JavaScript/Node.js */}
             <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">Code</span>
+                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">JavaScript/Node.js</span>
                 <button
                   onClick={() => handleCopy(codeExample, 'code')}
                   className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
