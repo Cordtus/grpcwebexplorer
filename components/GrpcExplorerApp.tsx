@@ -421,7 +421,7 @@ export default function GrpcExplorerApp() {
 
       {/* Method Descriptor - Three size states */}
       {descriptorSize !== 'minimized' && (
-        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black" style={{ marginLeft: '25%' }}>
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Method Descriptor
@@ -483,7 +483,7 @@ export default function GrpcExplorerApp() {
 
       {/* Minimized bar when panel is minimized */}
       {descriptorSize === 'minimized' && (
-        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+        <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black" style={{ marginLeft: '25%' }}>
           <button
             onClick={() => setDescriptorSize('small')}
             className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"

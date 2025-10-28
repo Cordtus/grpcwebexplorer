@@ -273,6 +273,9 @@ console.log(response);`;
               <pre className="text-[10px] text-gray-700 dark:text-gray-300 font-mono overflow-x-auto">
                 {codeExample}
               </pre>
+              <div className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
+                Proto files: <a href="https://github.com/cosmos/cosmos-sdk/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">cosmos-sdk</a>, <a href="https://github.com/cosmos/ibc-go/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">ibc-go</a>, or chain repo
+              </div>
             </div>
           </div>
         </div>
