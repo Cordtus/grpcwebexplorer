@@ -310,13 +310,20 @@ export default function GrpcExplorerApp() {
   // Add method instance to center panel
   const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
     // Check if method already exists
-    const exists = methodInstances.some(
-      m => m.networkId === network.id && 
+    const existingIndex = methodInstances.findIndex(
+      m => m.networkId === network.id &&
            m.method.fullName === method.fullName &&
            m.service.fullName === service.fullName
     );
 
-    if (!exists) {
+    if (existingIndex >= 0) {
+      // Method exists, just select it
+      setSelectedMethod(methodInstances[existingIndex]);
+    } else {
+      // Collapse all existing methods
+      setMethodInstances(prev => prev.map(m => ({ ...m, expanded: false })));
+
+      // Add new method expanded
       const newInstance: MethodInstance = {
         id: generateId(),
         networkId: network.id,
@@ -339,6 +346,12 @@ export default function GrpcExplorerApp() {
       setSelectedMethod(null);
     }
   }, [selectedMethod]);
+
+  // Clear all method instances
+  const handleClearAllMethods = useCallback(() => {
+    setMethodInstances([]);
+    setSelectedMethod(null);
+  }, []);
 
   // Toggle method instance expansion
   const toggleMethodExpanded = useCallback((instanceId: string) => {
@@ -554,9 +567,19 @@ export default function GrpcExplorerApp() {
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {methodInstances.length} active
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {methodInstances.length} active
+                </span>
+                {methodInstances.length > 0 && (
+                  <button
+                    onClick={handleClearAllMethods}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

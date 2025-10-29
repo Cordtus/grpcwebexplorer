@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, Search, Loader2, AlertCircle, Server, RefreshCw, Clock } from 'lucide-react';
+import { ChevronRight, Search, Loader2, AlertCircle, Server, RefreshCw } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
 import { MessageTypeDefinition } from './ProtobufFormGenerator';
@@ -121,21 +121,8 @@ export default function NetworkBlock({
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedNamespaces, setExpandedNamespaces] = useState<Set<string>>(new Set());
 
-  // Format cache age
-  const getCacheAge = () => {
-    if (!network.cacheTimestamp) return null;
-    const ageMs = Date.now() - network.cacheTimestamp;
-    const ageMins = Math.round(ageMs / 1000 / 60);
-    if (ageMins < 1) return 'just now';
-    if (ageMins === 1) return '1 min ago';
-    if (ageMins < 60) return `${ageMins} mins ago`;
-    const ageHours = Math.round(ageMins / 60);
-    if (ageHours === 1) return '1 hour ago';
-    return `${ageHours} hours ago`;
-  };
-
   // Group services by namespace
-  const namespaceGroups = useMemo(() => 
+  const namespaceGroups = useMemo(() =>
     groupMethodsByNamespace(network.services),
     [network.services]
   );
@@ -166,8 +153,6 @@ export default function NetworkBlock({
     setExpandedNamespaces(newExpanded);
   };
 
-  const cacheAge = getCacheAge();
-
   return (
     <ExpandableBlock
       title={network.name}
@@ -176,17 +161,7 @@ export default function NetworkBlock({
       onToggle={onToggle}
       color={network.color}
       badge={
-        network.services.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <span>{network.services.length} services</span>
-            {network.cached && cacheAge && (
-              <span className="flex items-center gap-1 text-xs opacity-75">
-                <Clock className="h-3 w-3" />
-                {cacheAge}
-              </span>
-            )}
-          </div>
-        ) : undefined as any
+        network.services.length > 0 ? `${network.services.length} services` : undefined as any
       }
       icon={<Server className="h-4 w-4" style={{ color: network.color }} />}
       onRemove={onRemove}
