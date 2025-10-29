@@ -251,20 +251,15 @@ export default function NetworkBlock({
                 <div key={group.namespace} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     onClick={() => toggleNamespace(group.namespace)}
-                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    className="w-full flex items-center gap-2 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                   >
-                    <div className="flex items-center gap-2">
-                      <ChevronRight
-                        className={cn(
-                          "h-4 w-4 transition-transform",
-                          expandedNamespaces.has(group.namespace) && "rotate-90"
-                        )}
-                      />
-                      <span className="font-medium text-sm">{group.namespace}</span>
-                    </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {group.methodCount} methods
-                    </span>
+                    <ChevronRight
+                      className={cn(
+                        "h-4 w-4 transition-transform",
+                        expandedNamespaces.has(group.namespace) && "rotate-90"
+                      )}
+                    />
+                    <span className="font-medium text-sm">{group.namespace}</span>
                   </button>
 
                   {expandedNamespaces.has(group.namespace) && (
