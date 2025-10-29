@@ -285,6 +285,19 @@ export class NativeReflectionClient {
       }
     }
 
+    // Add enums
+    if (descriptor.enumType) {
+      for (const enumType of descriptor.enumType) {
+        try {
+          this.addEnumType(namespace, enumType);
+        } catch (err) {
+          if (!(err as Error).message.includes('duplicate')) {
+            console.warn(`Failed to add enum ${enumType.name}:`, err);
+          }
+        }
+      }
+    }
+
     // Add messages
     if (descriptor.messageType) {
       for (const msgType of descriptor.messageType) {
@@ -337,12 +350,35 @@ export class NativeReflectionClient {
 
     namespace.add(message);
 
+    // Recursively add nested enums
+    if (msgType.enumType) {
+      for (const nested of msgType.enumType) {
+        this.addEnumType(message, nested);
+      }
+    }
+
     // Recursively add nested types
     if (msgType.nestedType) {
       for (const nested of msgType.nestedType) {
         this.addMessageType(message, nested);
       }
     }
+  }
+
+  /**
+   * Add enum type to namespace
+   */
+  private addEnumType(namespace: protobuf.Namespace, enumType: any): void {
+    const values: { [key: string]: number } = {};
+
+    if (enumType.value) {
+      for (const value of enumType.value) {
+        values[value.name] = value.number;
+      }
+    }
+
+    const enumObj = new protobuf.Enum(enumType.name, values);
+    namespace.add(enumObj);
   }
 
   /**
