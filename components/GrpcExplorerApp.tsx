@@ -560,9 +560,9 @@ export default function GrpcExplorerApp() {
 
         {/* Center and Right Panels */}
         <div className="flex-1 min-h-0">
-          <ResizablePanelGroup direction="horizontal" className="h-full">
+          <ResizablePanelGroup direction="horizontal" className="h-full" autoSaveId="main-panels">
             {/* Center Panel - Method Instances */}
-            <ResizablePanel defaultSize={50} minSize={30}>
+            <ResizablePanel defaultSize={50} minSize={30} id="methods-panel" collapsible={false}>
               <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
@@ -612,8 +612,8 @@ export default function GrpcExplorerApp() {
             <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
 
             {/* Right Panel - Results */}
-            <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
-              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden">
+            <ResizablePanel defaultSize={35} minSize={20} id="results-panel" collapsible={false}>
+              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden flex flex-col min-w-0">
                 <ResultsPanel
                   result={currentResult || null}
                   isExecuting={isExecuting}
