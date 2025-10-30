@@ -568,11 +568,10 @@ export default function GrpcExplorerApp() {
       </div>
 
       {/* Desktop Layout */}
-      <div className="hidden lg:flex flex-1 flex-col">
+      <div className="hidden lg:flex flex-1">
         {/* Left Panel - Networks (Full Height) */}
-        <div className="w-full flex flex-1">
-          <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
-        <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+        <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
               <button
@@ -766,7 +765,6 @@ export default function GrpcExplorerApp() {
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
-        </div>
         </div>
       </div>
 
