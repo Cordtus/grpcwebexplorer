@@ -16,6 +16,9 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { MessageTypeDefinition } from './ProtobufFormGenerator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface GrpcNetwork {
   id: string;
@@ -91,6 +94,7 @@ export default function GrpcExplorerApp() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
+  const [showMobileNetworks, setShowMobileNetworks] = useState(false);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -337,6 +341,9 @@ export default function GrpcExplorerApp() {
       setMethodInstances(prev => [...prev, newInstance]);
       setSelectedMethod(newInstance);
     }
+
+    // Close mobile networks drawer when method is selected
+    setShowMobileNetworks(false);
   }, [methodInstances]);
 
   // Remove method instance
@@ -425,18 +432,156 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
-      {/* Left Panel - Networks (Full Height) */}
-      <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row">
+      {/* Mobile: Floating Action Button */}
+      <Button
+        onClick={() => setShowMobileNetworks(true)}
+        className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg"
+        size="icon"
+      >
+        <Network className="h-6 w-6" />
+      </Button>
+
+      {/* Mobile: Bottom Sheet for Networks */}
+      <Sheet open={showMobileNetworks} onOpenChange={setShowMobileNetworks}>
+        <SheetContent side="bottom" className="h-[80vh] lg:hidden">
+          <SheetHeader>
+            <SheetTitle className="flex items-center justify-between">
+              <span>Networks</span>
+              <Button
+                onClick={() => setShowAddNetwork(true)}
+                size="icon"
+                variant="ghost"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto py-4 space-y-3">
+            {networks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No networks added</p>
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Add your first network
+                </button>
+              </div>
+            ) : (
+              networks.map(network => (
+                <NetworkBlock
+                  key={network.id}
+                  network={network}
+                  onToggle={() => toggleNetworkExpanded(network.id)}
+                  onRemove={() => handleRemoveNetwork(network.id)}
+                  onRefresh={() => handleRefreshNetwork(network.id)}
+                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+                />
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Mobile: Main Content */}
+      <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+        {/* Menu Bar */}
+        <MenuBar
+          onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+          onShowSettings={() => setShowSettings(true)}
+        />
+
+        {/* Method Descriptor - Mobile */}
+        {descriptorSize !== 'minimized' && selectedMethod && (
+          <Card className="m-4">
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Method Descriptor</span>
+                <Button
+                  onClick={() => setDescriptorSize('minimized')}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MethodDescriptor
+                method={selectedMethod.method}
+                service={selectedMethod.service}
+                color={selectedMethod.color}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Method Instances - Mobile */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {methodInstances.length === 0 ? (
+            <Card className="h-full flex items-center justify-center">
+              <CardContent className="text-center py-8">
+                <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30 text-gray-500" />
+                <p className="text-sm text-gray-500">No methods selected</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Tap the network button to select methods
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {methodInstances.map(instance => (
+                <Card key={instance.id} className={selectedMethod?.id === instance.id ? 'ring-2 ring-blue-500' : ''}>
+                  <CardContent className="p-4">
+                    <MethodBlock
+                      instance={instance}
+                      isSelected={selectedMethod?.id === instance.id}
+                      onToggle={() => toggleMethodExpanded(instance.id)}
+                      onRemove={() => handleRemoveMethodInstance(instance.id)}
+                      onSelect={() => setSelectedMethod(instance)}
+                      onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                      onExecute={() => handleExecuteMethod(instance)}
+                      isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Results - Mobile */}
+        {executionResults.length > 0 && (
+          <Card className="m-4">
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm">Execution Results</CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-64 overflow-y-auto">
+              <ResultsPanel
+                result={currentResult || null}
+                isExecuting={isExecuting}
+                selectedMethod={selectedMethod}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Desktop: Left Panel - Networks (Full Height) */}
+      <div className="hidden lg:flex w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex-col">
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
-              <button
+              <Button
                 onClick={() => setShowAddNetwork(true)}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                size="sm"
+                variant="ghost"
               >
                 <Plus className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
 
