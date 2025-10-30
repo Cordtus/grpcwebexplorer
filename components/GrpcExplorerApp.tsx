@@ -91,6 +91,7 @@ export default function GrpcExplorerApp() {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
+  const [mobileTab, setMobileTab] = useState<'networks' | 'methods' | 'results'>('networks');
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -337,6 +338,9 @@ export default function GrpcExplorerApp() {
       setMethodInstances(prev => [...prev, newInstance]);
       setSelectedMethod(newInstance);
     }
+
+    // Switch to methods tab on mobile
+    setMobileTab('methods');
   }, [methodInstances]);
 
   // Remove method instance
@@ -371,6 +375,7 @@ export default function GrpcExplorerApp() {
   const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
     setIsExecuting(true);
     setSelectedMethod(instance);
+    setMobileTab('results'); // Switch to results tab on mobile
 
     const startTime = Date.now();
 
@@ -425,9 +430,148 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
-      {/* Left Panel - Networks (Full Height) */}
-      <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row">
+      {/* Mobile Tab Bar */}
+      <div className="lg:hidden border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+        <div className="flex">
+          <button
+            onClick={() => setMobileTab('networks')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              mobileTab === 'networks'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+            }`}
+          >
+            Networks {networks.length > 0 && `(${networks.length})`}
+          </button>
+          <button
+            onClick={() => setMobileTab('methods')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              mobileTab === 'methods'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+            }`}
+          >
+            Methods {methodInstances.length > 0 && `(${methodInstances.length})`}
+          </button>
+          <button
+            onClick={() => setMobileTab('results')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              mobileTab === 'results'
+                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+            }`}
+          >
+            Results
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Content */}
+      <div className="lg:hidden flex-1 overflow-hidden">
+        {mobileTab === 'networks' && (
+          <div className="h-full bg-white dark:bg-gray-950 flex flex-col">
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between p-4">
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {networks.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No networks added</p>
+                  <button
+                    onClick={() => setShowAddNetwork(true)}
+                    className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Add your first network
+                  </button>
+                </div>
+              ) : (
+                networks.map(network => (
+                  <NetworkBlock
+                    key={network.id}
+                    network={network}
+                    onToggle={() => toggleNetworkExpanded(network.id)}
+                    onRemove={() => handleRemoveNetwork(network.id)}
+                    onRefresh={() => handleRefreshNetwork(network.id)}
+                    onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {mobileTab === 'methods' && (
+          <div className="h-full bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+            <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between p-4">
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {methodInstances.length} active
+                  </span>
+                  {methodInstances.length > 0 && (
+                    <button
+                      onClick={handleClearAllMethods}
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-3">
+              {methodInstances.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No methods selected</p>
+                  <p className="text-xs mt-1">Select methods from the networks panel</p>
+                </div>
+              ) : (
+                methodInstances.map(instance => (
+                  <MethodBlock
+                    key={instance.id}
+                    instance={instance}
+                    isSelected={selectedMethod?.id === instance.id}
+                    onToggle={() => toggleMethodExpanded(instance.id)}
+                    onRemove={() => handleRemoveMethodInstance(instance.id)}
+                    onSelect={() => setSelectedMethod(instance)}
+                    onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                    onExecute={() => handleExecuteMethod(instance)}
+                    isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {mobileTab === 'results' && (
+          <div className="h-full bg-white dark:bg-gray-950 overflow-hidden">
+            <ResultsPanel
+              result={currentResult || null}
+              isExecuting={isExecuting}
+              selectedMethod={selectedMethod}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="hidden lg:flex flex-1 flex-col">
+        {/* Left Panel - Networks (Full Height) */}
+        <div className="w-full flex flex-1">
+          <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
@@ -622,6 +766,7 @@ export default function GrpcExplorerApp() {
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
+        </div>
         </div>
       </div>
 
