@@ -425,17 +425,17 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
-      {/* Left Panel - Networks (Full Height) */}
-      <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row">
+      {/* Networks Panel - Collapsible on mobile, sidebar on desktop */}
+      <div className="w-full lg:w-[30%] lg:min-w-[20%] lg:max-w-[50%] border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col max-h-[40vh] lg:max-h-none overflow-hidden">
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
               <button
                 onClick={() => setShowAddNetwork(true)}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="p-2.5 lg:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-5 w-5 lg:h-4 lg:w-4" />
               </button>
             </div>
           </div>
@@ -558,12 +558,12 @@ export default function GrpcExplorerApp() {
           </div>
         )}
 
-        {/* Center and Right Panels */}
-        <div className="flex-1 min-h-0">
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            {/* Center Panel - Method Instances */}
-            <ResizablePanel defaultSize={50} minSize={30}>
-              <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+        {/* Center and Right Panels - Stacked on mobile, side-by-side on desktop */}
+        <div className="flex-1 min-h-0 flex flex-col lg:block">
+          {/* Mobile: Stacked layout */}
+          <div className="flex flex-col flex-1 lg:hidden">
+            {/* Method Instances - Mobile */}
+            <div className="flex-1 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto min-h-[30vh]">
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
@@ -606,22 +606,83 @@ export default function GrpcExplorerApp() {
               ))
             )}
           </div>
-              </div>
-            </ResizablePanel>
+            </div>
 
-            <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+            {/* Results - Mobile */}
+            <div className="flex-1 bg-white dark:bg-gray-950 overflow-hidden min-h-[30vh]">
+              <ResultsPanel
+                result={currentResult || null}
+                isExecuting={isExecuting}
+                selectedMethod={selectedMethod}
+              />
+            </div>
+          </div>
 
-            {/* Right Panel - Results */}
-            <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
-              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden">
-                <ResultsPanel
-                  result={currentResult || null}
-                  isExecuting={isExecuting}
-                  selectedMethod={selectedMethod}
-                />
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          {/* Desktop: Resizable panels */}
+          <div className="hidden lg:block h-full">
+            <ResizablePanelGroup direction="horizontal" className="h-full">
+              {/* Method Instances - Desktop */}
+              <ResizablePanel defaultSize={50} minSize={30}>
+                <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+                  <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                    <div className="flex items-center justify-between p-4">
+                      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {methodInstances.length} active
+                        </span>
+                        {methodInstances.length > 0 && (
+                          <button
+                            onClick={handleClearAllMethods}
+                            className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    {methodInstances.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">No methods selected</p>
+                        <p className="text-xs mt-1">Select methods from the networks panel</p>
+                      </div>
+                    ) : (
+                      methodInstances.map(instance => (
+                        <MethodBlock
+                          key={instance.id}
+                          instance={instance}
+                          isSelected={selectedMethod?.id === instance.id}
+                          onToggle={() => toggleMethodExpanded(instance.id)}
+                          onRemove={() => handleRemoveMethodInstance(instance.id)}
+                          onSelect={() => setSelectedMethod(instance)}
+                          onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                          onExecute={() => handleExecuteMethod(instance)}
+                          isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+
+              {/* Results - Desktop */}
+              <ResizablePanel defaultSize={35} minSize={20} maxSize={50}>
+                <div className="h-full bg-white dark:bg-gray-950 overflow-hidden">
+                  <ResultsPanel
+                    result={currentResult || null}
+                    isExecuting={isExecuting}
+                    selectedMethod={selectedMethod}
+                  />
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </div>
         </div>
       </div>
 
