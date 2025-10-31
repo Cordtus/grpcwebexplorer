@@ -8,9 +8,10 @@ import { getCacheStats, clearAllCache } from '@/lib/utils/client-cache';
 interface MenuBarProps {
   onShowSettings?: () => void;
   onShowKeyboardShortcuts?: () => void;
+  onShowHelp?: () => void;
 }
 
-export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts }: MenuBarProps) {
+export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onShowHelp }: MenuBarProps) {
   const [cacheStats, setCacheStats] = useState({ count: 0, sizeKB: 0 });
   const [showCacheMenu, setShowCacheMenu] = useState(false);
   const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -96,11 +97,11 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts }: Men
         {/* Divider */}
         <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-1" />
 
-        {/* Keyboard Shortcuts */}
+        {/* Help */}
         <button
-          onClick={onShowKeyboardShortcuts}
+          onClick={onShowHelp || onShowKeyboardShortcuts}
           className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
-          title={`Keyboard shortcuts (${isMac ? 'Cmd' : 'Ctrl'}+Shift+?)`}
+          title={`Help & Guide (${isMac ? 'Cmd' : 'Ctrl'}+Shift+?)`}
         >
           <HelpCircle className="h-4 w-4" />
         </button>

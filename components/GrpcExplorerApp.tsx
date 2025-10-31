@@ -10,7 +10,7 @@ import MethodDescriptor from './MethodDescriptor';
 import ResultsPanel from './ResultsPanel';
 import AddNetworkDialog from './AddNetworkDialog';
 import MenuBar from './MenuBar';
-import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
+import HelpDialog from './HelpDialog';
 import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
@@ -88,7 +88,7 @@ export default function GrpcExplorerApp() {
   const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
   const [showAddNetwork, setShowAddNetwork] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
 
@@ -127,8 +127,8 @@ export default function GrpcExplorerApp() {
       key: '?',
       ctrl: true,
       shift: true,
-      handler: () => setShowKeyboardShortcuts(true),
-      description: 'Show keyboard shortcuts'
+      handler: () => setShowHelp(true),
+      description: 'Show help and shortcuts'
     }
   ]);
 
@@ -471,7 +471,7 @@ export default function GrpcExplorerApp() {
       <div className="flex-1 flex flex-col">
         {/* Menu Bar */}
         <MenuBar
-          onShowKeyboardShortcuts={() => setShowKeyboardShortcuts(true)}
+          onShowHelp={() => setShowHelp(true)}
           onShowSettings={() => setShowSettings(true)}
         />
 
@@ -633,9 +633,9 @@ export default function GrpcExplorerApp() {
         />
       )}
 
-      <KeyboardShortcutsDialog
-        open={showKeyboardShortcuts}
-        onClose={() => setShowKeyboardShortcuts(false)}
+      <HelpDialog
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
       />
 
       <SettingsDialog
