@@ -1,7 +1,7 @@
 // Service discovery using gRPC reflection
 // NOTE: No server-side caching - clients cache responses in localStorage
 import { NextResponse } from 'next/server';
-import { fetchServicesViaReflection, type GrpcService } from '@/utils/grpcReflection';
+import { fetchServicesViaReflection, type GrpcService } from '@/lib/grpc/reflection-utils';
 
 export const runtime = 'nodejs';
 

@@ -1,5 +1,5 @@
-// lib/grpc/native-reflection.ts
-// Complete native gRPC reflection implementation without grpc-reflection-js
+// lib/grpc/reflection-client.ts
+// Complete gRPC reflection client implementation without grpc-reflection-js
 
 import * as grpc from '@grpc/grpc-js';
 import * as protobuf from 'protobufjs';
@@ -71,6 +71,22 @@ export interface GrpcService {
   methods: GrpcMethod[];
 }
 
+export interface MessageField {
+  name: string;
+  type: string;
+  rule?: 'optional' | 'required' | 'repeated';
+  defaultValue?: any;
+  comment?: string;
+  nested?: boolean;
+  enumValues?: string[];
+}
+
+export interface MessageTypeDefinition {
+  name: string;
+  fullName: string;
+  fields: MessageField[];
+}
+
 export interface GrpcMethod {
   name: string;
   fullName: string;
@@ -80,26 +96,28 @@ export interface GrpcMethod {
   requestStreaming: boolean;
   responseStreaming: boolean;
   description?: string;
+  requestTypeDefinition: MessageTypeDefinition;
+  responseTypeDefinition: MessageTypeDefinition;
 }
 
-export interface NativeReflectionOptions {
+export interface ReflectionOptions {
   endpoint: string;
   tls: boolean;
   timeout?: number;
 }
 
 /**
- * Native gRPC Reflection Client
- * Uses raw @grpc/grpc-js without grpc-reflection-js dependency
+ * gRPC Reflection Client
+ * Uses @grpc/grpc-js and protobufjs for complete control over reflection and type introspection
  */
-export class NativeReflectionClient {
+export class ReflectionClient {
   private client: grpc.Client;
   private reflectionStub: any;
   private root: protobuf.Root;
   private seenFiles = new Set<string>();
   private descriptorRoot: protobuf.Root | null = null;
 
-  constructor(private options: NativeReflectionOptions) {
+  constructor(private options: ReflectionOptions) {
     const credentials = options.tls
       ? grpc.credentials.createSsl()
       : grpc.credentials.createInsecure();
@@ -116,7 +134,7 @@ export class NativeReflectionClient {
    * Initialize and load all service descriptors
    */
   async initialize(): Promise<void> {
-    console.log(`[NativeReflection] Initializing for ${this.options.endpoint}`);
+    console.log(`[ReflectionClient] Initializing for ${this.options.endpoint}`);
 
     this.descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
 
@@ -150,7 +168,7 @@ export class NativeReflectionClient {
 
     // List all services
     const serviceNames = await this.listServices();
-    console.log(`[NativeReflection] Found ${serviceNames.length} services`);
+    console.log(`[ReflectionClient] Found ${serviceNames.length} services`);
 
     // Fetch descriptors for each service
     const processedServices = new Set<string>();
@@ -163,11 +181,11 @@ export class NativeReflectionClient {
         await this.loadServiceDescriptor(serviceName);
         processedServices.add(serviceName);
       } catch (err) {
-        console.warn(`[NativeReflection] Failed to load ${serviceName}:`, (err as Error).message);
+        console.warn(`[ReflectionClient] Failed to load ${serviceName}:`, (err as Error).message);
       }
     }
 
-    console.log(`[NativeReflection] Successfully loaded ${processedServices.size} services`);
+    console.log(`[ReflectionClient] Successfully loaded ${processedServices.size} services`);
   }
 
   /**
@@ -261,7 +279,7 @@ export class NativeReflectionClient {
       this.addDescriptorToRoot(descriptor);
 
     } catch (err) {
-      console.warn(`[NativeReflection] Failed to process descriptor:`, err);
+      console.warn(`[ReflectionClient] Failed to process descriptor:`, err);
     }
   }
 
@@ -426,6 +444,87 @@ export class NativeReflectionClient {
   }
 
   /**
+   * Extract message type definition from protobuf root
+   * Always returns a valid MessageTypeDefinition - never undefined
+   * Methods with no parameters will have an empty fields array
+   */
+  private extractMessageTypeDefinition(typeName: string): MessageTypeDefinition {
+    try {
+      const message = this.root.lookupType(typeName);
+      if (!message) {
+        console.warn(`[ReflectionClient] Could not lookup type ${typeName}, returning empty definition`);
+        return {
+          name: typeName.split('.').pop() || typeName,
+          fullName: typeName,
+          fields: [],
+        };
+      }
+
+      const fields: MessageField[] = [];
+
+      // message.fields can be undefined or an empty object for messages with no fields
+      if (message.fields && Object.keys(message.fields).length > 0) {
+        for (const [fieldName, field] of Object.entries(message.fields)) {
+          const fieldObj = field as any;
+          const fieldType = fieldObj.type;
+          const rule = fieldObj.rule;
+          const comment = fieldObj.comment || '';
+
+          // Check if this is a nested message type (not a primitive)
+          const primitiveTypes = [
+            'string', 'int32', 'int64', 'uint32', 'uint64',
+            'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32',
+            'sfixed64', 'bool', 'bytes', 'double', 'float'
+          ];
+          const isNested = fieldType && typeof fieldType === 'string' && !primitiveTypes.includes(fieldType);
+
+          // Check if this is an enum
+          let enumValues: string[] | undefined;
+          if (isNested) {
+            try {
+              const nestedType = this.root.lookup(fieldType);
+              if (nestedType && (nestedType as any).valuesById) {
+                enumValues = Object.values((nestedType as any).valuesById) as string[];
+              }
+            } catch (e) {
+              // Not an enum, must be a nested message
+            }
+          }
+
+          const fieldDef: MessageField = {
+            name: fieldName,
+            type: fieldType,
+            rule: rule === 'repeated' ? 'repeated' : rule === 'required' ? 'required' : 'optional',
+            comment,
+            nested: isNested && !enumValues,
+          };
+
+          // Only add enumValues if it's defined (don't set to undefined)
+          if (enumValues) {
+            fieldDef.enumValues = enumValues;
+          }
+
+          fields.push(fieldDef);
+        }
+      }
+
+      return {
+        name: message.name,
+        fullName: typeName,
+        fields,
+      };
+    } catch (error) {
+      console.error(`[ReflectionClient] Failed to extract message type definition for ${typeName}:`, error);
+      // Return empty definition on error rather than undefined
+      return {
+        name: typeName.split('.').pop() || typeName,
+        fullName: typeName,
+        fields: [],
+      };
+    }
+  }
+
+  /**
    * Get all services
    */
   getServices(): GrpcService[] {
@@ -440,6 +539,11 @@ export class NativeReflectionClient {
 
           for (const [methodName, method] of Object.entries(nested.methods)) {
             const m = method as protobuf.Method;
+
+            // Extract type definitions for request and response
+            const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
+            const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+
             methods.push({
               name: methodName,
               fullName: `${fullPath}.${methodName}`,
@@ -448,6 +552,8 @@ export class NativeReflectionClient {
               responseType: m.responseType,
               requestStreaming: m.requestStream || false,
               responseStreaming: m.responseStream || false,
+              requestTypeDefinition,
+              responseTypeDefinition,
             });
           }
 

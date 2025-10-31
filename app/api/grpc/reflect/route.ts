@@ -4,7 +4,7 @@
 // No caching - meant for testing purposes
 
 import { NextResponse } from 'next/server';
-import { GrpcReflectionClient } from '@/lib/grpc/reflection';
+import { ReflectionClient } from '@/lib/grpc/reflection-client';
 
 export const runtime = 'nodejs';
 
@@ -47,11 +47,10 @@ export async function POST(req: Request) {
     console.log(`[Reflection] Discovering services for ${endpoint} (TLS: ${tls})`);
 
     // Initialize reflection client (no caching for test endpoint)
-    const reflectionClient = new GrpcReflectionClient({
+    const reflectionClient = new ReflectionClient({
       endpoint,
       tls,
       timeout: 15000,
-      maxRetries: 3,
     });
 
     try {
@@ -64,24 +63,23 @@ export async function POST(req: Request) {
       let chainId: string | null = null;
 
       try {
-        const descriptor = reflectionClient.findMethodDescriptor(
+        const methodInfo = reflectionClient.findMethod(
           'cosmos.base.tendermint.v1beta1.Service',
           'GetLatestBlock'
         );
 
-        if (descriptor) {
-          const { invokeGrpcMethod, extractField } = await import('@/lib/grpc/reflection');
-
-          const response = await invokeGrpcMethod(
-            endpoint,
-            tls,
-            descriptor,
+        if (methodInfo) {
+          const response = await reflectionClient.invokeMethod(
+            'cosmos.base.tendermint.v1beta1.Service',
+            'GetLatestBlock',
             {},
             5000
           );
 
-          chainId = extractField(response, 'sdkBlock.header.chainId') ||
-                   extractField(response, 'block.header.chain_id');
+          // Extract chain_id from response
+          chainId = response?.sdkBlock?.header?.chainId ||
+                   response?.block?.header?.chain_id ||
+                   null;
 
           if (chainId) {
             console.log(`[Reflection] Detected chain_id: ${chainId}`);
@@ -104,7 +102,7 @@ export async function POST(req: Request) {
 
     } finally {
       // Cleanup reflection client
-      await reflectionClient.close();
+      reflectionClient.close();
     }
 
   } catch (error: any) {

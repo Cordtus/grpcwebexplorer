@@ -1,8 +1,8 @@
 // app/api/grpc/invoke/route.ts
-// gRPC method invocation endpoint
+// gRPC method invocation endpoint (legacy test endpoint - UI uses /api/grpc/execute)
 
 import { NextResponse } from 'next/server';
-import { GrpcReflectionClient, invokeGrpcMethod } from '@/lib/grpc/reflection';
+import { ReflectionClient } from '@/lib/grpc/reflection-client';
 
 export const runtime = 'nodejs';
 
@@ -58,22 +58,21 @@ export async function POST(req: Request) {
 
     console.log(`[Invoke] ${service}.${method} on ${endpoint}`);
 
-    // Initialize reflection client to get method descriptor
-    const reflectionClient = new GrpcReflectionClient({
+    // Initialize reflection client
+    const reflectionClient = new ReflectionClient({
       endpoint,
       tls,
       timeout: 15000,
-      maxRetries: 3,
     });
 
     try {
       // Initialize and fetch descriptors
       await reflectionClient.initialize();
 
-      // Find the method descriptor
-      const descriptor = reflectionClient.findMethodDescriptor(service, method);
+      // Find the method
+      const methodInfo = reflectionClient.findMethod(service, method);
 
-      if (!descriptor) {
+      if (!methodInfo) {
         return NextResponse.json(
           {
             error: `Method not found: ${service}.${method}`,
@@ -86,23 +85,22 @@ export async function POST(req: Request) {
       }
 
       // Check for streaming methods (not supported yet)
-      if (descriptor.requestStreaming || descriptor.responseStreaming) {
+      if (methodInfo.method.requestStream || methodInfo.method.responseStream) {
         return NextResponse.json(
           {
             error: 'Streaming methods are not yet supported',
             method: `${service}.${method}`,
-            requestStreaming: descriptor.requestStreaming,
-            responseStreaming: descriptor.responseStreaming,
+            requestStreaming: methodInfo.method.requestStream,
+            responseStreaming: methodInfo.method.responseStream,
           },
           { status: 400 }
         );
       }
 
       // Invoke the method
-      const result = await invokeGrpcMethod(
-        endpoint,
-        tls,
-        descriptor,
+      const result = await reflectionClient.invokeMethod(
+        service,
+        method,
         params,
         timeout
       );
@@ -121,7 +119,7 @@ export async function POST(req: Request) {
 
     } finally {
       // Cleanup reflection client
-      await reflectionClient.close();
+      reflectionClient.close();
     }
 
   } catch (error: any) {

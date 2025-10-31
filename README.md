@@ -88,7 +88,7 @@ Click the cache indicator in the menu bar to:
 **Technology Stack**:
 - Next.js 14 (App Router) with TypeScript
 - Tailwind CSS + shadcn/ui components
-- gRPC reflection via @grpc/grpc-js and grpc-reflection-js
+- gRPC reflection via @grpc/grpc-js and protobufjs
 - Client-side caching with localStorage (1-hour TTL)
 - React resizable panels for layout management
 
