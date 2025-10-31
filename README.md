@@ -15,7 +15,7 @@ Web-based interface for exploring and interacting with gRPC services via reflect
   - Left: Network tabs with hierarchical service/method trees
   - Center: Collapsible method descriptors (compact/normal/detailed views)
   - Right: Method execution with parameter forms and response viewer
-- **Keyboard Shortcuts**: Full keyboard navigation support (see `Cmd/Ctrl+Shift+?` for all shortcuts)
+- **Keyboard Shortcuts**: Full keyboard navigation support (press `Cmd/Ctrl+Shift+?` to open help guide)
 - **Execution History**: Track and replay previous method executions
 - **Dark Mode Support**: Automatic theme detection with manual toggle
 - **Cache Management**: View cache statistics and clear cached data via menu bar
@@ -68,14 +68,22 @@ yarn docker:down  # Stop container
 5. Click "Execute Method" to send the request
 6. View response in the right panel
 
-### Keyboard Shortcuts
+### Help & Keyboard Shortcuts
 
+Press `Cmd/Ctrl+Shift+?` or click the help icon in the menu bar to open the comprehensive help guide with:
+- Quick start guide
+- Network setup instructions (3 methods)
+- Method execution workflow
+- Complete keyboard shortcuts reference
+- Cache management details
+- Troubleshooting tips
+
+**Quick Shortcuts:**
 - `Cmd/Ctrl+N` - Add new network
-- `Cmd/Ctrl+K` - Show keyboard shortcuts
-- `Cmd/Ctrl+H` - Show execution history
 - `Cmd/Ctrl+W` - Close active method tab
+- `Cmd/Ctrl+Enter` - Execute method
 - `Cmd/Ctrl+Tab` - Cycle through method tabs
-- `Cmd/Ctrl+Shift+?` - Show all shortcuts
+- `Cmd/Ctrl+Shift+?` - Show help guide
 
 ### Cache Management
 
@@ -139,10 +147,9 @@ The custom `start-server.js` automatically finds an available port starting from
 ```
 /app/api/grpc/          # API routes for gRPC operations
 /components/            # React components (shadcn/ui + custom)
-/lib/grpc/             # gRPC client utilities and caching
+/lib/grpc/             # gRPC reflection client and utilities
 /lib/utils/            # Utility functions (colors, client-cache)
 /lib/hooks/            # React hooks (keyboard shortcuts, history)
-/utils/                # Legacy utilities (grpcReflection.ts)
 ```
 
 ### Key Components
@@ -156,13 +163,17 @@ The custom `start-server.js` automatically finds an available port starting from
 
 ### Testing
 
-Run test scripts with Node.js:
+Run test script with Node.js:
 
 ```bash
-node test-reflection.js          # Test grpc-reflection-js implementation
-node test-native-reflection.js   # Test native reflection client
-node test-fixes.js              # Validate build and deployment config
+node test-grpc-reflection.js     # Comprehensive reflection client tests
 ```
+
+The test validates:
+- Service discovery via gRPC reflection
+- Type definition extraction for form generation
+- Method invocation with various parameter types
+- Enum field detection and handling
 
 ## Troubleshooting
 
