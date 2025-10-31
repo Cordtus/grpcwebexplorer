@@ -2,7 +2,7 @@
 // gRPC method execution via reflection service
 
 import { NextResponse } from 'next/server';
-import { NativeReflectionClient } from '@/lib/grpc/native-reflection';
+import { ReflectionClient } from '@/lib/grpc/reflection-client';
 
 export const runtime = 'nodejs';
 
@@ -38,8 +38,8 @@ export async function POST(req: Request) {
 
     console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort}`);
 
-    // Create native reflection client
-    const client = new NativeReflectionClient({
+    // Create reflection client
+    const client = new ReflectionClient({
       endpoint: endpointWithPort,
       tls: tlsEnabled !== false,
       timeout: 15000,
