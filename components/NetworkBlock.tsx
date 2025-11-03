@@ -234,7 +234,11 @@ export default function NetworkBlock({
                         expandedNamespaces.has(group.namespace) && "rotate-90"
                       )}
                     />
-                    <span className="font-medium text-sm">{group.namespace}</span>
+                    <div className="marquee-container flex-1 min-w-0">
+                      <span className="marquee-text font-medium text-sm" data-long={group.namespace.length > 30 ? "true" : "false"}>
+                        {group.namespace}
+                      </span>
+                    </div>
                   </button>
 
                   {expandedNamespaces.has(group.namespace) && (
@@ -250,25 +254,29 @@ export default function NetworkBlock({
                               <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <code className="text-xs font-mono text-blue-600 dark:text-blue-400">
-                                      {method.name}
-                                    </code>
+                                    <div className="marquee-container flex-1 min-w-0">
+                                      <code className="marquee-text text-xs font-mono text-blue-600 dark:text-blue-400" data-long={method.name.length > 25 ? "true" : "false"}>
+                                        {method.name}
+                                      </code>
+                                    </div>
                                     {method.requestStreaming && (
-                                      <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                      <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 shrink-0">
                                         stream
                                       </span>
                                     )}
                                     {method.responseStreaming && (
-                                      <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                                      <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 shrink-0">
                                         stream
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                                    {service.fullName}
+                                  <div className="marquee-container text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <span className="marquee-text" data-long={service.fullName.length > 40 ? "true" : "false"}>
+                                      {service.fullName}
+                                    </span>
                                   </div>
                                 </div>
-                                <ChevronRight className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <ChevronRight className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </div>
                             </button>
                           ))}

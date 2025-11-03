@@ -144,7 +144,7 @@ console.log(response);`;
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {method.name}
           </h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-gray-500 dark:text-gray-400 truncate" title={service.fullName}>
             {service.fullName}
           </span>
         </div>
@@ -152,14 +152,14 @@ console.log(response);`;
         <div className="flex items-center gap-3">
           {/* Type Flow - inline with header */}
           <div className="flex items-center gap-2">
-            <div className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded">
-              <code className="text-[10px] font-mono text-blue-700 dark:text-blue-400">
+            <div className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded" title={method.requestType}>
+              <code className="text-[10px] font-mono text-blue-700 dark:text-blue-400 truncate max-w-[120px] inline-block">
                 {method.requestType.split('.').pop()}
               </code>
             </div>
-            <ArrowRight className="h-3 w-3 text-gray-400" />
-            <div className="px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded">
-              <code className="text-[10px] font-mono text-green-700 dark:text-green-400">
+            <ArrowRight className="h-3 w-3 text-gray-400 shrink-0" />
+            <div className="px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded" title={method.responseType}>
+              <code className="text-[10px] font-mono text-green-700 dark:text-green-400 truncate max-w-[120px] inline-block">
                 {method.responseType.split('.').pop()}
               </code>
             </div>
@@ -261,16 +261,16 @@ console.log(response);`;
 
       {/* Full path */}
       <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 dark:text-gray-400">Full Path:</span>
-            <code className="text-xs font-mono text-gray-700 dark:text-gray-300">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0">Full Path:</span>
+            <code className="text-xs font-mono text-gray-700 dark:text-gray-300 truncate" title={`${service.fullName}.${method.name}`}>
               {service.fullName}.{method.name}
             </code>
           </div>
-          <div className="flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
-            <span>Request: <code className="font-mono">{method.requestType}</code></span>
-            <span>Response: <code className="font-mono">{method.responseType}</code></span>
+          <div className="flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400 shrink-0">
+            <span className="truncate" title={method.requestType}>Request: <code className="font-mono">{method.requestType}</code></span>
+            <span className="truncate" title={method.responseType}>Response: <code className="font-mono">{method.responseType}</code></span>
           </div>
         </div>
       </div>

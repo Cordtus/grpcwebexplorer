@@ -240,9 +240,27 @@
   .draggable {
     -webkit-app-region: drag;
   }
-  
+
   .no-drag {
     -webkit-app-region: no-drag;
+  }
+
+  /* Marquee scrolling text on hover */
+  .marquee-container {
+    @apply overflow-hidden;
+  }
+
+  .marquee-text {
+    @apply inline-block whitespace-nowrap;
+  }
+
+  .marquee-container:hover .marquee-text {
+    animation: marquee 10s linear infinite;
+  }
+
+  /* Auto-adjust marquee speed based on text length */
+  .marquee-container:hover .marquee-text[data-long="true"] {
+    animation: marquee 15s linear infinite;
   }
 }
 
@@ -264,6 +282,15 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
   }
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExpandableBlock } from './ExpandableBlock';
 import NetworkBlock from './NetworkBlock';
@@ -91,6 +91,7 @@ export default function GrpcExplorerApp() {
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -426,45 +427,70 @@ export default function GrpcExplorerApp() {
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
-      {/* Left Panel - Networks (Full Height) */}
-      <div className="w-[30%] min-w-[20%] max-w-[50%] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
+      {/* Left Panel - Networks (Full Height) - Collapsible */}
+      <div
+        className={cn(
+          "border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col transition-all duration-300",
+          leftPanelCollapsed ? "w-12" : "w-[30%] min-w-[20%] max-w-[50%]"
+        )}
+      >
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+            {!leftPanelCollapsed && (
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+            )}
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setShowAddNetwork(true)}
+                onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title={leftPanelCollapsed ? "Expand panel" : "Collapse panel"}
               >
-                <Plus className="h-4 w-4" />
+                {leftPanelCollapsed ? (
+                  <PanelLeftOpen className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
               </button>
+              {!leftPanelCollapsed && (
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="Add network"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {networks.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No networks added</p>
-              <button
-                onClick={() => setShowAddNetwork(true)}
-                className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Add your first network
-              </button>
-            </div>
-          ) : (
-            networks.map(network => (
-              <NetworkBlock
-                key={network.id}
-                network={network}
-                onToggle={() => toggleNetworkExpanded(network.id)}
-                onRemove={() => handleRemoveNetwork(network.id)}
-                onRefresh={() => handleRefreshNetwork(network.id)}
-                onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
-              />
-            ))
-          )}
         </div>
+
+        {!leftPanelCollapsed && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {networks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No networks added</p>
+                <button
+                  onClick={() => setShowAddNetwork(true)}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Add your first network
+                </button>
+              </div>
+            ) : (
+              networks.map(network => (
+                <NetworkBlock
+                  key={network.id}
+                  network={network}
+                  onToggle={() => toggleNetworkExpanded(network.id)}
+                  onRemove={() => handleRemoveNetwork(network.id)}
+                  onRefresh={() => handleRefreshNetwork(network.id)}
+                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
