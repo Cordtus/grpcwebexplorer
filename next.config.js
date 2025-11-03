@@ -9,7 +9,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  output: 'standalone',
+  // output: 'standalone', // Disabled for Vercel deployment - only use for Docker/self-hosting
   images: {
     unoptimized: true,
   },
