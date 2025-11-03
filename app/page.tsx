@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 // This is necessary because it uses browser APIs
 const GrpcExplorerApp = dynamic(
   () => import('@/components/GrpcExplorerApp'),
-                                { ssr: false }
+  { ssr: false }
 );
 
 export default function Home() {
