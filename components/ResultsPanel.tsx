@@ -157,9 +157,9 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Results</h2>
         {result && (
           <div className="flex items-center gap-2">
@@ -202,7 +202,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto min-h-0">
+        <div className="p-4">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -283,6 +284,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
