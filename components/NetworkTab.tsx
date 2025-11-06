@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { useTabManager } from '@/lib/contexts/TabManager';
 import { cn } from '@/lib/utils';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
+import { debug } from '@/lib/utils/debug';
 
 export interface NetworkTabProps {
   endpoint: string;
@@ -35,7 +36,7 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
       const cached = getFromCache<any>(cacheKey);
 
       if (cached) {
-        console.log(`Using cached services for ${endpoint}`);
+        debug.log(`Using cached services for ${endpoint}`);
         setServices(cached.services || []);
         setError(null);
 
@@ -78,14 +79,14 @@ const NetworkTab: React.FC<NetworkTabProps> = ({
 
       // Show completion status and warnings
       if (data.status) {
-        console.log(`Service loading completed:`, data.status);
+        debug.log(`Service loading completed:`, data.status);
         if (data.status.completionRate < 100) {
-          console.warn(`Only ${data.status.completionRate}% of services loaded successfully (${data.status.successful}/${data.status.total})`);
+          debug.warn(`Only ${data.status.completionRate}% of services loaded successfully (${data.status.successful}/${data.status.total})`);
         }
       }
 
       if (data.warnings && data.warnings.length > 0) {
-        console.warn('Service loading warnings:', data.warnings);
+        debug.warn('Service loading warnings:', data.warnings);
         setError(data.warnings.join('\n'));
       }
 

@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { ChevronRight, Globe, Server, TestTube, Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EXAMPLE_ENDPOINTS, getEndpointsByCategory } from '@/lib/constants/exampleEndpoints';
+import { debug } from '@/lib/utils/debug';
 
 interface AddNetworkDialogProps {
 	onAdd: (endpoint: string, tlsEnabled: boolean) => void;
@@ -113,7 +114,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 			// Auto-detect chain names: if it's not in endpoint format and matches a chain, prefix with "chain:"
 			if (!isEndpointFormat(finalEndpoint) && chains.includes(finalEndpoint.toLowerCase())) {
 				finalEndpoint = `chain:${finalEndpoint.toLowerCase()}`;
-				console.log(`Auto-detected chain name, using: ${finalEndpoint}`);
+				debug.log(`Auto-detected chain name, using: ${finalEndpoint}`);
 			}
 
 			onAdd(finalEndpoint, tlsEnabled);
@@ -154,7 +155,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 
 			const grpcEndpoints = data.apis?.grpc || [];
 
-			console.log(`Loaded ${grpcEndpoints.length} gRPC endpoints for ${chainName}:`, grpcEndpoints);
+			debug.log(`Loaded ${grpcEndpoints.length} gRPC endpoints for ${chainName}:`, grpcEndpoints);
 
 			setSelectedChain({
 				chain_name: data.info.chain_name,
@@ -166,7 +167,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 				}))
 			});
 
-			console.log('Selected chain state:', {
+			debug.log('Selected chain state:', {
 				chain_name: data.info.chain_name,
 				chain_id: data.info.chain_id,
 				pretty_name: data.info.pretty_name,
@@ -215,7 +216,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		setShowChainRegistry(false);
 		setSelectedChain(null);
 
-		console.log(`Using all ${chain.grpc_endpoints.length} endpoints for ${chain.pretty_name} in round-robin mode`);
+		debug.log(`Using all ${chain.grpc_endpoints.length} endpoints for ${chain.pretty_name} in round-robin mode`);
 	};
 
 	const categoryIcons = {

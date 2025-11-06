@@ -3,8 +3,8 @@ version: '3.8'
 services:
   grpc-explorer:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deployment/Dockerfile
     container_name: grpc-explorer
     ports:
       - "3000:3000"

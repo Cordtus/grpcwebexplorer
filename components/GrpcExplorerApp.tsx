@@ -16,6 +16,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { MessageTypeDefinition } from './ProtobufFormGenerator';
+import { debug } from '@/lib/utils/debug';
 
 interface GrpcNetwork {
   id: string;
@@ -164,7 +165,7 @@ export default function GrpcExplorerApp() {
     const cached = getFromCache<any>(cacheKey);
 
     if (cached) {
-      console.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
+      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? {
@@ -180,7 +181,7 @@ export default function GrpcExplorerApp() {
     }
 
     // Fetch services via reflection
-    console.log(`⟳ Fetching fresh services from ${endpoint}...`);
+    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
@@ -199,7 +200,7 @@ export default function GrpcExplorerApp() {
       // Update network with actual endpoint (in case chain marker was used)
       const actualEndpoint = data.status?.endpoint || endpoint;
 
-      console.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
+      debug.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
 
       setNetworks(prev => prev.map(n =>
         n.id === id
@@ -238,7 +239,7 @@ export default function GrpcExplorerApp() {
     const { removeFromCache } = await import('@/lib/utils/client-cache');
     removeFromCache(cacheKey);
 
-    console.log(`🔄 Force refreshing ${network.endpoint}...`);
+    debug.log(`🔄 Force refreshing ${network.endpoint}...`);
 
     // Set loading state
     setNetworks(prev => prev.map(n => {
@@ -271,7 +272,7 @@ export default function GrpcExplorerApp() {
       saveToCache(cacheKey, { ...data, timestamp: now });
 
       const actualEndpoint = data.status?.endpoint || network.endpoint;
-      console.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
+      debug.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
 
       setNetworks(prev => prev.map(n => {
         if (n.id === networkId) {

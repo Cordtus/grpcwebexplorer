@@ -41,8 +41,8 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Copy start server script
-COPY start-server.js ./
+# Copy start server script from deployment directory
+COPY deployment/start-server.js ./
 
 # Start the application
 CMD ["node", "start-server.js"]

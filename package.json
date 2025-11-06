@@ -8,13 +8,14 @@
     "dev": "next dev",
     "build": "next build",
     "build:prod": "NEXT_TELEMETRY_DISABLED=1 next build",
-    "start": "node start-server.js",
-    "start:prod": "NODE_ENV=production node start-server.js",
+    "start": "node deployment/start-server.js",
+    "start:prod": "NODE_ENV=production node deployment/start-server.js",
     "lint": "next lint",
-    "docker:build": "docker-compose build",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:build": "cd deployment && docker-compose build",
+    "docker:up": "cd deployment && docker-compose up -d",
+    "docker:down": "cd deployment && docker-compose down",
+    "docker:logs": "cd deployment && docker-compose logs -f",
+    "test:grpc": "node deployment/test-grpc-reflection.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.13.3",
