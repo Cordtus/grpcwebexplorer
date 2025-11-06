@@ -586,7 +586,7 @@ export default function GrpcExplorerApp() {
 
         {/* Center and Right Panels */}
         <div className="flex-1 min-h-0">
-          <ResizablePanelGroup direction="horizontal" className="h-full" autoSaveId="main-panels">
+          <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Center Panel - Method Instances */}
             <ResizablePanel defaultSize={50} minSize={30} id="methods-panel" order={1} collapsible={false}>
               <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">

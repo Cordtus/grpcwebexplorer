@@ -57,12 +57,12 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
 
   if (Array.isArray(data)) {
     if (data.length === 0) return <span>[]</span>;
-    
+
     const key = `array-${level}`;
     const isExpanded = level === 0 || expanded.has(key);
 
     return (
-      <span>
+      <div className="inline-block">
         <button
           onClick={() => toggleExpand(key)}
           className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
@@ -75,12 +75,14 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
             {data.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-gray-500 mr-2">{index}:</span>
-                <JsonViewer data={item} level={level + 1} />
+                <div className="flex-1">
+                  <JsonViewer data={item} level={level + 1} />
+                </div>
               </div>
             ))}
           </div>
         )}
-      </span>
+      </div>
     );
   }
 
@@ -108,7 +110,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                 )}
                 {!isObject && <span className="w-5" />}
                 <span className="text-gray-700 dark:text-gray-300 font-medium">{key}:</span>
-                <span className="ml-2">
+                <div className="ml-2 flex-1">
                   {isObject ? (
                     isExpanded ? (
                       <div className="ml-4">
@@ -122,7 +124,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                   ) : (
                     <JsonViewer data={value} level={level + 1} />
                   )}
-                </span>
+                </div>
               </div>
             </div>
           );
