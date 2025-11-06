@@ -65,7 +65,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
     const displayData = hasMore ? data.slice(0, DISPLAY_LIMIT) : data;
 
     return (
-      <div className="inline-block">
+      <div className="w-full">
         <button
           onClick={() => toggleExpand(key)}
           className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
@@ -74,7 +74,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
           <span className="text-gray-500 ml-1">[{data.length}]</span>
         </button>
         {isExpanded && (
-          <div className="ml-4 mt-1 max-h-[500px] overflow-auto">
+          <div className="ml-4 mt-1">
             {displayData.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-gray-500 mr-2">{index}:</span>
@@ -213,7 +213,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
 
       {/* Content */}
       <div className="flex-1 overflow-auto min-h-0">
-        <div className="p-4">
+        <div className="p-4 w-full">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
