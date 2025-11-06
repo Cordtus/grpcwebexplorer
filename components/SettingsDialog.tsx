@@ -109,22 +109,22 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
             <div className="space-y-4">
               <div>
                 <label className="text-sm block mb-2">Cache Duration</label>
-                <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={cacheTTL}
+                  onChange={(e) => setCacheTTLState(e.target.value as CacheTTLOption)}
+                  className={cn(
+                    "w-full px-3 py-2 rounded text-sm",
+                    "bg-background border border-border",
+                    "focus:outline-none focus:ring-2 focus:ring-primary",
+                    "cursor-pointer"
+                  )}
+                >
                   {Object.entries(CACHE_TTL_LABELS).map(([key, label]) => (
-                    <button
-                      key={key}
-                      onClick={() => setCacheTTLState(key as CacheTTLOption)}
-                      className={cn(
-                        "px-3 py-2 rounded text-sm transition-colors text-left",
-                        cacheTTL === key
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary hover:bg-secondary/80"
-                      )}
-                    >
+                    <option key={key} value={key}>
                       {label}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
                 <p className="text-xs text-muted-foreground mt-2">
                   Controls how long service discovery results are cached
                 </p>
