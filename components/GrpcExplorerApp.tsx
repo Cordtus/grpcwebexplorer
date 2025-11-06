@@ -639,7 +639,7 @@ export default function GrpcExplorerApp() {
 
             {/* Right Panel - Results */}
             <ResizablePanel defaultSize={35} minSize={20} id="results-panel" collapsible={false}>
-              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden flex flex-col min-w-0">
+              <div className="h-full bg-white dark:bg-gray-950 overflow-hidden flex flex-col">
                 <ResultsPanel
                   result={currentResult || null}
                   isExecuting={isExecuting}
