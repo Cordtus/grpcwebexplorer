@@ -46,8 +46,8 @@ export async function POST(req: Request) {
     });
 
     try {
-      // Initialize
-      await client.initialize();
+      // Initialize only the specific service we need (fast!)
+      await client.initializeForMethod(service);
 
       // Invoke method
       const result = await client.invokeMethod(service, method, params || {}, 10000);

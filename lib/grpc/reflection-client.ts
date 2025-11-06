@@ -131,17 +131,14 @@ export class ReflectionClient {
   }
 
   /**
-   * Initialize and load all service descriptors
+   * Initialize reflection stub (lightweight setup without loading all services)
    */
-  async initialize(): Promise<void> {
-    console.log(`[ReflectionClient] Initializing for ${this.options.endpoint}`);
+  private async initializeReflectionStub(): Promise<void> {
+    if (this.reflectionStub) return; // Already initialized
 
     this.descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
 
     const reflectionRoot = protobuf.parse(REFLECTION_PROTO_SOURCE).root;
-    const ServerReflectionService = reflectionRoot.lookupService('grpc.reflection.v1alpha.ServerReflection');
-
-    // Create gRPC service definition
     const credentials = this.options.tls
       ? grpc.credentials.createSsl()
       : grpc.credentials.createInsecure();
@@ -165,6 +162,15 @@ export class ReflectionClient {
     }, 'ServerReflection', {});
 
     this.reflectionStub = new ServerReflectionClient(this.options.endpoint, credentials);
+  }
+
+  /**
+   * Initialize and load all service descriptors
+   */
+  async initialize(): Promise<void> {
+    console.log(`[ReflectionClient] Initializing for ${this.options.endpoint}`);
+
+    await this.initializeReflectionStub();
 
     // List all services
     const serviceNames = await this.listServices();
@@ -186,6 +192,23 @@ export class ReflectionClient {
     }
 
     console.log(`[ReflectionClient] Successfully loaded ${processedServices.size} services`);
+  }
+
+  /**
+   * Initialize only the specific service needed for method invocation
+   * Much faster than initialize() when you only need one service
+   */
+  async initializeForMethod(serviceName: string): Promise<void> {
+    console.log(`[ReflectionClient] Fast initialization for ${serviceName}`);
+
+    await this.initializeReflectionStub();
+
+    try {
+      await this.loadServiceDescriptor(serviceName);
+      console.log(`[ReflectionClient] Loaded ${serviceName}`);
+    } catch (err) {
+      throw new Error(`Failed to load service ${serviceName}: ${(err as Error).message}`);
+    }
   }
 
   /**

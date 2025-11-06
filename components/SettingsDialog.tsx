@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,15 @@ import {
 } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  getCacheTTL,
+  setCacheTTL,
+  CACHE_TTL_OPTIONS,
+  CACHE_TTL_LABELS,
+  type CacheTTLOption,
+  clearAllCache,
+  getCacheStats,
+} from '@/lib/utils/client-cache';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -19,7 +28,22 @@ interface SettingsDialogProps {
 const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [defaultTimeout, setDefaultTimeout] = useState(10000);
-  const [autoRefreshCache, setAutoRefreshCache] = useState(false);
+  const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
+  const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
+
+  // Load current cache TTL setting
+  useEffect(() => {
+    if (open) {
+      const currentTTL = getCacheTTL();
+      const option = Object.entries(CACHE_TTL_OPTIONS).find(
+        ([_, value]) => value === currentTTL
+      )?.[0] as CacheTTLOption || 'ONE_HOUR';
+      setCacheTTLState(option);
+
+      // Load cache stats
+      setCacheStatsState(getCacheStats());
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -82,16 +106,48 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
 
           <div>
             <h3 className="text-sm font-semibold text-muted-foreground mb-3">Cache</h3>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoRefreshCache}
-                  onChange={(e) => setAutoRefreshCache(e.target.checked)}
-                  className="w-4 h-4 rounded border-border"
-                />
-                <span className="text-sm">Auto-refresh cache hourly</span>
-              </label>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm block mb-2">Cache Duration</label>
+                <select
+                  value={cacheTTL}
+                  onChange={(e) => setCacheTTLState(e.target.value as CacheTTLOption)}
+                  className={cn(
+                    "w-full px-3 py-2 rounded text-sm",
+                    "bg-background border border-border",
+                    "focus:outline-none focus:ring-2 focus:ring-primary",
+                    "cursor-pointer"
+                  )}
+                >
+                  {Object.entries(CACHE_TTL_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Controls how long service discovery results are cached
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm">Cache Statistics</label>
+                  <button
+                    onClick={() => {
+                      clearAllCache();
+                      setCacheStatsState(getCacheStats());
+                    }}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Clear Cache
+                  </button>
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>Cached entries: {cacheStats.count}</div>
+                  <div>Storage used: {cacheStats.sizeKB} KB</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -108,7 +164,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
           </button>
           <button
             onClick={() => {
-              // Save settings (TODO: implement persistence)
+              // Save cache TTL setting
+              setCacheTTL(cacheTTL);
               onClose();
             }}
             className={cn(
