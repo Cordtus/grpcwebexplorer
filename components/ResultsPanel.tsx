@@ -167,7 +167,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
       <div className="shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Results</h2>
@@ -212,8 +212,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto min-h-0">
-        <div className="p-4 w-full">
+      <div className="flex-1 overflow-auto min-h-0 min-w-0">
+        <div className="p-4 w-full max-w-full overflow-x-auto">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -265,10 +265,10 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 </pre>
               </div>
             ) : result.data ? (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-w-full overflow-x-auto">
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
-                  <div className="text-xs font-mono">
+                  <div className="text-xs font-mono break-all overflow-wrap-anywhere">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
