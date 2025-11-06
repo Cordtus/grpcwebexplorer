@@ -9,13 +9,69 @@ export interface CacheEntry<T> {
 
 const CACHE_VERSION = '1.0.0';
 const CACHE_PREFIX = 'grpc-explorer:';
+const SETTINGS_KEY = 'grpc-explorer:settings';
+
+// Cache TTL options (in milliseconds)
+export const CACHE_TTL_OPTIONS = {
+  NONE: 0,
+  ONE_HOUR: 3600000,      // 1 hour
+  SIX_HOURS: 21600000,    // 6 hours
+  ONE_DAY: 86400000,      // 24 hours
+  THIRTY_SIX_HOURS: 129600000, // 36 hours
+} as const;
+
+export type CacheTTLOption = keyof typeof CACHE_TTL_OPTIONS;
+
+export const CACHE_TTL_LABELS: Record<CacheTTLOption, string> = {
+  NONE: 'None (always fresh)',
+  ONE_HOUR: '1 hour',
+  SIX_HOURS: '6 hours',
+  ONE_DAY: '24 hours',
+  THIRTY_SIX_HOURS: '36 hours',
+};
+
+/**
+ * Get user's preferred cache TTL setting
+ */
+export function getCacheTTL(): number {
+  if (typeof window === 'undefined') return CACHE_TTL_OPTIONS.ONE_HOUR;
+
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    if (!settings) return CACHE_TTL_OPTIONS.ONE_HOUR;
+
+    const parsed = JSON.parse(settings);
+    const ttlOption = parsed.cacheTTL as CacheTTLOption;
+
+    return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.ONE_HOUR;
+  } catch (error) {
+    return CACHE_TTL_OPTIONS.ONE_HOUR;
+  }
+}
+
+/**
+ * Set user's preferred cache TTL setting
+ */
+export function setCacheTTL(option: CacheTTLOption): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    const parsed = settings ? JSON.parse(settings) : {};
+
+    parsed.cacheTTL = option;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+  } catch (error) {
+    console.warn('Failed to save cache TTL setting:', error);
+  }
+}
 
 /**
  * Get cached data from localStorage
  * @param key Cache key
- * @param ttlMs Time-to-live in milliseconds (default: 1 hour)
+ * @param ttlMs Time-to-live in milliseconds (default: uses user preference)
  */
-export function getFromCache<T>(key: string, ttlMs: number = 3600000): T | null {
+export function getFromCache<T>(key: string, ttlMs?: number): T | null {
   if (typeof window === 'undefined') return null; // SSR safety
 
   try {
@@ -32,9 +88,17 @@ export function getFromCache<T>(key: string, ttlMs: number = 3600000): T | null 
       return null;
     }
 
+    // Get TTL (use provided or user preference)
+    const effectiveTTL = ttlMs !== undefined ? ttlMs : getCacheTTL();
+
+    // If TTL is 0 (NONE), don't use cache
+    if (effectiveTTL === 0) {
+      return null;
+    }
+
     // Check TTL
     const age = Date.now() - entry.timestamp;
-    if (age > ttlMs) {
+    if (age > effectiveTTL) {
       localStorage.removeItem(cacheKey);
       return null;
     }
