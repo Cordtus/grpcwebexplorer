@@ -60,6 +60,9 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
 
     const key = `array-${level}`;
     const isExpanded = level === 0 || expanded.has(key);
+    const DISPLAY_LIMIT = 100; // Show first 100 items
+    const hasMore = data.length > DISPLAY_LIMIT;
+    const displayData = hasMore ? data.slice(0, DISPLAY_LIMIT) : data;
 
     return (
       <div className="inline-block">
@@ -71,8 +74,8 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
           <span className="text-gray-500 ml-1">[{data.length}]</span>
         </button>
         {isExpanded && (
-          <div className="ml-4 mt-1">
-            {data.map((item, index) => (
+          <div className="ml-4 mt-1 max-h-[500px] overflow-auto">
+            {displayData.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-gray-500 mr-2">{index}:</span>
                 <div className="flex-1">
@@ -80,6 +83,11 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                 </div>
               </div>
             ))}
+            {hasMore && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 italic mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded">
+                ... and {data.length - DISPLAY_LIMIT} more items (showing first {DISPLAY_LIMIT} of {data.length})
+              </div>
+            )}
           </div>
         )}
       </div>
