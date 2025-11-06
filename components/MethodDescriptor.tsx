@@ -182,10 +182,10 @@ console.log(response);`;
       </div>
 
       {/* Content Grid - 2 columns */}
-      <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
+      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
         {/* Proto Definition */}
-        <div className="flex flex-col">
-          <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-col min-h-0">
+          <div className="shrink-0 flex items-center justify-between mb-2">
             <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
               <FileCode className="h-3 w-3" />
               Proto Definition
@@ -201,16 +201,18 @@ console.log(response);`;
               )}
             </button>
           </div>
-          <div className="flex-1 p-3 bg-gray-900 dark:bg-black rounded-lg overflow-auto">
-            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
-              {protoDefinition}
-            </pre>
+          <div className="flex-1 overflow-auto min-h-0">
+            <div className="p-3 bg-gray-900 dark:bg-black rounded-lg">
+              <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
+                {protoDefinition}
+              </pre>
+            </div>
           </div>
         </div>
 
         {/* Examples */}
-        <div className="flex flex-col">
-          <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-col min-h-0">
+          <div className="shrink-0 flex items-center justify-between mb-2">
             <div className="flex gap-1">
               <button
                 onClick={() => setActiveTab('curl')}
@@ -246,10 +248,12 @@ console.log(response);`;
               )}
             </button>
           </div>
-          <div className="flex-1 p-3 bg-gray-900 dark:bg-black rounded-lg overflow-auto max-h-[200px]">
-            <pre className="text-[10px] text-gray-300 font-mono whitespace-pre">
-              {activeTab === 'curl' ? curlExample : codeExample}
-            </pre>
+          <div className="flex-1 overflow-auto min-h-0">
+            <div className="p-3 bg-gray-900 dark:bg-black rounded-lg">
+              <pre className="text-[10px] text-gray-300 font-mono whitespace-pre">
+                {activeTab === 'curl' ? curlExample : codeExample}
+              </pre>
+            </div>
           </div>
           {activeTab === 'javascript' && (
             <div className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500 leading-tight">

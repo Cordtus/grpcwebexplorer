@@ -156,7 +156,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{field.comment}</p>
         )}
         {expanded && (
-          <div className="space-y-2 mt-2">
+          <div className="space-y-2 mt-2 max-h-96 overflow-y-auto">
             {arrayValue.length === 0 ? (
               <div className="text-xs text-gray-500 dark:text-gray-400 italic py-2">
                 Empty array - click &quot;Add&quot; to add items

@@ -65,7 +65,7 @@ const ExecutionHistoryDialog: React.FC<ExecutionHistoryDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <div className="flex items-center gap-2">
             <History className="h-5 w-5" />
             <DialogTitle>Execution History</DialogTitle>
@@ -74,12 +74,12 @@ const ExecutionHistoryDialog: React.FC<ExecutionHistoryDialogProps> = ({
             View and manage your recent gRPC method executions
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="flex-1 overflow-hidden">
+
+        <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
           {viewMode === 'list' ? (
             <>
               {/* List Actions */}
-              <div className="flex items-center justify-between mb-3">
+              <div className="shrink-0 flex items-center justify-between mb-3">
                 <span className="text-sm text-muted-foreground">
                   {history.length} execution{history.length !== 1 ? 's' : ''}
                 </span>
@@ -104,9 +104,9 @@ const ExecutionHistoryDialog: React.FC<ExecutionHistoryDialogProps> = ({
                   </Button>
                 </div>
               </div>
-              
+
               {/* History List */}
-              <div className="overflow-y-auto max-h-[400px] space-y-1">
+              <div className="flex-1 overflow-y-auto min-h-0 space-y-1">
                 {history.length === 0 ? (
                   <div className="text-center py-8 text-sm text-muted-foreground">
                     No execution history yet

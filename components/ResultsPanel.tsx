@@ -57,12 +57,15 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
 
   if (Array.isArray(data)) {
     if (data.length === 0) return <span>[]</span>;
-    
+
     const key = `array-${level}`;
     const isExpanded = level === 0 || expanded.has(key);
+    const DISPLAY_LIMIT = 100; // Show first 100 items
+    const hasMore = data.length > DISPLAY_LIMIT;
+    const displayData = hasMore ? data.slice(0, DISPLAY_LIMIT) : data;
 
     return (
-      <span>
+      <div className="w-full">
         <button
           onClick={() => toggleExpand(key)}
           className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
@@ -72,15 +75,22 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
         </button>
         {isExpanded && (
           <div className="ml-4 mt-1">
-            {data.map((item, index) => (
+            {displayData.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-gray-500 mr-2">{index}:</span>
-                <JsonViewer data={item} level={level + 1} />
+                <div className="flex-1">
+                  <JsonViewer data={item} level={level + 1} />
+                </div>
               </div>
             ))}
+            {hasMore && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 italic mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded">
+                ... and {data.length - DISPLAY_LIMIT} more items (showing first {DISPLAY_LIMIT} of {data.length})
+              </div>
+            )}
           </div>
         )}
-      </span>
+      </div>
     );
   }
 
@@ -108,7 +118,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                 )}
                 {!isObject && <span className="w-5" />}
                 <span className="text-gray-700 dark:text-gray-300 font-medium">{key}:</span>
-                <span className="ml-2">
+                <div className="ml-2 flex-1">
                   {isObject ? (
                     isExpanded ? (
                       <div className="ml-4">
@@ -122,7 +132,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                   ) : (
                     <JsonViewer data={value} level={level + 1} />
                   )}
-                </span>
+                </div>
               </div>
             </div>
           );
@@ -157,9 +167,9 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Results</h2>
         {result && (
           <div className="flex items-center gap-2">
@@ -202,7 +212,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto min-h-0 min-w-0">
+        <div className="p-4 w-full max-w-full overflow-x-auto">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -254,10 +265,10 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 </pre>
               </div>
             ) : result.data ? (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-w-full overflow-x-auto">
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
-                  <div className="text-xs font-mono">
+                  <div className="text-xs font-mono break-all overflow-wrap-anywhere">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
@@ -283,6 +294,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
