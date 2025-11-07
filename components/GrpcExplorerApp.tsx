@@ -129,14 +129,14 @@ export default function GrpcExplorerApp() {
 
   // Calculate responsive left panel width
   const getLeftPanelWidth = () => {
-    // Base width: 320px (w-80)
-    // As window narrows from 1400px to 1024px, shrink from 320px to 280px
-    if (windowWidth >= 1400) return 320;
-    if (windowWidth < 1024) return 280;
+    // Base width: 420px for comfortable method name reading
+    // As window narrows from 1600px to 1024px, shrink from 420px to 320px
+    if (windowWidth >= 1600) return 420;
+    if (windowWidth < 1024) return 320;
 
-    // Linear interpolation between 1400px and 1024px window width
-    const ratio = (windowWidth - 1024) / (1400 - 1024);
-    return Math.round(280 + (40 * ratio));
+    // Linear interpolation between 1600px and 1024px window width
+    const ratio = (windowWidth - 1024) / (1600 - 1024);
+    return Math.round(320 + (100 * ratio));
   };
 
   // Handle left panel toggle
@@ -569,7 +569,7 @@ export default function GrpcExplorerApp() {
           !leftPanelCollapsed && !isOverlayMode
             ? { width: `${getLeftPanelWidth()}px` }
             : isOverlayMode && !leftPanelCollapsed
-            ? { width: '320px' }
+            ? { width: '420px' }
             : undefined
         }
       >
