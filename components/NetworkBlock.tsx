@@ -136,9 +136,9 @@ const NetworkBlock = React.memo(function NetworkBlock({
       ...group,
       services: group.services.map(({ service, methods }) => ({
         service,
-        methods: methods.filter(method => 
-          method.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          method.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+        methods: methods.filter(method =>
+          method?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          method?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
       })).filter(s => s.methods.length > 0)
     })).filter(g => g.services.length > 0);

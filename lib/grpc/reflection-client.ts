@@ -185,9 +185,9 @@ export class ReflectionClient {
       name => !name.includes('ServerReflection')
     );
 
-    // Load services in parallel with concurrency limit (10 at a time)
+    // Load services in parallel with concurrency limit (3 at a time for stability)
     const loadStartTime = Date.now();
-    const concurrencyLimit = 10;
+    const concurrencyLimit = 3;
     const processedServices = new Set<string>();
     const failedServices: string[] = [];
 
@@ -588,28 +588,41 @@ export class ReflectionClient {
           for (const [methodName, method] of Object.entries(nested.methods)) {
             const m = method as protobuf.Method;
 
-            // Extract type definitions for request and response
-            const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
-            const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+            // Validate method has required fields
+            if (!methodName || !m.requestType || !m.responseType) {
+              console.warn(`[ReflectionClient] Skipping invalid method in ${fullPath}: missing name or types`);
+              continue;
+            }
 
-            methods.push({
-              name: methodName,
-              fullName: `${fullPath}.${methodName}`,
-              serviceName: fullPath,
-              requestType: m.requestType,
-              responseType: m.responseType,
-              requestStreaming: m.requestStream || false,
-              responseStreaming: m.responseStream || false,
-              requestTypeDefinition,
-              responseTypeDefinition,
-            });
+            try {
+              // Extract type definitions for request and response
+              const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
+              const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+
+              methods.push({
+                name: methodName,
+                fullName: `${fullPath}.${methodName}`,
+                serviceName: fullPath,
+                requestType: m.requestType,
+                responseType: m.responseType,
+                requestStreaming: m.requestStream || false,
+                responseStreaming: m.responseStream || false,
+                requestTypeDefinition,
+                responseTypeDefinition,
+              });
+            } catch (err) {
+              console.warn(`[ReflectionClient] Failed to process method ${methodName} in ${fullPath}:`, err);
+            }
           }
 
-          services.push({
-            name,
-            fullName: fullPath,
-            methods,
-          });
+          // Only add service if it has valid methods
+          if (methods.length > 0) {
+            services.push({
+              name,
+              fullName: fullPath,
+              methods,
+            });
+          }
         } else if (nested instanceof protobuf.Namespace) {
           traverse(nested, fullPath);
         }
