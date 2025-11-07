@@ -737,6 +737,152 @@ export class ReflectionClient {
   }
 
   /**
+   * Get query services using Cosmos v2alpha1 reflection (optimized for Cosmos chains)
+   * This is more efficient than standard reflection as it returns all query services in one call
+   */
+  async getQueryServicesViaV2Alpha1(): Promise<GrpcService[]> {
+    try {
+      console.log('[ReflectionClient] Attempting to fetch query services via v2alpha1...');
+
+      // Initialize only the v2alpha1 reflection service
+      await this.initializeForMethod('cosmos.base.reflection.v2alpha1.ReflectionService');
+
+      // Call GetQueryServicesDescriptor
+      const response = await this.invokeMethod(
+        'cosmos.base.reflection.v2alpha1.ReflectionService',
+        'GetQueryServicesDescriptor',
+        {},
+        10000
+      );
+
+      if (!response || !response.queries || !response.queries.queryServices) {
+        console.log('[ReflectionClient] No query services found in v2alpha1 response');
+        return [];
+      }
+
+      const services: GrpcService[] = [];
+
+      // Parse query services from response
+      for (const queryService of response.queries.queryServices) {
+        if (!queryService.fullname || !queryService.methods) continue;
+
+        const methods: GrpcMethod[] = [];
+
+        for (const method of queryService.methods) {
+          if (!method.name) continue;
+
+          // Note: v2alpha1 doesn't provide full type definitions, so we create simplified ones
+          methods.push({
+            name: method.name,
+            fullName: `${queryService.fullname}/${method.name}`,
+            serviceName: queryService.fullname,
+            requestType: method.fullQueryPath || `${queryService.fullname}.${method.name}Request`,
+            responseType: `${queryService.fullname}.${method.name}Response`,
+            requestStreaming: false,
+            responseStreaming: false,
+            requestTypeDefinition: {
+              name: `${method.name}Request`,
+              fullName: method.fullQueryPath || `${queryService.fullname}.${method.name}Request`,
+              fields: [], // Will be populated by standard reflection if needed
+            },
+            responseTypeDefinition: {
+              name: `${method.name}Response`,
+              fullName: `${queryService.fullname}.${method.name}Response`,
+              fields: [],
+            },
+          });
+        }
+
+        if (methods.length > 0) {
+          services.push({
+            name: queryService.fullname.split('.').pop() || queryService.fullname,
+            fullName: queryService.fullname,
+            methods,
+          });
+        }
+      }
+
+      console.log(`[ReflectionClient] ✅ Found ${services.length} query services via v2alpha1`);
+      return services;
+    } catch (err: any) {
+      console.log(`[ReflectionClient] v2alpha1 query services not available: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get transaction descriptor using Cosmos v2alpha1 reflection
+   * Returns tx methods grouped in a single "Transactions" service
+   */
+  async getTxDescriptorViaV2Alpha1(): Promise<GrpcService | null> {
+    try {
+      console.log('[ReflectionClient] Attempting to fetch tx descriptor via v2alpha1...');
+
+      // Initialize only the v2alpha1 reflection service
+      await this.initializeForMethod('cosmos.base.reflection.v2alpha1.ReflectionService');
+
+      // Call GetTxDescriptor
+      const response = await this.invokeMethod(
+        'cosmos.base.reflection.v2alpha1.ReflectionService',
+        'GetTxDescriptor',
+        {},
+        10000
+      );
+
+      if (!response || !response.tx || !response.tx.msgs) {
+        console.log('[ReflectionClient] No tx messages found in v2alpha1 response');
+        return null;
+      }
+
+      const methods: GrpcMethod[] = [];
+
+      // Parse tx messages from response
+      for (const msg of response.tx.msgs) {
+        if (!msg.msgTypeUrl) continue;
+
+        // Extract message name from type URL (e.g., /cosmos.bank.v1beta1.MsgSend -> MsgSend)
+        const msgName = msg.msgTypeUrl.split('.').pop() || msg.msgTypeUrl;
+        const serviceName = msg.msgTypeUrl.substring(1, msg.msgTypeUrl.lastIndexOf('.'));
+
+        methods.push({
+          name: msgName,
+          fullName: msg.msgTypeUrl,
+          serviceName: 'cosmos.tx.v1beta1.Transactions',
+          requestType: msg.msgTypeUrl,
+          responseType: `${serviceName}.${msgName}Response`,
+          requestStreaming: false,
+          responseStreaming: false,
+          requestTypeDefinition: {
+            name: msgName,
+            fullName: msg.msgTypeUrl,
+            fields: [], // Will be populated by standard reflection if needed
+          },
+          responseTypeDefinition: {
+            name: `${msgName}Response`,
+            fullName: `${serviceName}.${msgName}Response`,
+            fields: [],
+          },
+        });
+      }
+
+      if (methods.length === 0) {
+        return null;
+      }
+
+      console.log(`[ReflectionClient] ✅ Found ${methods.length} tx messages via v2alpha1`);
+
+      return {
+        name: 'Transactions',
+        fullName: 'cosmos.tx.v1beta1.Transactions',
+        methods,
+      };
+    } catch (err: any) {
+      console.log(`[ReflectionClient] v2alpha1 tx descriptor not available: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Close connection
    */
   close(): void {
