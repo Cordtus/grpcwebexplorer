@@ -96,9 +96,68 @@ export default function GrpcExplorerApp() {
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Window resize handler for responsive left panel
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setWindowWidth(width);
+
+      // Auto-collapse threshold: 1024px
+      const collapseThreshold = 1024;
+
+      if (width < collapseThreshold && !leftPanelCollapsed) {
+        // Window is narrow, collapse the panel
+        setLeftPanelCollapsed(true);
+        setIsOverlayMode(false);
+      } else if (width >= collapseThreshold && leftPanelCollapsed && !isOverlayMode) {
+        // Window is wide enough, restore panel if it was auto-collapsed
+        // (but not if user manually collapsed it in overlay mode)
+        setLeftPanelCollapsed(false);
+      }
+    };
+
+    handleResize(); // Initial check
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [leftPanelCollapsed, isOverlayMode]);
+
+  // Calculate responsive left panel width
+  const getLeftPanelWidth = () => {
+    // Base width: 320px (w-80)
+    // As window narrows from 1400px to 1024px, shrink from 320px to 280px
+    if (windowWidth >= 1400) return 320;
+    if (windowWidth < 1024) return 280;
+
+    // Linear interpolation between 1400px and 1024px window width
+    const ratio = (windowWidth - 1024) / (1400 - 1024);
+    return Math.round(280 + (40 * ratio));
+  };
+
+  // Handle left panel toggle
+  const handleLeftPanelToggle = () => {
+    const collapseThreshold = 1024;
+
+    if (windowWidth < collapseThreshold) {
+      // Narrow window: use overlay mode
+      if (leftPanelCollapsed) {
+        setLeftPanelCollapsed(false);
+        setIsOverlayMode(true);
+      } else {
+        setLeftPanelCollapsed(true);
+        setIsOverlayMode(false);
+      }
+    } else {
+      // Wide window: normal toggle
+      setLeftPanelCollapsed(!leftPanelCollapsed);
+      setIsOverlayMode(false);
+    }
+  };
 
   // Register keyboard shortcuts
   useKeyboardShortcuts([
@@ -498,13 +557,21 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex relative">
       {/* Left Panel - Networks (Full Height) - Collapsible */}
       <div
         className={cn(
           "border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col transition-all duration-300",
-          leftPanelCollapsed ? "w-12" : "w-80 min-w-[280px] max-w-[400px]"
+          leftPanelCollapsed ? "w-12" : "",
+          isOverlayMode && !leftPanelCollapsed && "absolute top-0 left-0 h-full z-50 shadow-2xl"
         )}
+        style={
+          !leftPanelCollapsed && !isOverlayMode
+            ? { width: `${getLeftPanelWidth()}px` }
+            : isOverlayMode && !leftPanelCollapsed
+            ? { width: '320px' }
+            : undefined
+        }
       >
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
@@ -513,7 +580,7 @@ export default function GrpcExplorerApp() {
             )}
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                onClick={handleLeftPanelToggle}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 title={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
                 aria-label={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
@@ -565,6 +632,14 @@ export default function GrpcExplorerApp() {
           </div>
         )}
       </div>
+
+      {/* Backdrop for overlay mode */}
+      {isOverlayMode && !leftPanelCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+          onClick={handleLeftPanelToggle}
+        />
+      )}
 
       {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
       <div className="flex-1 flex flex-col">
