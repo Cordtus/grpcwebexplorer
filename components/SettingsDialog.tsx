@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -23,15 +24,23 @@ import {
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  autoCollapseEnabled?: boolean;
+  onAutoCollapseChange?: (enabled: boolean) => void;
 }
 
-const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
+const SettingsDialog: React.FC<SettingsDialogProps> = ({
+  open,
+  onClose,
+  autoCollapseEnabled = true,
+  onAutoCollapseChange
+}) => {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [defaultTimeout, setDefaultTimeout] = useState(10000);
   const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
   const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
+  const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
 
-  // Load current cache TTL setting
+  // Load current settings when dialog opens
   useEffect(() => {
     if (open) {
       const currentTTL = getCacheTTL();
@@ -42,8 +51,11 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
 
       // Load cache stats
       setCacheStatsState(getCacheStats());
+
+      // Load auto-collapse setting
+      setLocalAutoCollapse(autoCollapseEnabled);
     }
-  }, [open]);
+  }, [open, autoCollapseEnabled]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -99,6 +111,24 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
                   min={1000}
                   max={60000}
                   step={1000}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Panel Behavior</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Auto-collapse panels</label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically collapse other panels when opening a new one
+                  </p>
+                </div>
+                <Switch
+                  checked={localAutoCollapse}
+                  onCheckedChange={setLocalAutoCollapse}
                 />
               </div>
             </div>
@@ -166,6 +196,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
             onClick={() => {
               // Save cache TTL setting
               setCacheTTL(cacheTTL);
+
+              // Save auto-collapse setting
+              if (onAutoCollapseChange) {
+                onAutoCollapseChange(localAutoCollapse);
+              }
+
               onClose();
             }}
             className={cn(

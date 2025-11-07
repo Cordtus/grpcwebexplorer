@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, Code, AlertCircle, Loader2 } from 'lucide-react';
+import { Play, Code, AlertCircle, Loader2, Pin, PinOff } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
 import ProtobufFormGenerator, { MessageTypeDefinition } from './ProtobufFormGenerator';
@@ -32,6 +32,7 @@ interface MethodInstance {
   service: GrpcService;
   color: string;
   expanded?: boolean;
+  pinned?: boolean;
   params?: Record<string, any>;
 }
 
@@ -43,6 +44,7 @@ interface MethodBlockProps {
   onSelect: () => void;
   onUpdateParams: (params: Record<string, any>) => void;
   onExecute: () => void;
+  onTogglePin: () => void;
   isExecuting: boolean;
 }
 
@@ -54,6 +56,7 @@ export default function MethodBlock({
   onSelect,
   onUpdateParams,
   onExecute,
+  onTogglePin,
   isExecuting
 }: MethodBlockProps) {
   const [params, setParams] = useState<Record<string, any>>(instance.params || {});
@@ -110,6 +113,27 @@ export default function MethodBlock({
         isActive={isSelected}
         className="transition-all"
         headerClassName={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+        actions={
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            className={cn(
+              "p-1 rounded transition-colors",
+              instance.pinned
+                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+            )}
+            title={instance.pinned ? "Unpin method (allow auto-collapse)" : "Pin method (prevent auto-collapse)"}
+          >
+            {instance.pinned ? (
+              <Pin className="h-3.5 w-3.5" />
+            ) : (
+              <PinOff className="h-3.5 w-3.5" />
+            )}
+          </button>
+        }
       >
         <div className="space-y-4">
           {/* Stream indicators */}

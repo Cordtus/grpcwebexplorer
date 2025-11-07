@@ -161,7 +161,13 @@ export default function GrpcExplorerApp() {
       expanded: true
     };
 
-    setNetworks(prev => [...prev, newNetwork]);
+    // Auto-collapse other networks if enabled
+    setNetworks(prev => {
+      if (autoCollapseEnabled) {
+        return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
+      }
+      return [...prev, newNetwork];
+    });
 
     // Check client-side cache first
     const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
@@ -313,10 +319,27 @@ export default function GrpcExplorerApp() {
 
   // Toggle network expansion
   const toggleNetworkExpanded = useCallback((networkId: string) => {
-    setNetworks(prev => prev.map(n =>
-      n.id === networkId ? { ...n, expanded: !n.expanded } : n
-    ));
-  }, []);
+    setNetworks(prev => {
+      const targetNetwork = prev.find(n => n.id === networkId);
+      if (!targetNetwork) return prev;
+
+      const isExpanding = !targetNetwork.expanded;
+
+      // If expanding and auto-collapse is enabled, collapse other networks
+      if (isExpanding && autoCollapseEnabled) {
+        return prev.map(n =>
+          n.id === networkId
+            ? { ...n, expanded: true }
+            : { ...n, expanded: false }
+        );
+      }
+
+      // Otherwise, just toggle this network
+      return prev.map(n =>
+        n.id === networkId ? { ...n, expanded: !n.expanded } : n
+      );
+    });
+  }, [autoCollapseEnabled]);
 
   // Add method instance to center panel
   const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
@@ -328,12 +351,20 @@ export default function GrpcExplorerApp() {
     );
 
     if (existingIndex >= 0) {
-      // Method exists, just select it
-      setSelectedMethod(methodInstances[existingIndex]);
-    } else {
-      // Collapse all existing methods
-      setMethodInstances(prev => prev.map(m => ({ ...m, expanded: false })));
+      // Method exists, select it and auto-collapse others if enabled
+      const existingInstance = methodInstances[existingIndex];
 
+      if (autoCollapseEnabled && !existingInstance.expanded) {
+        // If auto-collapse is enabled and we're expanding this method, collapse unpinned methods
+        setMethodInstances(prev => prev.map(m =>
+          m.id === existingInstance.id
+            ? { ...m, expanded: true }
+            : (m.pinned ? m : { ...m, expanded: false })
+        ));
+      }
+
+      setSelectedMethod(existingInstance);
+    } else {
       // Add new method expanded
       const newInstance: MethodInstance = {
         id: generateId(),
@@ -345,10 +376,17 @@ export default function GrpcExplorerApp() {
         params: {}
       };
 
-      setMethodInstances(prev => [...prev, newInstance]);
+      // Auto-collapse unpinned methods if enabled
+      setMethodInstances(prev => {
+        if (autoCollapseEnabled) {
+          return [...prev.map(m => m.pinned ? m : { ...m, expanded: false }), newInstance];
+        }
+        return [...prev, newInstance];
+      });
+
       setSelectedMethod(newInstance);
     }
-  }, [methodInstances]);
+  }, [methodInstances, autoCollapseEnabled]);
 
   // Remove method instance
   const handleRemoveMethodInstance = useCallback((instanceId: string) => {
@@ -366,14 +404,38 @@ export default function GrpcExplorerApp() {
 
   // Toggle method instance expansion
   const toggleMethodExpanded = useCallback((instanceId: string) => {
-    setMethodInstances(prev => prev.map(m => 
-      m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+    setMethodInstances(prev => {
+      const targetMethod = prev.find(m => m.id === instanceId);
+      if (!targetMethod) return prev;
+
+      const isExpanding = !targetMethod.expanded;
+
+      // If expanding and auto-collapse is enabled, collapse other unpinned methods
+      if (isExpanding && autoCollapseEnabled) {
+        return prev.map(m =>
+          m.id === instanceId
+            ? { ...m, expanded: true }
+            : (m.pinned ? m : { ...m, expanded: false })
+        );
+      }
+
+      // Otherwise, just toggle this method
+      return prev.map(m =>
+        m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+      );
+    });
+  }, [autoCollapseEnabled]);
+
+  // Toggle method pin status
+  const toggleMethodPin = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.map(m =>
+      m.id === instanceId ? { ...m, pinned: !m.pinned } : m
     ));
   }, []);
 
   // Update method parameters
   const handleUpdateParams = useCallback((instanceId: string, params: Record<string, any>) => {
-    setMethodInstances(prev => prev.map(m => 
+    setMethodInstances(prev => prev.map(m =>
       m.id === instanceId ? { ...m, params } : m
     ));
   }, []);
@@ -638,6 +700,7 @@ export default function GrpcExplorerApp() {
                   onSelect={() => setSelectedMethod(instance)}
                   onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
                   onExecute={() => handleExecuteMethod(instance)}
+                  onTogglePin={() => toggleMethodPin(instance.id)}
                   isExecuting={isExecuting && selectedMethod?.id === instance.id}
                 />
               ))
@@ -678,6 +741,8 @@ export default function GrpcExplorerApp() {
       <SettingsDialog
         open={showSettings}
         onClose={() => setShowSettings(false)}
+        autoCollapseEnabled={autoCollapseEnabled}
+        onAutoCollapseChange={setAutoCollapseEnabled}
       />
     </div>
   );
