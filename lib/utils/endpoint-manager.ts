@@ -197,7 +197,8 @@ class EndpointManager {
    */
   clearExpiredBlacklist(): void {
     const now = Date.now();
-    for (const [address, stats] of this.stats.entries()) {
+    const entries = Array.from(this.stats.entries());
+    for (const [address, stats] of entries) {
       if (stats.lastFailure && now - stats.lastFailure > this.BLACKLIST_DURATION) {
         this.blacklist.delete(address);
         // Reset failure count
