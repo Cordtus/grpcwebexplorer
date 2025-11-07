@@ -3,46 +3,46 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme */
+  /* Light theme - soft, easy on the eyes */
   .light {
-    --background: 0 0% 98%; /* #fafafa */
-    --foreground: 0 0% 9%; /* #171717 */
+    --background: 0 0% 96%; /* #f5f5f5 - soft off-white */
+    --foreground: 0 0% 20%; /* #333333 - dark gray text */
 
-    --card: 0 0% 100%; /* #ffffff */
-    --card-foreground: 0 0% 9%;
+    --card: 0 0% 98%; /* #fafafa - very light gray */
+    --card-foreground: 0 0% 25%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover: 0 0% 98%;
+    --popover-foreground: 0 0% 20%;
 
-    --primary: 211 100% 50%; /* #0a84ff */
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 35%; /* #595959 - medium gray for primary elements */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 0 0% 95%; /* #f2f2f2 */
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 0 0% 90%; /* #e6e6e6 - light gray */
+    --secondary-foreground: 0 0% 25%;
 
-    --muted: 0 0% 95%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 0 0% 88%; /* #e0e0e0 - muted gray */
+    --muted-foreground: 0 0% 50%; /* #808080 - medium gray text */
 
-    --accent: 211 100% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 0 0% 70%; /* #b3b3b3 - light-medium gray for accents */
+    --accent-foreground: 0 0% 20%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 70% 45%; /* Muted red */
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 89%; /* #e3e3e3 */
-    --input: 0 0% 89%;
-    --ring: 211 100% 50%;
+    --border: 0 0% 85%; /* #d9d9d9 - light gray borders */
+    --input: 0 0% 92%; /* #ebebeb - input backgrounds */
+    --ring: 0 0% 60%;
 
     --radius: 0.375rem;
 
-    --glass-bg: rgba(255, 255, 255, 0.75);
-    --glass-border: rgba(228, 228, 231, 0.5);
-    --hover-bg: rgba(242, 242, 242, 0.8);
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    --glass-bg: rgba(250, 250, 250, 0.85);
+    --glass-border: rgba(217, 217, 217, 0.5);
+    --hover-bg: rgba(230, 230, 230, 0.8);
+    --shadow-color: rgba(0, 0, 0, 0.08);
 
-    --traffic-red: #FF3B30;
-    --traffic-yellow: #FFCC00;
-    --traffic-green: #34C759;
+    --traffic-red: #cc4444;
+    --traffic-yellow: #ccaa44;
+    --traffic-green: #44cc66;
   }
 
   /* Dark theme */
@@ -87,52 +87,52 @@
     --traffic-green: #00CA4E;
   }
 
-  /* Retro/8-bit theme - structured color usage */
+  /* 8-bit theme - authentic VGA/EGA palette with pure, saturated colors */
   .retro {
-    /* Base colors using classic 8-bit palette */
-    --background: 220 13% 18%; /* #282a36 - Dark purple-gray */
-    --foreground: 60 30% 96%; /* #f8f8f2 - Warm white */
+    /* Background: Pure black like classic terminals */
+    --background: 0 0% 0%; /* #000000 - true black */
+    --foreground: 0 0% 100%; /* #ffffff - pure white text */
 
-    --card: 232 14% 31%; /* #44475a - Purple-gray cards */
-    --card-foreground: 60 30% 96%;
+    --card: 240 100% 13%; /* #000044 - deep blue cards */
+    --card-foreground: 0 0% 100%;
 
-    --popover: 232 14% 31%;
-    --popover-foreground: 60 30% 96%;
+    --popover: 240 100% 13%;
+    --popover-foreground: 0 0% 100%;
 
-    /* Primary: Cyan (#00ffff) - for main actions */
+    /* Primary: Pure cyan (#00ffff) */
     --primary: 180 100% 50%;
-    --primary-foreground: 220 13% 18%;
+    --primary-foreground: 0 0% 0%;
 
-    /* Secondary: Magenta (#ff00ff) - for secondary elements */
-    --secondary: 326 100% 74%; /* #ff79c6 - Pink */
-    --secondary-foreground: 220 13% 18%;
+    /* Secondary: Pure magenta (#ff00ff) */
+    --secondary: 300 100% 50%;
+    --secondary-foreground: 0 0% 0%;
 
-    /* Muted: Purple tones */
-    --muted: 265 89% 78%; /* #bd93f9 - Light purple */
-    --muted-foreground: 232 14% 31%;
+    /* Muted: Dark gray with slight blue tint */
+    --muted: 240 10% 25%; /* #3a3a44 */
+    --muted-foreground: 0 0% 67%; /* #aaaaaa */
 
-    /* Accent: Yellow (#ffff00) - for highlights */
-    --accent: 65 92% 76%; /* #f1fa8c - Pale yellow */
-    --accent-foreground: 220 13% 18%;
+    /* Accent: Pure yellow (#ffff00) */
+    --accent: 60 100% 50%;
+    --accent-foreground: 0 0% 0%;
 
-    /* Destructive: Red (#ff0000) */
-    --destructive: 0 100% 67%; /* #ff5555 - Bright red */
-    --destructive-foreground: 60 30% 96%;
+    /* Destructive: Pure red (#ff0000) */
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 232 14% 41%; /* Lighter purple-gray */
-    --input: 232 14% 31%;
+    --border: 180 100% 30%; /* Darker cyan borders */
+    --input: 240 100% 13%;
     --ring: 180 100% 50%;
 
-    --radius: 0.25rem; /* Sharper corners for retro feel */
+    --radius: 0rem; /* Sharp corners - no rounding for authentic 8-bit */
 
-    --glass-bg: rgba(68, 71, 90, 0.85);
-    --glass-border: rgba(139, 233, 253, 0.3);
-    --hover-bg: rgba(189, 147, 249, 0.2);
-    --shadow-color: rgba(0, 255, 255, 0.3);
+    --glass-bg: rgba(0, 0, 68, 0.95);
+    --glass-border: rgba(0, 255, 255, 0.5);
+    --hover-bg: rgba(0, 255, 255, 0.15);
+    --shadow-color: rgba(0, 255, 255, 0.5);
 
-    --traffic-red: #ff5555;
-    --traffic-yellow: #f1fa8c;
-    --traffic-green: #50fa7b;
+    --traffic-red: #ff0000;
+    --traffic-yellow: #ffff00;
+    --traffic-green: #00ff00;
   }
 }
 
