@@ -2,29 +2,32 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = 'light' | 'dark' | 'retro';
+export type Theme = 'light' | 'dark' | 'retro' | 'system';
 
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  resolvedTheme: 'light' | 'dark' | 'retro';
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('system');
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark' | 'retro'>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     // Load theme from localStorage on mount
     const savedTheme = localStorage.getItem('grpc-explorer-theme') as Theme;
-    if (savedTheme && ['light', 'dark', 'retro'].includes(savedTheme)) {
+    if (savedTheme && ['light', 'dark', 'retro', 'system'].includes(savedTheme)) {
       setThemeState(savedTheme);
       applyTheme(savedTheme);
     } else {
-      // Default to dark
-      applyTheme('dark');
+      // Default to system
+      setThemeState('system');
+      applyTheme('system');
     }
   }, []);
 
@@ -40,9 +43,33 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Remove all theme classes
     root.classList.remove('light', 'dark', 'retro');
 
-    // Add the new theme class
-    root.classList.add(theme);
+    let effectiveTheme: 'light' | 'dark' | 'retro' = 'dark';
+
+    if (theme === 'system') {
+      // Detect system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      effectiveTheme = prefersDark ? 'dark' : 'light';
+    } else {
+      effectiveTheme = theme;
+    }
+
+    // Add the effective theme class
+    root.classList.add(effectiveTheme);
+    setResolvedTheme(effectiveTheme);
   };
+
+  // Listen for system theme changes
+  useEffect(() => {
+    if (theme !== 'system') return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      applyTheme('system');
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [theme]);
 
   // Prevent flash of unstyled content
   if (!mounted) {
@@ -50,7 +77,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
       {children}
     </ThemeContext.Provider>
   );
