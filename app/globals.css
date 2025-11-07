@@ -3,48 +3,136 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* Dark theme colors - gRPC Explorer specific */
-    --background: 0 0% 11.8%; /* #1e1e1e */
-    --foreground: 0 0% 94.1%; /* #f0f0f0 */
-    
-    --card: 0 0% 14.5%; /* #252525 */
-    --card-foreground: 0 0% 94.1%;
-    
-    --popover: 0 0% 17.6%; /* #2d2d2d */
-    --popover-foreground: 0 0% 94.1%;
-    
+  /* Light theme */
+  .light {
+    --background: 0 0% 98%; /* #fafafa */
+    --foreground: 0 0% 9%; /* #171717 */
+
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 0 0% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+
     --primary: 211 100% 50%; /* #0a84ff */
     --primary-foreground: 0 0% 100%;
-    
+
+    --secondary: 0 0% 95%; /* #f2f2f2 */
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 211 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 89%; /* #e3e3e3 */
+    --input: 0 0% 89%;
+    --ring: 211 100% 50%;
+
+    --radius: 0.375rem;
+
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(228, 228, 231, 0.5);
+    --hover-bg: rgba(242, 242, 242, 0.8);
+    --shadow-color: rgba(0, 0, 0, 0.1);
+
+    --traffic-red: #FF3B30;
+    --traffic-yellow: #FFCC00;
+    --traffic-green: #34C759;
+  }
+
+  /* Dark theme */
+  .dark {
+    --background: 0 0% 11.8%; /* #1e1e1e */
+    --foreground: 0 0% 94.1%; /* #f0f0f0 */
+
+    --card: 0 0% 14.5%; /* #252525 */
+    --card-foreground: 0 0% 94.1%;
+
+    --popover: 0 0% 17.6%; /* #2d2d2d */
+    --popover-foreground: 0 0% 94.1%;
+
+    --primary: 211 100% 50%; /* #0a84ff */
+    --primary-foreground: 0 0% 100%;
+
     --secondary: 0 0% 17.6%; /* #2d2d2d */
     --secondary-foreground: 0 0% 94.1%;
-    
+
     --muted: 0 0% 23.5%; /* #3c3c3c */
     --muted-foreground: 0 0% 53.3%; /* #888 */
-    
+
     --accent: 211 100% 50%; /* #0a84ff */
     --accent-foreground: 0 0% 100%;
-    
+
     --destructive: 2 100% 68%; /* #FF605C */
     --destructive-foreground: 0 0% 100%;
-    
+
     --border: 0 0% 23.5%; /* #3c3c3c */
     --input: 0 0% 23.5%;
     --ring: 211 100% 50%;
-    
+
     --radius: 0.375rem;
-    
-    /* Custom properties for special effects */
+
     --glass-bg: rgba(37, 37, 37, 0.55);
     --glass-border: rgba(60, 60, 60, 0.5);
     --hover-bg: rgba(45, 45, 45, 0.8);
     --shadow-color: rgba(0, 0, 0, 0.5);
-    
-    /* Traffic light colors */
+
     --traffic-red: #FF605C;
     --traffic-yellow: #FFBD44;
     --traffic-green: #00CA4E;
+  }
+
+  /* Retro/8-bit theme - structured color usage */
+  .retro {
+    /* Base colors using classic 8-bit palette */
+    --background: 220 13% 18%; /* #282a36 - Dark purple-gray */
+    --foreground: 60 30% 96%; /* #f8f8f2 - Warm white */
+
+    --card: 232 14% 31%; /* #44475a - Purple-gray cards */
+    --card-foreground: 60 30% 96%;
+
+    --popover: 232 14% 31%;
+    --popover-foreground: 60 30% 96%;
+
+    /* Primary: Cyan (#00ffff) - for main actions */
+    --primary: 180 100% 50%;
+    --primary-foreground: 220 13% 18%;
+
+    /* Secondary: Magenta (#ff00ff) - for secondary elements */
+    --secondary: 326 100% 74%; /* #ff79c6 - Pink */
+    --secondary-foreground: 220 13% 18%;
+
+    /* Muted: Purple tones */
+    --muted: 265 89% 78%; /* #bd93f9 - Light purple */
+    --muted-foreground: 232 14% 31%;
+
+    /* Accent: Yellow (#ffff00) - for highlights */
+    --accent: 65 92% 76%; /* #f1fa8c - Pale yellow */
+    --accent-foreground: 220 13% 18%;
+
+    /* Destructive: Red (#ff0000) */
+    --destructive: 0 100% 67%; /* #ff5555 - Bright red */
+    --destructive-foreground: 60 30% 96%;
+
+    --border: 232 14% 41%; /* Lighter purple-gray */
+    --input: 232 14% 31%;
+    --ring: 180 100% 50%;
+
+    --radius: 0.25rem; /* Sharper corners for retro feel */
+
+    --glass-bg: rgba(68, 71, 90, 0.85);
+    --glass-border: rgba(139, 233, 253, 0.3);
+    --hover-bg: rgba(189, 147, 249, 0.2);
+    --shadow-color: rgba(0, 255, 255, 0.3);
+
+    --traffic-red: #ff5555;
+    --traffic-yellow: #f1fa8c;
+    --traffic-green: #50fa7b;
   }
 }
 

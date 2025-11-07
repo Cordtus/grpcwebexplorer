@@ -20,6 +20,7 @@ import {
   clearAllCache,
   getCacheStats,
 } from '@/lib/utils/client-cache';
+import { useTheme, type Theme } from '@/components/ThemeProvider';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -34,7 +35,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   autoCollapseEnabled = true,
   onAutoCollapseChange
 }) => {
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+  const { theme, setTheme } = useTheme();
   const [defaultTimeout, setDefaultTimeout] = useState(10000);
   const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
   const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
@@ -76,18 +77,22 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <div className="space-y-2">
               <label className="text-sm">Theme</label>
               <div className="flex gap-2">
-                {(['light', 'dark', 'system'] as const).map((t) => (
+                {([
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                  { value: 'retro', label: '8-bit' }
+                ] as const).map((t) => (
                   <button
-                    key={t}
-                    onClick={() => setTheme(t)}
+                    key={t.value}
+                    onClick={() => setTheme(t.value)}
                     className={cn(
-                      "px-4 py-2 rounded text-sm capitalize transition-colors",
-                      theme === t
+                      "px-4 py-2 rounded text-sm transition-colors font-medium",
+                      theme === t.value
                         ? "bg-primary text-primary-foreground"
                         : "bg-secondary hover:bg-secondary/80"
                     )}
                   >
-                    {t}
+                    {t.label}
                   </button>
                 ))}
               </div>
