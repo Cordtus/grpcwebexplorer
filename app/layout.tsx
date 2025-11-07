@@ -12,12 +12,6 @@ export const metadata = {
     icon: '/favicon.ico',
   },
   manifest: '/manifest.json',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-  },
-  themeColor: '#3b82f6',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -26,6 +20,13 @@ export const metadata = {
   other: {
     'mobile-web-app-capable': 'yes',
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#3b82f6',
 };
 
 export default function RootLayout({

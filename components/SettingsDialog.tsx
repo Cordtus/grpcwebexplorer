@@ -76,8 +76,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
             <h3 className="text-sm font-semibold text-muted-foreground mb-3">Appearance</h3>
             <div className="space-y-2">
               <label className="text-sm">Theme</label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {([
+                  { value: 'system', label: 'System' },
                   { value: 'light', label: 'Light' },
                   { value: 'dark', label: 'Dark' },
                   { value: 'retro', label: '8-bit' }
@@ -86,7 +87,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     key={t.value}
                     onClick={() => setTheme(t.value)}
                     className={cn(
-                      "px-4 py-2 rounded text-sm transition-colors font-medium",
+                      "px-4 py-2 rounded text-sm font-medium transition-colors",
                       theme === t.value
                         ? "bg-primary text-primary-foreground"
                         : "bg-secondary hover:bg-secondary/80"
