@@ -4,41 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronRight, Search, Loader2, AlertCircle, Server, RefreshCw } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
-import { MessageTypeDefinition } from './ProtobufFormGenerator';
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
-}
-
-interface GrpcNetwork {
-  id: string;
-  name: string;
-  endpoint: string;
-  chainId?: string;
-  tlsEnabled: boolean;
-  services: GrpcService[];
-  color: string;
-  loading?: boolean;
-  error?: string;
-  expanded?: boolean;
-  cached?: boolean;
-  cacheTimestamp?: number;
-}
+import { GrpcNetwork, GrpcService, GrpcMethod } from '@/lib/types/grpc';
 
 interface NetworkBlockProps {
   network: GrpcNetwork;
@@ -112,7 +78,7 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
   );
 }
 
-export default function NetworkBlock({
+const NetworkBlock = React.memo(function NetworkBlock({
   network,
   onToggle,
   onRemove,
@@ -136,9 +102,9 @@ export default function NetworkBlock({
       ...group,
       services: group.services.map(({ service, methods }) => ({
         service,
-        methods: methods.filter(method => 
-          method.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          method.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+        methods: methods.filter(method =>
+          method?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          method?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
       })).filter(s => s.methods.length > 0)
     })).filter(g => g.services.length > 0);
@@ -154,10 +120,14 @@ export default function NetworkBlock({
     setExpandedNamespaces(newExpanded);
   };
 
+  const subtitle = network.chainId
+    ? `${network.endpoint}${network.endpoints && network.endpoints.length > 0 ? ` (+${network.endpoints.length} fallback${network.endpoints.length > 1 ? 's' : ''})` : ''}`
+    : network.endpoint;
+
   return (
     <ExpandableBlock
       title={network.chainId || network.endpoint}
-      subtitle={network.endpoint}
+      subtitle={subtitle}
       isExpanded={network.expanded || false}
       onToggle={onToggle}
       color={network.color}
@@ -290,4 +260,6 @@ export default function NetworkBlock({
       )}
     </ExpandableBlock>
   );
-}
+});
+
+export default NetworkBlock;

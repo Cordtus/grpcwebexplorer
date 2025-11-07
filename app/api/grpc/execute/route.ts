@@ -36,38 +36,72 @@ export async function POST(req: Request) {
       endpointWithPort = tlsEnabled !== false ? `${endpoint}:443` : `${endpoint}:9090`;
     }
 
-    console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort}`);
+    console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort} (TLS: ${tlsEnabled !== false})`);
 
-    // Create reflection client
-    const client = new ReflectionClient({
-      endpoint: endpointWithPort,
-      tls: tlsEnabled !== false,
-      timeout: 15000,
-    });
+    // Try with TLS first, fallback to non-TLS if TLS fails
+    let result: any;
+    let usedTls = tlsEnabled !== false;
 
     try {
-      // Initialize only the specific service we need (fast!)
-      await client.initializeForMethod(service);
-
-      // Invoke method
-      const result = await client.invokeMethod(service, method, params || {}, 10000);
-
-      const executionTime = Date.now() - startTime;
-
-      console.log(`[Execute] ${service}.${method} completed in ${executionTime}ms`);
-
-      return NextResponse.json({
-        success: true,
-        result,
-        executionTime,
-        service,
-        method,
+      // Create reflection client with TLS
+      const client = new ReflectionClient({
         endpoint: endpointWithPort,
+        tls: usedTls,
+        timeout: 15000,
       });
 
-    } finally {
-      client.close();
+      try {
+        // Initialize only the specific service we need (fast!)
+        await client.initializeForMethod(service);
+
+        // Invoke method
+        result = await client.invokeMethod(service, method, params || {}, 10000);
+
+      } finally {
+        client.close();
+      }
+    } catch (err: any) {
+      // Check if it's a TLS error
+      const isTLSError = err.message?.includes('wrong version number') ||
+                        err.message?.includes('SSL routines') ||
+                        err.message?.includes('EPROTO');
+
+      if (usedTls && isTLSError) {
+        console.log(`[Execute] TLS error detected, retrying ${endpointWithPort} without TLS...`);
+        usedTls = false;
+
+        // Retry without TLS
+        const retryClient = new ReflectionClient({
+          endpoint: endpointWithPort,
+          tls: false,
+          timeout: 15000,
+        });
+
+        try {
+          await retryClient.initializeForMethod(service);
+          result = await retryClient.invokeMethod(service, method, params || {}, 10000);
+          console.log(`[Execute] ✅ Success without TLS`);
+        } finally {
+          retryClient.close();
+        }
+      } else {
+        // Not a TLS error, or already tried without TLS
+        throw err;
+      }
     }
+
+    const executionTime = Date.now() - startTime;
+    console.log(`[Execute] ${service}.${method} completed in ${executionTime}ms`);
+
+    return NextResponse.json({
+      success: true,
+      result,
+      executionTime,
+      service,
+      method,
+      endpoint: endpointWithPort,
+      tls: usedTls,
+    });
 
   } catch (err: any) {
     const executionTime = Date.now() - startTime;

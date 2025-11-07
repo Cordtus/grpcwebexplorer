@@ -166,32 +166,57 @@ export class ReflectionClient {
 
   /**
    * Initialize and load all service descriptors
+   * OPTIMIZED: Loads services in parallel with configurable concurrency
    */
   async initialize(): Promise<void> {
+    const initStartTime = Date.now();
     console.log(`[ReflectionClient] Initializing for ${this.options.endpoint}`);
 
     await this.initializeReflectionStub();
 
     // List all services
+    const listStartTime = Date.now();
     const serviceNames = await this.listServices();
-    console.log(`[ReflectionClient] Found ${serviceNames.length} services`);
+    const listDuration = Date.now() - listStartTime;
+    console.log(`[ReflectionClient] Found ${serviceNames.length} services in ${listDuration}ms`);
 
-    // Fetch descriptors for each service
+    // Filter out reflection service and duplicates
+    const servicesToLoad = serviceNames.filter(
+      name => !name.includes('ServerReflection')
+    );
+
+    // Load services in parallel with concurrency limit (3 at a time for stability)
+    const loadStartTime = Date.now();
+    const concurrencyLimit = 3;
     const processedServices = new Set<string>();
+    const failedServices: string[] = [];
 
-    for (const serviceName of serviceNames) {
-      if (serviceName.includes('ServerReflection')) continue;
-      if (processedServices.has(serviceName)) continue;
+    for (let i = 0; i < servicesToLoad.length; i += concurrencyLimit) {
+      const batch = servicesToLoad.slice(i, i + concurrencyLimit);
 
-      try {
-        await this.loadServiceDescriptor(serviceName);
-        processedServices.add(serviceName);
-      } catch (err) {
-        console.warn(`[ReflectionClient] Failed to load ${serviceName}:`, (err as Error).message);
-      }
+      const results = await Promise.allSettled(
+        batch.map(serviceName => this.loadServiceDescriptor(serviceName))
+      );
+
+      results.forEach((result, index) => {
+        const serviceName = batch[index];
+        if (result.status === 'fulfilled') {
+          processedServices.add(serviceName);
+        } else {
+          failedServices.push(serviceName);
+          console.warn(`[ReflectionClient] Failed to load ${serviceName}:`, result.reason?.message);
+        }
+      });
     }
 
-    console.log(`[ReflectionClient] Successfully loaded ${processedServices.size} services`);
+    const loadDuration = Date.now() - loadStartTime;
+    const totalDuration = Date.now() - initStartTime;
+
+    console.log(`[ReflectionClient] Successfully loaded ${processedServices.size}/${servicesToLoad.length} services in ${loadDuration}ms (total: ${totalDuration}ms)`);
+
+    if (failedServices.length > 0) {
+      console.log(`[ReflectionClient] Failed services: ${failedServices.join(', ')}`);
+    }
   }
 
   /**
@@ -563,28 +588,41 @@ export class ReflectionClient {
           for (const [methodName, method] of Object.entries(nested.methods)) {
             const m = method as protobuf.Method;
 
-            // Extract type definitions for request and response
-            const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
-            const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+            // Validate method has required fields
+            if (!methodName || !m.requestType || !m.responseType) {
+              console.warn(`[ReflectionClient] Skipping invalid method in ${fullPath}: missing name or types`);
+              continue;
+            }
 
-            methods.push({
-              name: methodName,
-              fullName: `${fullPath}.${methodName}`,
-              serviceName: fullPath,
-              requestType: m.requestType,
-              responseType: m.responseType,
-              requestStreaming: m.requestStream || false,
-              responseStreaming: m.responseStream || false,
-              requestTypeDefinition,
-              responseTypeDefinition,
-            });
+            try {
+              // Extract type definitions for request and response
+              const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
+              const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+
+              methods.push({
+                name: methodName,
+                fullName: `${fullPath}.${methodName}`,
+                serviceName: fullPath,
+                requestType: m.requestType,
+                responseType: m.responseType,
+                requestStreaming: m.requestStream || false,
+                responseStreaming: m.responseStream || false,
+                requestTypeDefinition,
+                responseTypeDefinition,
+              });
+            } catch (err) {
+              console.warn(`[ReflectionClient] Failed to process method ${methodName} in ${fullPath}:`, err);
+            }
           }
 
-          services.push({
-            name,
-            fullName: fullPath,
-            methods,
-          });
+          // Only add service if it has valid methods
+          if (methods.length > 0) {
+            services.push({
+              name,
+              fullName: fullPath,
+              methods,
+            });
+          }
         } else if (nested instanceof protobuf.Namespace) {
           traverse(nested, fullPath);
         }

@@ -15,62 +15,8 @@ import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { MessageTypeDefinition } from './ProtobufFormGenerator';
 import { debug } from '@/lib/utils/debug';
-
-interface GrpcNetwork {
-  id: string;
-  name: string;
-  endpoint: string;
-  chainId?: string;
-  tlsEnabled: boolean;
-  services: GrpcService[];
-  color: string;
-  loading?: boolean;
-  error?: string;
-  expanded?: boolean;
-  cached?: boolean;
-  cacheTimestamp?: number;
-}
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
-}
-
-interface MethodInstance {
-  id: string;
-  networkId: string;
-  method: GrpcMethod;
-  service: GrpcService;
-  color: string;
-  expanded?: boolean;
-  pinned?: boolean;
-  params?: Record<string, any>;
-}
-
-interface ExecutionResult {
-  methodId: string;
-  success: boolean;
-  data?: any;
-  error?: string;
-  timestamp: number;
-  duration?: number;
-}
+import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
 
 // Color palette for networks
 const NETWORK_COLORS = [
@@ -96,9 +42,107 @@ export default function GrpcExplorerApp() {
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
+
+  // Load persisted networks from localStorage on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('grpc-explorer-networks');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Check if cache is still valid (use same TTL as services)
+        const ttl = parseInt(localStorage.getItem('grpc-cache-ttl') || '3600000'); // Default 1 hour
+        const isValid = parsed.networks && Array.isArray(parsed.networks) &&
+                       parsed.timestamp && (Date.now() - parsed.timestamp < ttl);
+
+        if (isValid) {
+          console.log(`[NetworkCache] Restored ${parsed.networks.length} networks from cache`);
+          setNetworks(parsed.networks);
+        } else {
+          console.log('[NetworkCache] Cache expired or invalid, starting fresh');
+          localStorage.removeItem('grpc-explorer-networks');
+        }
+      }
+    } catch (err) {
+      console.error('[NetworkCache] Failed to restore networks:', err);
+    }
+  }, []);
+
+  // Persist networks to localStorage whenever they change
+  useEffect(() => {
+    if (networks.length > 0) {
+      try {
+        localStorage.setItem('grpc-explorer-networks', JSON.stringify({
+          networks,
+          timestamp: Date.now(),
+        }));
+        console.log(`[NetworkCache] Saved ${networks.length} networks to cache`);
+      } catch (err) {
+        console.error('[NetworkCache] Failed to save networks:', err);
+      }
+    }
+  }, [networks]);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Window resize handler for responsive left panel
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setWindowWidth(width);
+
+      // Auto-collapse threshold: 1024px
+      const collapseThreshold = 1024;
+
+      if (width < collapseThreshold && !leftPanelCollapsed) {
+        // Window is narrow, collapse the panel
+        setLeftPanelCollapsed(true);
+        setIsOverlayMode(false);
+      } else if (width >= collapseThreshold && leftPanelCollapsed && !isOverlayMode) {
+        // Window is wide enough, restore panel if it was auto-collapsed
+        // (but not if user manually collapsed it in overlay mode)
+        setLeftPanelCollapsed(false);
+      }
+    };
+
+    handleResize(); // Initial check
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [leftPanelCollapsed, isOverlayMode]);
+
+  // Calculate responsive left panel width
+  const getLeftPanelWidth = () => {
+    // Base width: 420px for comfortable method name reading
+    // As window narrows from 1600px to 1024px, shrink from 420px to 320px
+    if (windowWidth >= 1600) return 420;
+    if (windowWidth < 1024) return 320;
+
+    // Linear interpolation between 1600px and 1024px window width
+    const ratio = (windowWidth - 1024) / (1600 - 1024);
+    return Math.round(320 + (100 * ratio));
+  };
+
+  // Handle left panel toggle
+  const handleLeftPanelToggle = () => {
+    const collapseThreshold = 1024;
+
+    if (windowWidth < collapseThreshold) {
+      // Narrow window: use overlay mode
+      if (leftPanelCollapsed) {
+        setLeftPanelCollapsed(false);
+        setIsOverlayMode(true);
+      } else {
+        setLeftPanelCollapsed(true);
+        setIsOverlayMode(false);
+      }
+    } else {
+      // Wide window: normal toggle
+      setLeftPanelCollapsed(!leftPanelCollapsed);
+      setIsOverlayMode(false);
+    }
+  };
 
   // Register keyboard shortcuts
   useKeyboardShortcuts([
@@ -146,6 +190,70 @@ export default function GrpcExplorerApp() {
 
   // Add network
   const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean) => {
+    // Check client-side cache first to get chain-id for deduplication
+    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+    const cached = getFromCache<any>(cacheKey);
+    const cachedChainId = cached?.chainId || cached?.status?.chainId;
+
+    // If we have cached data, use it immediately
+    if (cached) {
+      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
+
+      const actualEndpoint = cached.status?.endpoint || endpoint;
+      const existingNetwork = cachedChainId
+        ? networks.find(n => n.chainId === cachedChainId)
+        : null;
+
+      if (existingNetwork && cachedChainId) {
+        // Same chain detected - add endpoint to existing network instead of duplicating
+        debug.log(`⚠️  Chain ${cachedChainId} already exists, adding ${actualEndpoint} as fallback endpoint`);
+
+        setNetworks(prev => prev.map(n =>
+          n.id === existingNetwork.id
+            ? {
+                ...n,
+                endpoints: [...(n.endpoints || []), actualEndpoint],
+                expanded: true // Expand to show user we recognized the duplicate
+              }
+            : autoCollapseEnabled ? { ...n, expanded: false } : n
+        ));
+
+        console.log(`[NetworkCache] Added ${actualEndpoint} as fallback for chain ${cachedChainId}`);
+        return;
+      }
+
+      // New chain with cached data - add immediately
+      const id = generateId();
+      const color = getNextColor();
+      const name = actualEndpoint.split('//').pop()?.split(':')[0] || actualEndpoint;
+
+      const newNetwork: GrpcNetwork = {
+        id,
+        name,
+        endpoint: actualEndpoint,
+        endpoints: [],
+        ...(cachedChainId ? { chainId: cachedChainId } : {}),
+        tlsEnabled,
+        services: cached.services || [],
+        color,
+        loading: false,
+        cached: true,
+        cacheTimestamp: cached.timestamp || Date.now(),
+        expanded: true
+      };
+
+      setNetworks(prev => {
+        if (autoCollapseEnabled) {
+          return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
+        }
+        return [...prev, newNetwork];
+      });
+      return;
+    }
+
+    // No cache - add network with loading state, then fetch
+    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
+
     const id = generateId();
     const color = getNextColor();
     const name = endpoint.split('//').pop()?.split(':')[0] || endpoint;
@@ -154,39 +262,25 @@ export default function GrpcExplorerApp() {
       id,
       name,
       endpoint,
+      endpoints: [],
       tlsEnabled,
       services: [],
       color,
       loading: true,
+      cached: false,
+      cacheTimestamp: Date.now(),
       expanded: true
     };
 
-    setNetworks(prev => [...prev, newNetwork]);
+    // Add network to UI immediately with loading state
+    setNetworks(prev => {
+      if (autoCollapseEnabled) {
+        return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
+      }
+      return [...prev, newNetwork];
+    });
 
-    // Check client-side cache first
-    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
-    const cached = getFromCache<any>(cacheKey);
-
-    if (cached) {
-      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
-      const cachedChainId = cached.chainId || cached.status?.chainId;
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? {
-              ...n,
-              services: cached.services || [],
-              chainId: cachedChainId,
-              loading: false,
-              cached: true,
-              cacheTimestamp: cached.timestamp || Date.now()
-            }
-          : n
-      ));
-      return;
-    }
-
-    // Fetch services via reflection
-    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
+    // Fetch data in background
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
@@ -202,19 +296,44 @@ export default function GrpcExplorerApp() {
       // Save to client-side cache with timestamp
       saveToCache(cacheKey, { ...data, timestamp: now });
 
-      // Update network with actual endpoint and chain ID (in case chain marker was used)
       const actualEndpoint = data.status?.endpoint || endpoint;
-      const chainId = data.chainId || data.status?.chainId;
+      const fetchedChainId = data.chainId || data.status?.chainId;
 
       debug.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
 
+      // Check if this chain already exists (might have been added while we were fetching)
+      const existingNetwork = fetchedChainId
+        ? networks.find(n => n.chainId === fetchedChainId && n.id !== id)
+        : null;
+
+      if (existingNetwork && fetchedChainId) {
+        // Same chain detected - remove the loading network and add as fallback instead
+        debug.log(`⚠️  Chain ${fetchedChainId} already exists, converting to fallback endpoint`);
+
+        setNetworks(prev => prev.map(n =>
+          n.id === existingNetwork.id
+            ? {
+                ...n,
+                endpoints: [...(n.endpoints || []), actualEndpoint],
+                expanded: true
+              }
+            : n.id === id
+              ? null // Remove the loading network
+              : autoCollapseEnabled ? { ...n, expanded: false } : n
+        ).filter((n): n is GrpcNetwork => n !== null));
+
+        console.log(`[NetworkCache] Added ${actualEndpoint} as fallback for chain ${fetchedChainId}`);
+        return;
+      }
+
+      // Update network with fetched data
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? {
               ...n,
               services: data.services || [],
-              endpoint: actualEndpoint,  // Use actual endpoint that worked
-              chainId,  // Store chain ID if available
+              endpoint: actualEndpoint,
+              ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
               loading: false,
               cached: false,
               cacheTimestamp: now
@@ -222,13 +341,14 @@ export default function GrpcExplorerApp() {
           : n
       ));
     } catch (error) {
+      debug.error(`Failed to fetch from ${endpoint}:`, error);
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
           : n
       ));
     }
-  }, [getNextColor]);
+  }, [networks, getNextColor, autoCollapseEnabled]);
 
   // Remove network
   const handleRemoveNetwork = useCallback((networkId: string) => {
@@ -313,10 +433,27 @@ export default function GrpcExplorerApp() {
 
   // Toggle network expansion
   const toggleNetworkExpanded = useCallback((networkId: string) => {
-    setNetworks(prev => prev.map(n =>
-      n.id === networkId ? { ...n, expanded: !n.expanded } : n
-    ));
-  }, []);
+    setNetworks(prev => {
+      const targetNetwork = prev.find(n => n.id === networkId);
+      if (!targetNetwork) return prev;
+
+      const isExpanding = !targetNetwork.expanded;
+
+      // If expanding and auto-collapse is enabled, collapse other networks
+      if (isExpanding && autoCollapseEnabled) {
+        return prev.map(n =>
+          n.id === networkId
+            ? { ...n, expanded: true }
+            : { ...n, expanded: false }
+        );
+      }
+
+      // Otherwise, just toggle this network
+      return prev.map(n =>
+        n.id === networkId ? { ...n, expanded: !n.expanded } : n
+      );
+    });
+  }, [autoCollapseEnabled]);
 
   // Add method instance to center panel
   const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
@@ -328,12 +465,20 @@ export default function GrpcExplorerApp() {
     );
 
     if (existingIndex >= 0) {
-      // Method exists, just select it
-      setSelectedMethod(methodInstances[existingIndex]);
-    } else {
-      // Collapse all existing methods
-      setMethodInstances(prev => prev.map(m => ({ ...m, expanded: false })));
+      // Method exists, select it and auto-collapse others if enabled
+      const existingInstance = methodInstances[existingIndex];
 
+      if (autoCollapseEnabled && !existingInstance.expanded) {
+        // If auto-collapse is enabled and we're expanding this method, collapse unpinned methods
+        setMethodInstances(prev => prev.map(m =>
+          m.id === existingInstance.id
+            ? { ...m, expanded: true }
+            : (m.pinned ? m : { ...m, expanded: false })
+        ));
+      }
+
+      setSelectedMethod(existingInstance);
+    } else {
       // Add new method expanded
       const newInstance: MethodInstance = {
         id: generateId(),
@@ -345,10 +490,17 @@ export default function GrpcExplorerApp() {
         params: {}
       };
 
-      setMethodInstances(prev => [...prev, newInstance]);
+      // Auto-collapse unpinned methods if enabled
+      setMethodInstances(prev => {
+        if (autoCollapseEnabled) {
+          return [...prev.map(m => m.pinned ? m : { ...m, expanded: false }), newInstance];
+        }
+        return [...prev, newInstance];
+      });
+
       setSelectedMethod(newInstance);
     }
-  }, [methodInstances]);
+  }, [methodInstances, autoCollapseEnabled]);
 
   // Remove method instance
   const handleRemoveMethodInstance = useCallback((instanceId: string) => {
@@ -366,14 +518,38 @@ export default function GrpcExplorerApp() {
 
   // Toggle method instance expansion
   const toggleMethodExpanded = useCallback((instanceId: string) => {
-    setMethodInstances(prev => prev.map(m => 
-      m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+    setMethodInstances(prev => {
+      const targetMethod = prev.find(m => m.id === instanceId);
+      if (!targetMethod) return prev;
+
+      const isExpanding = !targetMethod.expanded;
+
+      // If expanding and auto-collapse is enabled, collapse other unpinned methods
+      if (isExpanding && autoCollapseEnabled) {
+        return prev.map(m =>
+          m.id === instanceId
+            ? { ...m, expanded: true }
+            : (m.pinned ? m : { ...m, expanded: false })
+        );
+      }
+
+      // Otherwise, just toggle this method
+      return prev.map(m =>
+        m.id === instanceId ? { ...m, expanded: !m.expanded } : m
+      );
+    });
+  }, [autoCollapseEnabled]);
+
+  // Toggle method pin status
+  const toggleMethodPin = useCallback((instanceId: string) => {
+    setMethodInstances(prev => prev.map(m =>
+      m.id === instanceId ? { ...m, pinned: !m.pinned } : m
     ));
   }, []);
 
   // Update method parameters
   const handleUpdateParams = useCallback((instanceId: string, params: Record<string, any>) => {
-    setMethodInstances(prev => prev.map(m => 
+    setMethodInstances(prev => prev.map(m =>
       m.id === instanceId ? { ...m, params } : m
     ));
   }, []);
@@ -436,13 +612,21 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex relative">
       {/* Left Panel - Networks (Full Height) - Collapsible */}
       <div
         className={cn(
           "border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col transition-all duration-300",
-          leftPanelCollapsed ? "w-12" : "w-[30%] min-w-[20%] max-w-[50%]"
+          leftPanelCollapsed ? "w-12" : "",
+          isOverlayMode && !leftPanelCollapsed && "absolute top-0 left-0 h-full z-50 shadow-2xl"
         )}
+        style={
+          !leftPanelCollapsed && !isOverlayMode
+            ? { width: `${getLeftPanelWidth()}px` }
+            : isOverlayMode && !leftPanelCollapsed
+            ? { width: '420px' }
+            : undefined
+        }
       >
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-between p-4">
@@ -451,7 +635,7 @@ export default function GrpcExplorerApp() {
             )}
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                onClick={handleLeftPanelToggle}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 title={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
                 aria-label={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
@@ -503,6 +687,14 @@ export default function GrpcExplorerApp() {
           </div>
         )}
       </div>
+
+      {/* Backdrop for overlay mode */}
+      {isOverlayMode && !leftPanelCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+          onClick={handleLeftPanelToggle}
+        />
+      )}
 
       {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
       <div className="flex-1 flex flex-col">
@@ -599,7 +791,7 @@ export default function GrpcExplorerApp() {
         <div className="flex-1 min-h-0">
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Center Panel - Method Instances */}
-            <ResizablePanel defaultSize={50} minSize={30} id="methods-panel" order={1} collapsible={false}>
+            <ResizablePanel defaultSize={33} minSize={25} id="methods-panel" order={1} collapsible={false}>
               <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
           <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between p-4">
@@ -638,6 +830,7 @@ export default function GrpcExplorerApp() {
                   onSelect={() => setSelectedMethod(instance)}
                   onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
                   onExecute={() => handleExecuteMethod(instance)}
+                  onTogglePin={() => toggleMethodPin(instance.id)}
                   isExecuting={isExecuting && selectedMethod?.id === instance.id}
                 />
               ))
@@ -649,7 +842,7 @@ export default function GrpcExplorerApp() {
             <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
 
             {/* Right Panel - Results */}
-            <ResizablePanel defaultSize={35} minSize={20} maxSize={80} id="results-panel" order={2} collapsible={false}>
+            <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="results-panel" order={2} collapsible={false}>
               <div className="h-full w-full bg-white dark:bg-gray-950 flex flex-col">
                 <ResultsPanel
                   result={currentResult || null}
@@ -678,6 +871,8 @@ export default function GrpcExplorerApp() {
       <SettingsDialog
         open={showSettings}
         onClose={() => setShowSettings(false)}
+        autoCollapseEnabled={autoCollapseEnabled}
+        onAutoCollapseChange={setAutoCollapseEnabled}
       />
     </div>
   );

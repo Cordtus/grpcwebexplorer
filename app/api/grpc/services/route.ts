@@ -1,7 +1,8 @@
-// Service discovery using gRPC reflection
+// Service discovery using gRPC reflection with smart endpoint management
 // NOTE: No server-side caching - clients cache responses in localStorage
 import { NextResponse } from 'next/server';
 import { fetchServicesViaReflection, type GrpcService } from '@/lib/grpc/reflection-utils';
+import { endpointManager } from '@/lib/utils/endpoint-manager';
 
 export const runtime = 'nodejs';
 
@@ -15,15 +16,14 @@ export async function POST(req: Request) {
     }
 
     // Check if this is a chain marker for round-robin mode
-    let endpointWithPort = endpoint;
     let isChainMarker = false;
     let chainName = '';
-    let roundRobinEndpoints: Array<{ address: string; tls: boolean }> = [];
+    let endpoints: Array<{ address: string; tls: boolean }> = [];
 
     if (endpoint.startsWith('chain:')) {
       isChainMarker = true;
       chainName = endpoint.replace('chain:', '');
-      console.log(`Chain marker detected: ${chainName} - will use round-robin across all endpoints`);
+      console.log(`[Services] Chain marker detected: ${chainName} - will use concurrent endpoint fetching`);
 
       // Fetch endpoints from chain registry
       try {
@@ -32,83 +32,156 @@ export async function POST(req: Request) {
           const chainData = await chainResponse.json();
           const grpcEndpoints = chainData.apis?.grpc || [];
 
-          roundRobinEndpoints = grpcEndpoints.map((ep: any) => {
-            let address = ep.address.replace(/^https?:\/\//, '');
-            if (!address.includes(':')) {
-              address = `${address}:9090`;
-            }
-            const port = address.split(':')[1];
-            const tlsEnabled = port === '443';
-            return { address, tls: tlsEnabled };
-          });
+          // Use endpoint manager to normalize and detect TLS
+          endpoints = grpcEndpoints.map((ep: any) =>
+            endpointManager.normalizeEndpoint(ep.address)
+          );
 
-          console.log(`Loaded ${roundRobinEndpoints.length} endpoints for chain ${chainName} from registry`);
+          console.log(`[Services] Loaded ${endpoints.length} endpoints for ${chainName}`);
 
-          if (roundRobinEndpoints.length === 0) {
+          if (endpoints.length === 0) {
             return NextResponse.json({ error: `No gRPC endpoints found for chain ${chainName}` }, { status: 404 });
           }
         } else {
           return NextResponse.json({ error: `Chain ${chainName} not found in registry` }, { status: 404 });
         }
       } catch (error) {
-        console.error(`Error fetching chain data for ${chainName}:`, error);
+        console.error(`[Services] Error fetching chain data for ${chainName}:`, error);
         return NextResponse.json({ error: `Failed to fetch chain data for ${chainName}` }, { status: 500 });
       }
     } else {
-      // Parse endpoint to ensure it has a port
-      if (!endpoint.includes(':')) {
-        endpointWithPort = tls !== false ? `${endpoint}:443` : `${endpoint}:9090`;
-      }
+      // Single endpoint - normalize it
+      const normalized = endpointManager.normalizeEndpoint(endpoint);
+      endpoints = [normalized];
     }
 
-    // Determine which endpoints to try
-    const endpointsToTry = roundRobinEndpoints.length > 0
-      ? roundRobinEndpoints
-      : [{ address: endpointWithPort, tls }];
-
-    // Try each endpoint until one works
-    // NOTE: No server-side caching - client handles caching in localStorage
+    // Try endpoints sequentially (prioritized) until one succeeds
+    // Note: Concurrent fetching doesn't work well with reflection - causes partial data
     let services: GrpcService[] = [];
+    let successfulEndpoint: string | null = null;
+    let tlsUsed: boolean = false;
     let lastError: any = null;
-    let successfulEndpoint = null;
 
-    for (let i = 0; i < Math.min(endpointsToTry.length, 5); i++) {
+    // Prioritize endpoints before trying
+    const prioritizedEndpoints = endpointManager.prioritizeEndpoints(endpoints);
+
+    // Filter out blacklisted and limit to 5 attempts
+    const endpointsToTry = prioritizedEndpoints
+      .filter(ep => !endpointManager.isBlacklisted(ep.address))
+      .slice(0, 5);
+
+    console.log(`[Services] Trying up to ${endpointsToTry.length} endpoints (prioritized, non-blacklisted)`);
+
+    for (let i = 0; i < endpointsToTry.length; i++) {
       const { address, tls: tlsEnabled } = endpointsToTry[i];
 
-      try {
-        console.log(`Attempting to fetch services from ${address} (TLS: ${tlsEnabled})...`);
+      console.log(`[Services] Attempt ${i + 1}/${endpointsToTry.length}: ${address} (TLS: ${tlsEnabled})`);
 
+      const startTime = Date.now();
+      try {
         services = await fetchServicesViaReflection({
           endpoint: address,
           tls: tlsEnabled,
-          timeout: 15000, // 15 second timeout
+          timeout: 10000, // 10 second timeout per endpoint
         });
+        const responseTime = Date.now() - startTime;
 
+        // Success!
+        endpointManager.recordSuccess(address, responseTime);
         successfulEndpoint = address;
-        console.log(`Successfully fetched ${services.length} services from ${address}`);
-        break; // Success! Exit loop
-      } catch (err: any) {
-        console.error(`Failed to fetch from ${address}:`, err.message);
-        lastError = err;
+        tlsUsed = tlsEnabled;
 
-        // If this isn't the last endpoint, try the next one
-        if (i < Math.min(endpointsToTry.length, 5) - 1) {
-          console.log(`Trying next endpoint...`);
-          continue;
+        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${services.length} services)`);
+        break; // Exit loop on success
+      } catch (err: any) {
+        const responseTime = Date.now() - startTime;
+        const isTimeout = err.message?.includes('timeout') || err.message?.includes('Timeout');
+        const isTLSError = err.message?.includes('wrong version number') ||
+                          err.message?.includes('SSL routines') ||
+                          err.message?.includes('EPROTO');
+
+        lastError = err;
+        console.error(`[Services] ❌ Failed: ${address} (${responseTime}ms) - ${err.message}`);
+
+        // If TLS failed with version mismatch, retry without TLS
+        if (tlsEnabled && isTLSError) {
+          console.log(`[Services] TLS error detected, retrying ${address} without TLS...`);
+          const retryStartTime = Date.now();
+          try {
+            services = await fetchServicesViaReflection({
+              endpoint: address,
+              tls: false,
+              timeout: 10000,
+            });
+            const retryResponseTime = Date.now() - retryStartTime;
+
+            // Success with non-TLS!
+            endpointManager.recordSuccess(address, retryResponseTime);
+            successfulEndpoint = address;
+            tlsUsed = false;
+
+            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services)`);
+            break; // Exit loop on success
+          } catch (retryErr: any) {
+            console.error(`[Services] ❌ Retry without TLS also failed: ${retryErr.message}`);
+            endpointManager.recordFailure(address, false);
+            lastError = retryErr;
+          }
+        } else {
+          endpointManager.recordFailure(address, isTimeout);
+        }
+
+        // Continue to next endpoint if available
+        if (i < endpointsToTry.length - 1) {
+          console.log(`[Services] Trying next endpoint...`);
         }
       }
     }
 
-    // If all endpoints failed, return error
-    if (services.length === 0 && lastError) {
+    // Check if all endpoints failed
+    if (!successfulEndpoint) {
+      console.error('[Services] All endpoints failed');
       return NextResponse.json({
-        error: `Failed to fetch services: ${lastError.message}`,
-        details: `Tried ${Math.min(endpointsToTry.length, 5)} endpoint(s)`,
+        error: `Failed to fetch services: ${lastError?.message || 'All endpoints failed'}`,
+        details: `Tried ${endpointsToTry.length} endpoint(s) sequentially`,
       }, { status: 500 });
     }
 
     // Filter out services with no methods
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
+
+    // Auto-detect chain-ID from GetNodeInfo if not already set
+    let detectedChainId = chainName;
+    if (!detectedChainId) {
+      try {
+        console.log('[Services] Attempting to detect chain-ID via GetNodeInfo...');
+        const nodeInfoClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({
+          endpoint: successfulEndpoint!,
+          tls: tlsUsed!,
+          timeout: 5000,
+        });
+
+        try {
+          await nodeInfoClient.initializeForMethod('cosmos.base.tendermint.v1beta1.Service');
+          const nodeInfo = await nodeInfoClient.invokeMethod(
+            'cosmos.base.tendermint.v1beta1.Service',
+            'GetNodeInfo',
+            {},
+            5000
+          );
+
+          if (nodeInfo?.default_node_info?.network) {
+            detectedChainId = nodeInfo.default_node_info.network;
+            console.log(`[Services] ✅ Detected chain-ID: ${detectedChainId}`);
+          }
+        } finally {
+          nodeInfoClient.close();
+        }
+      } catch (err: any) {
+        console.log(`[Services] Could not auto-detect chain-ID: ${err.message}`);
+        // Not a critical error - continue without chain-ID
+      }
+    }
 
     // Prepare status
     const status = {
@@ -120,21 +193,33 @@ export async function POST(req: Request) {
       completionRate: services.length > 0
         ? Math.round((servicesWithMethods.length / services.length) * 100)
         : 0,
-      endpoint: successfulEndpoint,
+      endpoint: successfulEndpoint!,
+      tls: tlsUsed!,
     };
 
-    console.log(`Final status: ${JSON.stringify(status)}`);
+    console.log(`[Services] Final status: ${JSON.stringify(status)}`);
+
+    // Log endpoint stats periodically
+    if (Math.random() < 0.1) { // 10% chance to log stats
+      const stats = endpointManager.getStats();
+      const blacklist = endpointManager.getBlacklist();
+
+      console.log(`[Services] Endpoint stats: ${stats.size} tracked`);
+      if (blacklist.length > 0) {
+        console.log(`[Services] Blacklisted endpoints: ${blacklist.join(', ')}`);
+      }
+    }
 
     return NextResponse.json({
       services: servicesWithMethods,
-      chainId: chainName,
+      chainId: detectedChainId,
       status,
       warnings: status.failed > 0
         ? [`${status.failed} services had no methods or failed to load.`]
         : [],
     });
   } catch (err: any) {
-    console.error('Error in services route:', err);
+    console.error('[Services] Error in services route:', err);
     return NextResponse.json({
       error: err.message || 'Failed to fetch services',
     }, { status: 500 });

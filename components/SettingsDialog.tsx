@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -19,19 +20,28 @@ import {
   clearAllCache,
   getCacheStats,
 } from '@/lib/utils/client-cache';
+import { useTheme, type Theme } from '@/components/ThemeProvider';
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  autoCollapseEnabled?: boolean;
+  onAutoCollapseChange?: (enabled: boolean) => void;
 }
 
-const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+const SettingsDialog: React.FC<SettingsDialogProps> = ({
+  open,
+  onClose,
+  autoCollapseEnabled = true,
+  onAutoCollapseChange
+}) => {
+  const { theme, setTheme } = useTheme();
   const [defaultTimeout, setDefaultTimeout] = useState(10000);
   const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
   const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
+  const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
 
-  // Load current cache TTL setting
+  // Load current settings when dialog opens
   useEffect(() => {
     if (open) {
       const currentTTL = getCacheTTL();
@@ -42,8 +52,11 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
 
       // Load cache stats
       setCacheStatsState(getCacheStats());
+
+      // Load auto-collapse setting
+      setLocalAutoCollapse(autoCollapseEnabled);
     }
-  }, [open]);
+  }, [open, autoCollapseEnabled]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -64,18 +77,22 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
             <div className="space-y-2">
               <label className="text-sm">Theme</label>
               <div className="flex gap-2">
-                {(['light', 'dark', 'system'] as const).map((t) => (
+                {([
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                  { value: 'retro', label: '8-bit' }
+                ] as const).map((t) => (
                   <button
-                    key={t}
-                    onClick={() => setTheme(t)}
+                    key={t.value}
+                    onClick={() => setTheme(t.value)}
                     className={cn(
-                      "px-4 py-2 rounded text-sm capitalize transition-colors",
-                      theme === t
+                      "px-4 py-2 rounded text-sm transition-colors font-medium",
+                      theme === t.value
                         ? "bg-primary text-primary-foreground"
                         : "bg-secondary hover:bg-secondary/80"
                     )}
                   >
-                    {t}
+                    {t.label}
                   </button>
                 ))}
               </div>
@@ -99,6 +116,24 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
                   min={1000}
                   max={60000}
                   step={1000}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Panel Behavior</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Auto-collapse panels</label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically collapse other panels when opening a new one
+                  </p>
+                </div>
+                <Switch
+                  checked={localAutoCollapse}
+                  onCheckedChange={setLocalAutoCollapse}
                 />
               </div>
             </div>
@@ -166,6 +201,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ open, onClose }) => {
             onClick={() => {
               // Save cache TTL setting
               setCacheTTL(cacheTTL);
+
+              // Save auto-collapse setting
+              if (onAutoCollapseChange) {
+                onAutoCollapseChange(localAutoCollapse);
+              }
+
               onClose();
             }}
             className={cn(

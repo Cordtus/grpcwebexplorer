@@ -1,39 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, Code, AlertCircle, Loader2 } from 'lucide-react';
+import { Play, Code, AlertCircle, Loader2, Pin } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
-import ProtobufFormGenerator, { MessageTypeDefinition } from './ProtobufFormGenerator';
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
-}
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
-
-interface MethodInstance {
-  id: string;
-  networkId: string;
-  method: GrpcMethod;
-  service: GrpcService;
-  color: string;
-  expanded?: boolean;
-  params?: Record<string, any>;
-}
+import ProtobufFormGenerator from './ProtobufFormGenerator';
+import { GrpcMethod, GrpcService, MethodInstance } from '@/lib/types/grpc';
 
 interface MethodBlockProps {
   instance: MethodInstance;
@@ -43,10 +15,11 @@ interface MethodBlockProps {
   onSelect: () => void;
   onUpdateParams: (params: Record<string, any>) => void;
   onExecute: () => void;
+  onTogglePin: () => void;
   isExecuting: boolean;
 }
 
-export default function MethodBlock({
+const MethodBlock = React.memo(function MethodBlock({
   instance,
   isSelected,
   onToggle,
@@ -54,6 +27,7 @@ export default function MethodBlock({
   onSelect,
   onUpdateParams,
   onExecute,
+  onTogglePin,
   isExecuting
 }: MethodBlockProps) {
   const [params, setParams] = useState<Record<string, any>>(instance.params || {});
@@ -110,6 +84,23 @@ export default function MethodBlock({
         isActive={isSelected}
         className="transition-all"
         headerClassName={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+        actions={
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            className={cn(
+              "p-1 rounded transition-colors",
+              instance.pinned
+                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                : "text-gray-400 dark:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-400"
+            )}
+            title={instance.pinned ? "Unpin method (allow auto-collapse)" : "Pin method (prevent auto-collapse)"}
+          >
+            <Pin className="h-3.5 w-3.5" />
+          </button>
+        }
       >
         <div className="space-y-4">
           {/* Stream indicators */}
@@ -194,4 +185,6 @@ export default function MethodBlock({
       </ExpandableBlock>
     </div>
   );
-}
+});
+
+export default MethodBlock;
