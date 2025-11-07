@@ -22,6 +22,7 @@ interface GrpcNetwork {
   id: string;
   name: string;
   endpoint: string;
+  endpoints?: string[]; // Additional fallback endpoints for this chain
   chainId?: string;
   tlsEnabled: boolean;
   services: GrpcService[];
@@ -98,6 +99,45 @@ export default function GrpcExplorerApp() {
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
+
+  // Load persisted networks from localStorage on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('grpc-explorer-networks');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Check if cache is still valid (use same TTL as services)
+        const ttl = parseInt(localStorage.getItem('grpc-cache-ttl') || '3600000'); // Default 1 hour
+        const isValid = parsed.networks && Array.isArray(parsed.networks) &&
+                       parsed.timestamp && (Date.now() - parsed.timestamp < ttl);
+
+        if (isValid) {
+          console.log(`[NetworkCache] Restored ${parsed.networks.length} networks from cache`);
+          setNetworks(parsed.networks);
+        } else {
+          console.log('[NetworkCache] Cache expired or invalid, starting fresh');
+          localStorage.removeItem('grpc-explorer-networks');
+        }
+      }
+    } catch (err) {
+      console.error('[NetworkCache] Failed to restore networks:', err);
+    }
+  }, []);
+
+  // Persist networks to localStorage whenever they change
+  useEffect(() => {
+    if (networks.length > 0) {
+      try {
+        localStorage.setItem('grpc-explorer-networks', JSON.stringify({
+          networks,
+          timestamp: Date.now(),
+        }));
+        console.log(`[NetworkCache] Saved ${networks.length} networks to cache`);
+      } catch (err) {
+        console.error('[NetworkCache] Failed to save networks:', err);
+      }
+    }
+  }, [networks]);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -205,18 +245,87 @@ export default function GrpcExplorerApp() {
 
   // Add network
   const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean) => {
+    // Check client-side cache first to get chain-id for deduplication
+    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+    const cached = getFromCache<any>(cacheKey);
+    const cachedChainId = cached?.chainId || cached?.status?.chainId;
+
+    // Try to fetch data to get chain-id
+    let fetchedChainId: string | undefined = cachedChainId;
+    let fetchedData: any = cached;
+    let actualEndpoint = endpoint;
+
+    if (!cached) {
+      debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
+      try {
+        const response = await fetch('/api/grpc/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint, tlsEnabled })
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch services');
+
+        fetchedData = await response.json();
+        const now = Date.now();
+
+        // Save to client-side cache with timestamp
+        saveToCache(cacheKey, { ...fetchedData, timestamp: now });
+
+        actualEndpoint = fetchedData.status?.endpoint || endpoint;
+        fetchedChainId = fetchedData.chainId || fetchedData.status?.chainId;
+
+        debug.log(`✓ Fetched ${fetchedData.services?.length || 0} services from ${actualEndpoint}`);
+      } catch (error) {
+        debug.error(`Failed to fetch from ${endpoint}:`, error);
+        // Continue anyway - might be adding without data
+      }
+    } else {
+      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
+      actualEndpoint = cached.status?.endpoint || endpoint;
+    }
+
+    // Check for duplicate chain-id
+    const existingNetwork = fetchedChainId
+      ? networks.find(n => n.chainId === fetchedChainId)
+      : null;
+
+    if (existingNetwork && fetchedChainId) {
+      // Same chain detected - add endpoint to existing network instead of duplicating
+      debug.log(`⚠️  Chain ${fetchedChainId} already exists, adding ${actualEndpoint} as fallback endpoint`);
+
+      setNetworks(prev => prev.map(n =>
+        n.id === existingNetwork.id
+          ? {
+              ...n,
+              endpoints: [...(n.endpoints || []), actualEndpoint],
+              expanded: true // Expand to show user we recognized the duplicate
+            }
+          : autoCollapseEnabled ? { ...n, expanded: false } : n
+      ));
+
+      // Show user-friendly message
+      console.log(`[NetworkCache] Added ${actualEndpoint} as fallback for chain ${fetchedChainId}`);
+      return;
+    }
+
+    // New chain - add as new network
     const id = generateId();
     const color = getNextColor();
-    const name = endpoint.split('//').pop()?.split(':')[0] || endpoint;
+    const name = actualEndpoint.split('//').pop()?.split(':')[0] || actualEndpoint;
 
     const newNetwork: GrpcNetwork = {
       id,
       name,
-      endpoint,
+      endpoint: actualEndpoint,
+      endpoints: [], // Will accumulate additional endpoints
+      chainId: fetchedChainId,
       tlsEnabled,
-      services: [],
+      services: fetchedData?.services || [],
       color,
-      loading: true,
+      loading: !fetchedData,
+      cached: !!cached,
+      cacheTimestamp: fetchedData?.timestamp || cached?.timestamp || Date.now(),
       expanded: true
     };
 
@@ -228,72 +337,47 @@ export default function GrpcExplorerApp() {
       return [...prev, newNetwork];
     });
 
-    // Check client-side cache first
-    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
-    const cached = getFromCache<any>(cacheKey);
+    // If we didn't have data yet, fetch it now
+    if (!fetchedData) {
+      try {
+        const response = await fetch('/api/grpc/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint, tlsEnabled })
+        });
 
-    if (cached) {
-      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
-      const cachedChainId = cached.chainId || cached.status?.chainId;
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? {
-              ...n,
-              services: cached.services || [],
-              chainId: cachedChainId,
-              loading: false,
-              cached: true,
-              cacheTimestamp: cached.timestamp || Date.now()
-            }
-          : n
-      ));
-      return;
+        if (!response.ok) throw new Error('Failed to fetch services');
+
+        const data = await response.json();
+        const now = Date.now();
+
+        saveToCache(cacheKey, { ...data, timestamp: now });
+
+        const finalEndpoint = data.status?.endpoint || endpoint;
+        const finalChainId = data.chainId || data.status?.chainId;
+
+        setNetworks(prev => prev.map(n =>
+          n.id === id
+            ? {
+                ...n,
+                services: data.services || [],
+                endpoint: finalEndpoint,
+                chainId: finalChainId,
+                loading: false,
+                cached: false,
+                cacheTimestamp: now
+              }
+            : n
+        ));
+      } catch (error) {
+        setNetworks(prev => prev.map(n =>
+          n.id === id
+            ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
+            : n
+        ));
+      }
     }
-
-    // Fetch services via reflection
-    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
-    try {
-      const response = await fetch('/api/grpc/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, tlsEnabled })
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch services');
-
-      const data = await response.json();
-      const now = Date.now();
-
-      // Save to client-side cache with timestamp
-      saveToCache(cacheKey, { ...data, timestamp: now });
-
-      // Update network with actual endpoint and chain ID (in case chain marker was used)
-      const actualEndpoint = data.status?.endpoint || endpoint;
-      const chainId = data.chainId || data.status?.chainId;
-
-      debug.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
-
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? {
-              ...n,
-              services: data.services || [],
-              endpoint: actualEndpoint,  // Use actual endpoint that worked
-              chainId,  // Store chain ID if available
-              loading: false,
-              cached: false,
-              cacheTimestamp: now
-            }
-          : n
-      ));
-    } catch (error) {
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
-          : n
-      ));
-    }
-  }, [getNextColor]);
+  }, [networks, getNextColor, autoCollapseEnabled]);
 
   // Remove network
   const handleRemoveNetwork = useCallback((networkId: string) => {

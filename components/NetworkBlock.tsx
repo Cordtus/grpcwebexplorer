@@ -154,10 +154,14 @@ const NetworkBlock = React.memo(function NetworkBlock({
     setExpandedNamespaces(newExpanded);
   };
 
+  const subtitle = network.chainId
+    ? `${network.endpoint}${network.endpoints && network.endpoints.length > 0 ? ` (+${network.endpoints.length} fallback${network.endpoints.length > 1 ? 's' : ''})` : ''}`
+    : network.endpoint;
+
   return (
     <ExpandableBlock
       title={network.chainId || network.endpoint}
-      subtitle={network.endpoint}
+      subtitle={subtitle}
       isExpanded={network.expanded || false}
       onToggle={onToggle}
       color={network.color}

@@ -24,10 +24,14 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
 
   // Handle clear cache
   const handleClearCache = () => {
-    if (confirm('Clear all cached data? You will need to re-fetch services from all endpoints.')) {
+    if (confirm('Clear all cached data? This will remove all networks and you will need to re-add them.')) {
       clearAllCache();
+      // Also clear network cache
+      localStorage.removeItem('grpc-explorer-networks');
       updateCacheStats();
       setShowCacheMenu(false);
+      // Reload page to clear networks from state
+      window.location.reload();
     }
   };
 
