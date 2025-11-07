@@ -87,12 +87,33 @@ export async function POST(req: Request) {
         });
         const responseTime = Date.now() - startTime;
 
+        // Verify we got valid data
+        const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+
+        if (servicesWithMethods.length === 0) {
+          throw new Error(`No valid services with methods found (got ${services.length} total services)`);
+        }
+
+        // Additional validation: ensure each method has required fields
+        let invalidMethodCount = 0;
+        for (const service of servicesWithMethods) {
+          for (const method of service.methods) {
+            if (!method.name || !method.requestType || !method.responseType) {
+              invalidMethodCount++;
+            }
+          }
+        }
+
+        if (invalidMethodCount > 0) {
+          console.warn(`[Services] Warning: ${invalidMethodCount} methods have incomplete data`);
+        }
+
         // Success!
         endpointManager.recordSuccess(address, responseTime);
         successfulEndpoint = address;
         tlsUsed = tlsEnabled;
 
-        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${services.length} services)`);
+        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${servicesWithMethods.length} services with methods, ${invalidMethodCount} invalid methods)`);
         break; // Exit loop on success
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
@@ -117,12 +138,19 @@ export async function POST(req: Request) {
             });
             const retryResponseTime = Date.now() - retryStartTime;
 
+            // Verify we got valid data
+            const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+
+            if (servicesWithMethods.length === 0) {
+              throw new Error(`No valid services with methods found after TLS retry (got ${services.length} total services)`);
+            }
+
             // Success with non-TLS!
             endpointManager.recordSuccess(address, retryResponseTime);
             successfulEndpoint = address;
             tlsUsed = false;
 
-            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services)`);
+            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${servicesWithMethods.length} services with methods)`);
             break; // Exit loop on success
           } catch (retryErr: any) {
             console.error(`[Services] ❌ Retry without TLS also failed: ${retryErr.message}`);

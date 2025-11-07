@@ -34,24 +34,38 @@ class EndpointManager {
   normalizeEndpoint(url: string): EndpointConfig {
     let address = url.trim();
     let tls = false;
+    let hadHttpsPrefix = false;
 
-    // Remove protocol prefix if present
+    // Remove protocol prefix if present and remember if it was HTTPS
     if (address.startsWith('https://')) {
       address = address.replace('https://', '');
       tls = true;
+      hadHttpsPrefix = true;
     } else if (address.startsWith('http://')) {
       address = address.replace('http://', '');
       tls = false;
+    } else if (address.startsWith('grpc://')) {
+      address = address.replace('grpc://', '');
+      tls = false;
+    } else if (address.startsWith('grpcs://')) {
+      address = address.replace('grpcs://', '');
+      tls = true;
+      hadHttpsPrefix = true;
     }
 
     // Add port if missing
     if (!address.includes(':')) {
-      address = `${address}:9090`; // Default gRPC port
-      tls = false;
+      // If URL had https:// prefix, use port 443, otherwise use 9090
+      if (hadHttpsPrefix) {
+        address = `${address}:443`;
+        tls = true;
+      } else {
+        address = `${address}:9090`; // Default gRPC port
+      }
     } else {
-      // Check if port 443 (implies TLS)
+      // Check if port 443 or 9091 (common TLS ports for gRPC)
       const port = address.split(':')[1];
-      if (port === '443') {
+      if (port === '443' || port === '9091') {
         tls = true;
       }
     }
