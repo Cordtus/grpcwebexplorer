@@ -29,6 +29,7 @@ interface GrpcNetwork {
   id: string;
   name: string;
   endpoint: string;
+  chainId?: string;
   tlsEnabled: boolean;
   services: GrpcService[];
   color: string;
@@ -155,14 +156,11 @@ export default function NetworkBlock({
 
   return (
     <ExpandableBlock
-      title={network.name}
+      title={network.chainId || network.endpoint}
       subtitle={network.endpoint}
       isExpanded={network.expanded || false}
       onToggle={onToggle}
       color={network.color}
-      badge={
-        network.services.length > 0 ? `${network.services.length} services` : undefined as any
-      }
       icon={<Server className="h-4 w-4" style={{ color: network.color }} />}
       onRemove={onRemove}
       actions={
