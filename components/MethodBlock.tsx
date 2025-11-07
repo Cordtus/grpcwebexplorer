@@ -48,7 +48,7 @@ interface MethodBlockProps {
   isExecuting: boolean;
 }
 
-export default function MethodBlock({
+const MethodBlock = React.memo(function MethodBlock({
   instance,
   isSelected,
   onToggle,
@@ -218,4 +218,6 @@ export default function MethodBlock({
       </ExpandableBlock>
     </div>
   );
-}
+});
+
+export default MethodBlock;

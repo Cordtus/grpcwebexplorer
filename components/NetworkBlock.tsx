@@ -112,7 +112,7 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
   );
 }
 
-export default function NetworkBlock({
+const NetworkBlock = React.memo(function NetworkBlock({
   network,
   onToggle,
   onRemove,
@@ -290,4 +290,6 @@ export default function NetworkBlock({
       )}
     </ExpandableBlock>
   );
-}
+});
+
+export default NetworkBlock;
