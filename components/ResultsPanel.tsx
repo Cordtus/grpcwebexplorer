@@ -46,7 +46,9 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
       ? JSON.stringify(value, null, 2)
       : String(value);
     navigator.clipboard.writeText(textToCopy);
-    setCopiedKeys(new Set([...copiedKeys, key]));
+    const newCopiedKeys = new Set(copiedKeys);
+    newCopiedKeys.add(key);
+    setCopiedKeys(newCopiedKeys);
     setTimeout(() => {
       setCopiedKeys(prev => {
         const newSet = new Set(prev);
