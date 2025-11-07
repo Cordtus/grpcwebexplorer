@@ -22,6 +22,9 @@ export const metadata = {
     statusBarStyle: 'default',
     title: 'gRPC Explorer',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export default function RootLayout({
