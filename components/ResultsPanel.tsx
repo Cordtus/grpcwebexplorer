@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy, Check, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, Check, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronRight, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ExecutionResult {
@@ -27,8 +27,9 @@ interface ResultsPanelProps {
   selectedMethod: MethodInstance | null;
 }
 
-function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
+function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number; path?: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [copiedKeys, setCopiedKeys] = useState<Set<string>>(new Set());
 
   const toggleExpand = (key: string) => {
     const newExpanded = new Set(expanded);
@@ -38,6 +39,21 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
       newExpanded.add(key);
     }
     setExpanded(newExpanded);
+  };
+
+  const handleCopyValue = (value: any, key: string) => {
+    const textToCopy = typeof value === 'object'
+      ? JSON.stringify(value, null, 2)
+      : String(value);
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedKeys(new Set([...copiedKeys, key]));
+    setTimeout(() => {
+      setCopiedKeys(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
+    }, 2000);
   };
 
   if (data === null) return <span className="text-gray-500">null</span>;
@@ -58,7 +74,7 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
   if (Array.isArray(data)) {
     if (data.length === 0) return <span>[]</span>;
 
-    const key = `array-${level}`;
+    const key = `${path}-array-${level}`;
     const isExpanded = level === 0 || expanded.has(key);
     const DISPLAY_LIMIT = 100; // Show first 100 items
     const hasMore = data.length > DISPLAY_LIMIT;
@@ -66,20 +82,33 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
 
     return (
       <div className="w-full">
-        <button
-          onClick={() => toggleExpand(key)}
-          className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
-        >
-          {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          <span className="text-gray-500 ml-1">[{data.length}]</span>
-        </button>
+        <div className="inline-flex items-center gap-1 group">
+          <button
+            onClick={() => toggleExpand(key)}
+            className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
+          >
+            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            <span className="text-gray-500 ml-1">[{data.length}]</span>
+          </button>
+          <button
+            onClick={() => handleCopyValue(data, key)}
+            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+            title="Copy array"
+          >
+            {copiedKeys.has(key) ? (
+              <Check className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3 text-gray-400" />
+            )}
+          </button>
+        </div>
         {isExpanded && (
           <div className="ml-4 mt-1">
             {displayData.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-gray-500 mr-2">{index}:</span>
                 <div className="flex-1">
-                  <JsonViewer data={item} level={level + 1} />
+                  <JsonViewer data={item} level={level + 1} path={`${path}[${index}]`} />
                 </div>
               </div>
             ))}
@@ -101,12 +130,12 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
     return (
       <div>
         {entries.map(([key, value], index) => {
-          const itemKey = `${key}-${level}-${index}`;
+          const itemKey = `${path}.${key}`;
           const isExpanded = level === 0 || expanded.has(itemKey);
           const isObject = typeof value === 'object' && value !== null;
 
           return (
-            <div key={key} className="mb-1">
+            <div key={key} className="mb-1 group">
               <div className="flex items-start">
                 {isObject && (
                   <button
@@ -118,19 +147,47 @@ function JsonViewer({ data, level = 0 }: { data: any; level?: number }) {
                 )}
                 {!isObject && <span className="w-5" />}
                 <span className="text-gray-700 dark:text-gray-300 font-medium">{key}:</span>
-                <div className="ml-2 flex-1">
+                <div className="ml-2 flex-1 flex items-start gap-1">
                   {isObject ? (
-                    isExpanded ? (
-                      <div className="ml-4">
-                        <JsonViewer data={value} level={level + 1} />
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">
-                        {Array.isArray(value) ? `[${value.length}]` : '{...}'}
-                      </span>
-                    )
+                    <>
+                      {isExpanded ? (
+                        <div className="ml-4 flex-1">
+                          <JsonViewer data={value} level={level + 1} path={itemKey} />
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">
+                          {Array.isArray(value) ? `[${value.length}]` : '{...}'}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleCopyValue(value, itemKey)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+                        title={`Copy ${Array.isArray(value) ? 'array' : 'object'}`}
+                      >
+                        {copiedKeys.has(itemKey) ? (
+                          <Check className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-gray-400" />
+                        )}
+                      </button>
+                    </>
                   ) : (
-                    <JsonViewer data={value} level={level + 1} />
+                    <>
+                      <div className="flex-1">
+                        <JsonViewer data={value} level={level + 1} path={itemKey} />
+                      </div>
+                      <button
+                        onClick={() => handleCopyValue(value, itemKey)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+                        title="Copy value"
+                      >
+                        {copiedKeys.has(itemKey) ? (
+                          <Check className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-gray-400" />
+                        )}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -154,6 +211,26 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleSaveAsJSON = () => {
+    if (!result?.data) return;
+
+    const jsonString = JSON.stringify(result.data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    // Generate filename from method name and timestamp
+    const methodName = selectedMethod?.method.name || 'response';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    link.download = `${methodName}_${timestamp}.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const formatDuration = (ms?: number) => {
@@ -198,8 +275,16 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
               </button>
             </div>
             <button
+              onClick={handleSaveAsJSON}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Save as JSON file"
+            >
+              <Save className="h-4 w-4 text-gray-400" />
+            </button>
+            <button
               onClick={handleCopy}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Copy entire response"
             >
               {copied ? (
                 <Check className="h-4 w-4 text-green-500" />

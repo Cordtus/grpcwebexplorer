@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, Code, AlertCircle, Loader2, Pin, PinOff } from 'lucide-react';
+import { Play, Code, AlertCircle, Loader2, Pin } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
 import ProtobufFormGenerator, { MessageTypeDefinition } from './ProtobufFormGenerator';
@@ -123,15 +123,11 @@ const MethodBlock = React.memo(function MethodBlock({
               "p-1 rounded transition-colors",
               instance.pinned
                 ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
-                : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                : "text-gray-400 dark:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-400"
             )}
             title={instance.pinned ? "Unpin method (allow auto-collapse)" : "Pin method (prevent auto-collapse)"}
           >
-            {instance.pinned ? (
-              <Pin className="h-3.5 w-3.5" />
-            ) : (
-              <PinOff className="h-3.5 w-3.5" />
-            )}
+            <Pin className="h-3.5 w-3.5" />
           </button>
         }
       >

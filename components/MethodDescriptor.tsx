@@ -144,9 +144,18 @@ console.log(response);`;
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {method.name}
           </h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400 truncate" title={service.fullName}>
-            {service.fullName}
-          </span>
+          <button
+            onClick={() => handleCopy(service.fullName, 'service')}
+            className="flex items-center gap-1.5 px-2 py-1 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors group"
+            title="Click to copy service name"
+          >
+            <span className="truncate max-w-[300px]">{service.fullName}</span>
+            {copied === 'service' ? (
+              <Check className="h-3 w-3 text-green-500 shrink-0" />
+            ) : (
+              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            )}
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
