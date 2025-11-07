@@ -4,37 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Play, Code, AlertCircle, Loader2, Pin } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
-import ProtobufFormGenerator, { MessageTypeDefinition } from './ProtobufFormGenerator';
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
-}
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
-
-interface MethodInstance {
-  id: string;
-  networkId: string;
-  method: GrpcMethod;
-  service: GrpcService;
-  color: string;
-  expanded?: boolean;
-  pinned?: boolean;
-  params?: Record<string, any>;
-}
+import ProtobufFormGenerator from './ProtobufFormGenerator';
+import { GrpcMethod, GrpcService, MethodInstance } from '@/lib/types/grpc';
 
 interface MethodBlockProps {
   instance: MethodInstance;

@@ -15,63 +15,8 @@ import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { MessageTypeDefinition } from './ProtobufFormGenerator';
 import { debug } from '@/lib/utils/debug';
-
-interface GrpcNetwork {
-  id: string;
-  name: string;
-  endpoint: string;
-  endpoints?: string[]; // Additional fallback endpoints for this chain
-  chainId?: string;
-  tlsEnabled: boolean;
-  services: GrpcService[];
-  color: string;
-  loading?: boolean;
-  error?: string;
-  expanded?: boolean;
-  cached?: boolean;
-  cacheTimestamp?: number;
-}
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
-}
-
-interface MethodInstance {
-  id: string;
-  networkId: string;
-  method: GrpcMethod;
-  service: GrpcService;
-  color: string;
-  expanded?: boolean;
-  pinned?: boolean;
-  params?: Record<string, any>;
-}
-
-interface ExecutionResult {
-  methodId: string;
-  success: boolean;
-  data?: any;
-  error?: string;
-  timestamp: number;
-  duration?: number;
-}
+import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
 
 // Color palette for networks
 const NETWORK_COLORS = [
@@ -319,7 +264,7 @@ export default function GrpcExplorerApp() {
       name,
       endpoint: actualEndpoint,
       endpoints: [], // Will accumulate additional endpoints
-      chainId: fetchedChainId,
+      ...(fetchedChainId ? { chainId: fetchedChainId } : {}), // Only include if defined
       tlsEnabled,
       services: fetchedData?.services || [],
       color,

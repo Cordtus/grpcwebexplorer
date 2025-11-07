@@ -3,23 +3,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, FileCode, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-}
-
-interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-}
+import { GrpcMethod, GrpcService } from '@/lib/types/grpc';
 
 interface MethodDescriptorProps {
   method: GrpcMethod;

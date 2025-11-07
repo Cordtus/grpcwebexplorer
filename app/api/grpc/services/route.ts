@@ -96,11 +96,40 @@ export async function POST(req: Request) {
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
         const isTimeout = err.message?.includes('timeout') || err.message?.includes('Timeout');
+        const isTLSError = err.message?.includes('wrong version number') ||
+                          err.message?.includes('SSL routines') ||
+                          err.message?.includes('EPROTO');
 
-        endpointManager.recordFailure(address, isTimeout);
         lastError = err;
-
         console.error(`[Services] ❌ Failed: ${address} (${responseTime}ms) - ${err.message}`);
+
+        // If TLS failed with version mismatch, retry without TLS
+        if (tlsEnabled && isTLSError) {
+          console.log(`[Services] TLS error detected, retrying ${address} without TLS...`);
+          const retryStartTime = Date.now();
+          try {
+            services = await fetchServicesViaReflection({
+              endpoint: address,
+              tls: false,
+              timeout: 10000,
+            });
+            const retryResponseTime = Date.now() - retryStartTime;
+
+            // Success with non-TLS!
+            endpointManager.recordSuccess(address, retryResponseTime);
+            successfulEndpoint = address;
+            tlsUsed = false;
+
+            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services)`);
+            break; // Exit loop on success
+          } catch (retryErr: any) {
+            console.error(`[Services] ❌ Retry without TLS also failed: ${retryErr.message}`);
+            endpointManager.recordFailure(address, false);
+            lastError = retryErr;
+          }
+        } else {
+          endpointManager.recordFailure(address, isTimeout);
+        }
 
         // Continue to next endpoint if available
         if (i < endpointsToTry.length - 1) {
@@ -120,6 +149,39 @@ export async function POST(req: Request) {
 
     // Filter out services with no methods
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
+
+    // Auto-detect chain-ID from GetNodeInfo if not already set
+    let detectedChainId = chainName;
+    if (!detectedChainId) {
+      try {
+        console.log('[Services] Attempting to detect chain-ID via GetNodeInfo...');
+        const nodeInfoClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({
+          endpoint: successfulEndpoint!,
+          tls: tlsUsed!,
+          timeout: 5000,
+        });
+
+        try {
+          await nodeInfoClient.initializeForMethod('cosmos.base.tendermint.v1beta1.Service');
+          const nodeInfo = await nodeInfoClient.invokeMethod(
+            'cosmos.base.tendermint.v1beta1.Service',
+            'GetNodeInfo',
+            {},
+            5000
+          );
+
+          if (nodeInfo?.default_node_info?.network) {
+            detectedChainId = nodeInfo.default_node_info.network;
+            console.log(`[Services] ✅ Detected chain-ID: ${detectedChainId}`);
+          }
+        } finally {
+          nodeInfoClient.close();
+        }
+      } catch (err: any) {
+        console.log(`[Services] Could not auto-detect chain-ID: ${err.message}`);
+        // Not a critical error - continue without chain-ID
+      }
+    }
 
     // Prepare status
     const status = {
@@ -150,7 +212,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       services: servicesWithMethods,
-      chainId: chainName,
+      chainId: detectedChainId,
       status,
       warnings: status.failed > 0
         ? [`${status.failed} services had no methods or failed to load.`]
