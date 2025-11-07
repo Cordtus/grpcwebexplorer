@@ -62,15 +62,15 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
   if (data === undefined) return <span className="text-gray-500">undefined</span>;
 
   if (typeof data === 'string') {
-    return <span className="text-green-600 dark:text-green-400">"{data}"</span>;
+    return <span className="text-green-600 dark:text-green-400 break-all">"{data}"</span>;
   }
 
   if (typeof data === 'number') {
-    return <span className="text-blue-600 dark:text-blue-400">{data}</span>;
+    return <span className="text-blue-600 dark:text-blue-400 break-all">{data}</span>;
   }
 
   if (typeof data === 'boolean') {
-    return <span className="text-purple-600 dark:text-purple-400">{data.toString()}</span>;
+    return <span className="text-purple-600 dark:text-purple-400 break-all">{data.toString()}</span>;
   }
 
   if (Array.isArray(data)) {
@@ -300,7 +300,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
 
       {/* Content */}
       <div className="flex-1 overflow-auto min-h-0 min-w-0">
-        <div className="p-4 w-full max-w-full overflow-x-auto">
+        <div className="p-4 w-full max-w-full">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -352,14 +352,14 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 </pre>
               </div>
             ) : result.data ? (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-w-full overflow-x-auto">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-w-full overflow-hidden">
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
-                  <div className="text-xs font-mono break-all overflow-wrap-anywhere">
+                  <div className="text-xs font-mono break-all overflow-wrap-anywhere max-w-full">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
-                  <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                  <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-all font-mono bg-gray-50 dark:bg-gray-800 p-3 rounded max-w-full overflow-hidden">
                     {JSON.stringify(result.data, null, 2)}
                   </pre>
                 )}

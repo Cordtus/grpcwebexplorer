@@ -1,7 +1,7 @@
 // Service discovery using gRPC reflection with smart endpoint management
 // NOTE: No server-side caching - clients cache responses in localStorage
 import { NextResponse } from 'next/server';
-import { fetchServicesViaReflection, type GrpcService } from '@/lib/grpc/reflection-utils';
+import { fetchServicesViaReflection, fetchServicesWithCosmosOptimization, type GrpcService } from '@/lib/grpc/reflection-utils';
 import { endpointManager } from '@/lib/utils/endpoint-manager';
 
 export const runtime = 'nodejs';
@@ -79,19 +79,41 @@ export async function POST(req: Request) {
 
       const startTime = Date.now();
       try {
-        services = await fetchServicesViaReflection({
+        // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
+        services = await fetchServicesWithCosmosOptimization({
           endpoint: address,
           tls: tlsEnabled,
           timeout: 10000, // 10 second timeout per endpoint
         });
         const responseTime = Date.now() - startTime;
 
+        // Verify we got valid data
+        const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+
+        if (servicesWithMethods.length === 0) {
+          throw new Error(`No valid services with methods found (got ${services.length} total services)`);
+        }
+
+        // Additional validation: ensure each method has required fields
+        let invalidMethodCount = 0;
+        for (const service of servicesWithMethods) {
+          for (const method of service.methods) {
+            if (!method.name || !method.requestType || !method.responseType) {
+              invalidMethodCount++;
+            }
+          }
+        }
+
+        if (invalidMethodCount > 0) {
+          console.warn(`[Services] Warning: ${invalidMethodCount} methods have incomplete data`);
+        }
+
         // Success!
         endpointManager.recordSuccess(address, responseTime);
         successfulEndpoint = address;
         tlsUsed = tlsEnabled;
 
-        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${services.length} services)`);
+        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${servicesWithMethods.length} services with methods, ${invalidMethodCount} invalid methods)`);
         break; // Exit loop on success
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
@@ -108,19 +130,27 @@ export async function POST(req: Request) {
           console.log(`[Services] TLS error detected, retrying ${address} without TLS...`);
           const retryStartTime = Date.now();
           try {
-            services = await fetchServicesViaReflection({
+            // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
+            services = await fetchServicesWithCosmosOptimization({
               endpoint: address,
               tls: false,
               timeout: 10000,
             });
             const retryResponseTime = Date.now() - retryStartTime;
 
+            // Verify we got valid data
+            const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+
+            if (servicesWithMethods.length === 0) {
+              throw new Error(`No valid services with methods found after TLS retry (got ${services.length} total services)`);
+            }
+
             // Success with non-TLS!
             endpointManager.recordSuccess(address, retryResponseTime);
             successfulEndpoint = address;
             tlsUsed = false;
 
-            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services)`);
+            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${servicesWithMethods.length} services with methods)`);
             break; // Exit loop on success
           } catch (retryErr: any) {
             console.error(`[Services] ❌ Retry without TLS also failed: ${retryErr.message}`);
@@ -150,36 +180,66 @@ export async function POST(req: Request) {
     // Filter out services with no methods
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
 
-    // Auto-detect chain-ID from GetNodeInfo if not already set
+    // Auto-detect chain-ID if not already set
+    // Try GetChainDescriptor first (v2alpha1), fallback to GetNodeInfo (v1beta1)
     let detectedChainId = chainName;
     if (!detectedChainId) {
       try {
-        console.log('[Services] Attempting to detect chain-ID via GetNodeInfo...');
-        const nodeInfoClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({
+        console.log('[Services] Attempting to detect chain-ID via GetChainDescriptor (v2alpha1)...');
+        const chainDescriptorClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({
           endpoint: successfulEndpoint!,
           tls: tlsUsed!,
           timeout: 5000,
         });
 
         try {
-          await nodeInfoClient.initializeForMethod('cosmos.base.tendermint.v1beta1.Service');
-          const nodeInfo = await nodeInfoClient.invokeMethod(
-            'cosmos.base.tendermint.v1beta1.Service',
-            'GetNodeInfo',
+          await chainDescriptorClient.initializeForMethod('cosmos.base.reflection.v2alpha1.ReflectionService');
+          const chainDescriptor = await chainDescriptorClient.invokeMethod(
+            'cosmos.base.reflection.v2alpha1.ReflectionService',
+            'GetChainDescriptor',
             {},
             5000
           );
 
-          if (nodeInfo?.default_node_info?.network) {
-            detectedChainId = nodeInfo.default_node_info.network;
-            console.log(`[Services] ✅ Detected chain-ID: ${detectedChainId}`);
+          if (chainDescriptor?.chain?.id) {
+            detectedChainId = chainDescriptor.chain.id;
+            console.log(`[Services] ✅ Detected chain-ID via v2alpha1: ${detectedChainId}`);
           }
         } finally {
-          nodeInfoClient.close();
+          chainDescriptorClient.close();
         }
       } catch (err: any) {
-        console.log(`[Services] Could not auto-detect chain-ID: ${err.message}`);
-        // Not a critical error - continue without chain-ID
+        console.log(`[Services] GetChainDescriptor failed: ${err.message}, trying fallback...`);
+
+        // Fallback to GetNodeInfo (v1beta1)
+        try {
+          console.log('[Services] Attempting to detect chain-ID via GetNodeInfo (v1beta1)...');
+          const nodeInfoClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({
+            endpoint: successfulEndpoint!,
+            tls: tlsUsed!,
+            timeout: 5000,
+          });
+
+          try {
+            await nodeInfoClient.initializeForMethod('cosmos.base.tendermint.v1beta1.Service');
+            const nodeInfo = await nodeInfoClient.invokeMethod(
+              'cosmos.base.tendermint.v1beta1.Service',
+              'GetNodeInfo',
+              {},
+              5000
+            );
+
+            if (nodeInfo?.default_node_info?.network) {
+              detectedChainId = nodeInfo.default_node_info.network;
+              console.log(`[Services] ✅ Detected chain-ID via v1beta1 fallback: ${detectedChainId}`);
+            }
+          } finally {
+            nodeInfoClient.close();
+          }
+        } catch (fallbackErr: any) {
+          console.log(`[Services] Could not auto-detect chain-ID: ${fallbackErr.message}`);
+          // Not a critical error - continue without chain-ID
+        }
       }
     }
 

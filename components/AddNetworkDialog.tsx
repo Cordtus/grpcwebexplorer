@@ -13,9 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronRight, Globe, Server, TestTube, Search, Loader2 } from 'lucide-react';
+import { ChevronRight, Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { EXAMPLE_ENDPOINTS, getEndpointsByCategory } from '@/lib/constants/exampleEndpoints';
 import { debug } from '@/lib/utils/debug';
 
 interface AddNetworkDialogProps {
@@ -33,7 +32,6 @@ interface ChainData {
 const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) => {
 	const [endpoint, setEndpoint] = useState('');
 	const [tlsEnabled, setTlsEnabled] = useState(true);
-	const [showExamples, setShowExamples] = useState(false);
 	const [showChainRegistry, setShowChainRegistry] = useState(false);
 	const [chains, setChains] = useState<string[]>([]);
 	const [filteredChains, setFilteredChains] = useState<string[]>([]);
@@ -129,17 +127,10 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		// Reset form
 		setEndpoint('');
 		setTlsEnabled(true);
-		setShowExamples(false);
 		setShowChainRegistry(false);
 		setSelectedChain(null);
 		setSearchQuery('');
 		onClose();
-	};
-
-	const selectExample = (example: typeof EXAMPLE_ENDPOINTS[0]) => {
-		setEndpoint(example.endpoint);
-		setTlsEnabled(example.tls);
-		setShowExamples(false);
 	};
 
 	const selectChain = async (chainName: string) => {
@@ -188,17 +179,44 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	};
 
 	const selectEndpointFromChain = (address: string) => {
-		// Normalize endpoint (remove https:// if present)
-		let normalizedAddress = address.replace(/^https?:\/\//, '');
+		// Use consistent normalization logic from endpoint-manager
+		let normalizedAddress = address.trim();
+		let hasTls = false;
+		let hadHttpsPrefix = false;
 
-		// Add default port if missing
-		if (!normalizedAddress.includes(':')) {
-			normalizedAddress = `${normalizedAddress}:9090`;
+		// Remove protocol prefix if present and remember if it was HTTPS
+		if (normalizedAddress.startsWith('https://')) {
+			normalizedAddress = normalizedAddress.replace('https://', '');
+			hasTls = true;
+			hadHttpsPrefix = true;
+		} else if (normalizedAddress.startsWith('http://')) {
+			normalizedAddress = normalizedAddress.replace('http://', '');
+			hasTls = false;
+		} else if (normalizedAddress.startsWith('grpc://')) {
+			normalizedAddress = normalizedAddress.replace('grpc://', '');
+			hasTls = false;
+		} else if (normalizedAddress.startsWith('grpcs://')) {
+			normalizedAddress = normalizedAddress.replace('grpcs://', '');
+			hasTls = true;
+			hadHttpsPrefix = true;
 		}
 
-		// Determine TLS: port 443 = TLS, everything else = no TLS
-		const port = normalizedAddress.split(':')[1];
-		const hasTls = port === '443';
+		// Add port if missing
+		if (!normalizedAddress.includes(':')) {
+			// If URL had https:// prefix, use port 443, otherwise use 9090
+			if (hadHttpsPrefix) {
+				normalizedAddress = `${normalizedAddress}:443`;
+				hasTls = true;
+			} else {
+				normalizedAddress = `${normalizedAddress}:9090`;
+			}
+		} else {
+			// Check if port 443 or 9091 (common TLS ports for gRPC)
+			const port = normalizedAddress.split(':')[1];
+			if (port === '443' || port === '9091') {
+				hasTls = true;
+			}
+		}
 
 		setEndpoint(normalizedAddress);
 		setTlsEnabled(hasTls);
@@ -209,6 +227,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	const useAllEndpoints = (chain: ChainData) => {
 		// Use a special marker format that the backend will recognize
 		// Format: chain:<chain_name>
+		// Backend will try endpoints sequentially with automatic fallback
 		const chainMarker = `chain:${chain.chain_name}`;
 
 		setEndpoint(chainMarker);
@@ -216,14 +235,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		setShowChainRegistry(false);
 		setSelectedChain(null);
 
-		debug.log(`Using all ${chain.grpc_endpoints.length} endpoints for ${chain.pretty_name} in round-robin mode`);
-	};
-
-	const categoryIcons = {
-		cosmos: Globe,
-		ethereum: Server,
-		test: TestTube,
-		other: Server
+		debug.log(`Using all ${chain.grpc_endpoints.length} endpoints for ${chain.pretty_name} with automatic fallback`);
 	};
 
 	return (
@@ -240,28 +252,13 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 						<div className="grid gap-2">
 							<div className="flex items-center justify-between">
 								<Label htmlFor="endpoint">Endpoint URL</Label>
-								<div className="flex gap-2">
-									<button
-										type="button"
-										onClick={() => {
-											setShowChainRegistry(!showChainRegistry);
-											setShowExamples(false);
-										}}
-										className="text-xs text-primary hover:underline"
-									>
-										{showChainRegistry ? 'Hide' : 'Browse'} Chain Registry
-									</button>
-									<button
-										type="button"
-										onClick={() => {
-											setShowExamples(!showExamples);
-											setShowChainRegistry(false);
-										}}
-										className="text-xs text-primary hover:underline"
-									>
-										{showExamples ? 'Hide' : 'Show'} Examples
-									</button>
-								</div>
+								<button
+									type="button"
+									onClick={() => setShowChainRegistry(!showChainRegistry)}
+									className="text-xs text-primary hover:underline"
+								>
+									{showChainRegistry ? 'Hide' : 'Browse'} Chain Registry
+								</button>
 							</div>
 							<div className="relative">
 								<Input
@@ -318,48 +315,6 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 								Enter a gRPC endpoint (e.g., server.com:443) or chain name (e.g., dydx)
 							</p>
 						</div>
-						
-						{showExamples && (
-							<div className="border border-border rounded-lg p-2 max-h-[200px] overflow-y-auto">
-								<div className="space-y-2">
-									{['cosmos', 'test'].map((category) => {
-										const examples = getEndpointsByCategory(category as any);
-										if (examples.length === 0) return null;
-										const Icon = categoryIcons[category as keyof typeof categoryIcons];
-										
-										return (
-											<div key={category}>
-												<div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-muted-foreground">
-													<Icon className="h-3 w-3" />
-													{category.charAt(0).toUpperCase() + category.slice(1)}
-												</div>
-												{examples.map((example) => (
-													<button
-														key={example.endpoint}
-														type="button"
-														onClick={() => selectExample(example)}
-														className={cn(
-															"w-full text-left px-2 py-1.5 rounded hover:bg-secondary/50",
-															"transition-colors group"
-														)}
-													>
-														<div className="flex items-center justify-between">
-															<div>
-																<div className="text-sm font-medium">{example.name}</div>
-																<div className="text-xs text-muted-foreground">
-																	{example.endpoint}
-																</div>
-															</div>
-															<ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-														</div>
-													</button>
-												))}
-											</div>
-										);
-									})}
-								</div>
-							</div>
-						)}
 
 						{showChainRegistry && (
 							<div className="border border-border rounded-lg p-3 max-h-[300px] overflow-y-auto">
@@ -431,7 +386,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 													className="w-full mb-3"
 													variant="default"
 												>
-													Use All {selectedChain.grpc_endpoints.length} Endpoints (Round-Robin)
+													Use All {selectedChain.grpc_endpoints.length} Endpoints (Automatic Fallback)
 												</Button>
 												<div className="text-xs text-muted-foreground mb-2 text-center">
 													Or select a specific endpoint:
