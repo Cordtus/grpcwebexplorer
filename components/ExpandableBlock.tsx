@@ -73,9 +73,17 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
           )}
           
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm truncate">{title}</div>
+            <div className="marquee-container font-medium text-sm">
+              <span className="marquee-text" data-long={title.length > 30 ? "true" : "false"}>
+                {title}
+              </span>
+            </div>
             {subtitle && (
-              <div className="text-xs text-gray-500 truncate">{subtitle}</div>
+              <div className="marquee-container text-xs text-gray-500">
+                <span className="marquee-text" data-long={subtitle.length > 35 ? "true" : "false"}>
+                  {subtitle}
+                </span>
+              </div>
             )}
           </div>
         </div>
