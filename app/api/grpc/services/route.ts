@@ -1,8 +1,8 @@
-// Service discovery using gRPC reflection with concurrent endpoint fetching
+// Service discovery using gRPC reflection with smart endpoint management
 // NOTE: No server-side caching - clients cache responses in localStorage
 import { NextResponse } from 'next/server';
 import { fetchServicesViaReflection, type GrpcService } from '@/lib/grpc/reflection-utils';
-import { endpointManager, fetchWithConcurrentEndpoints } from '@/lib/utils/endpoint-manager';
+import { endpointManager } from '@/lib/utils/endpoint-manager';
 
 export const runtime = 'nodejs';
 
@@ -55,66 +55,66 @@ export async function POST(req: Request) {
       endpoints = [normalized];
     }
 
-    // Fetch services using concurrent endpoint racing if multiple endpoints
+    // Try endpoints sequentially (prioritized) until one succeeds
+    // Note: Concurrent fetching doesn't work well with reflection - causes partial data
     let services: GrpcService[] = [];
-    let successfulEndpoint: string;
-    let tlsUsed: boolean;
+    let successfulEndpoint: string | null = null;
+    let tlsUsed: boolean = false;
+    let lastError: any = null;
 
-    try {
-      if (endpoints.length > 1) {
-        // Multiple endpoints - use concurrent fetching with race-to-first-success
-        const result = await fetchWithConcurrentEndpoints(
-          endpoints,
-          async (address, tlsEnabled) => {
-            return await fetchServicesViaReflection({
-              endpoint: address,
-              tls: tlsEnabled,
-              timeout: 15000,
-            });
-          },
-          {
-            adaptiveTimeoutPercent: 0.2, // 20% slower than fastest = dropped
-            maxAttempts: 5, // Try up to 5 endpoints concurrently
-          }
-        );
+    // Prioritize endpoints before trying
+    const prioritizedEndpoints = endpointManager.prioritizeEndpoints(endpoints);
 
-        services = result.data;
-        successfulEndpoint = result.endpoint;
-        tlsUsed = result.tls;
+    // Filter out blacklisted and limit to 5 attempts
+    const endpointsToTry = prioritizedEndpoints
+      .filter(ep => !endpointManager.isBlacklisted(ep.address))
+      .slice(0, 5);
 
-        console.log(`[Services] Success with ${successfulEndpoint} (${result.responseTime}ms, TLS: ${tlsUsed})`);
-      } else {
-        // Single endpoint - direct fetch
-        const { address, tls: tlsEnabled } = endpoints[0];
-        console.log(`[Services] Fetching from single endpoint ${address} (TLS: ${tlsEnabled})`);
+    console.log(`[Services] Trying up to ${endpointsToTry.length} endpoints (prioritized, non-blacklisted)`);
 
-        const startTime = Date.now();
-        try {
-          services = await fetchServicesViaReflection({
-            endpoint: address,
-            tls: tlsEnabled,
-            timeout: 15000,
-          });
-          const responseTime = Date.now() - startTime;
+    for (let i = 0; i < endpointsToTry.length; i++) {
+      const { address, tls: tlsEnabled } = endpointsToTry[i];
 
-          endpointManager.recordSuccess(address, responseTime);
-          successfulEndpoint = address;
-          tlsUsed = tlsEnabled;
+      console.log(`[Services] Attempt ${i + 1}/${endpointsToTry.length}: ${address} (TLS: ${tlsEnabled})`);
 
-          console.log(`[Services] Successfully fetched ${services.length} services from ${address} (${responseTime}ms)`);
-        } catch (err) {
-          const isTimeout = (err as Error).message?.includes('timeout');
-          endpointManager.recordFailure(address, isTimeout);
-          throw err;
+      const startTime = Date.now();
+      try {
+        services = await fetchServicesViaReflection({
+          endpoint: address,
+          tls: tlsEnabled,
+          timeout: 10000, // 10 second timeout per endpoint
+        });
+        const responseTime = Date.now() - startTime;
+
+        // Success!
+        endpointManager.recordSuccess(address, responseTime);
+        successfulEndpoint = address;
+        tlsUsed = tlsEnabled;
+
+        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${services.length} services)`);
+        break; // Exit loop on success
+      } catch (err: any) {
+        const responseTime = Date.now() - startTime;
+        const isTimeout = err.message?.includes('timeout') || err.message?.includes('Timeout');
+
+        endpointManager.recordFailure(address, isTimeout);
+        lastError = err;
+
+        console.error(`[Services] ❌ Failed: ${address} (${responseTime}ms) - ${err.message}`);
+
+        // Continue to next endpoint if available
+        if (i < endpointsToTry.length - 1) {
+          console.log(`[Services] Trying next endpoint...`);
         }
       }
-    } catch (err: any) {
-      console.error('[Services] All endpoints failed:', err.message);
+    }
+
+    // Check if all endpoints failed
+    if (!successfulEndpoint) {
+      console.error('[Services] All endpoints failed');
       return NextResponse.json({
-        error: `Failed to fetch services: ${err.message}`,
-        details: endpoints.length > 1
-          ? `Tried ${endpoints.length} endpoint(s) concurrently`
-          : 'Single endpoint failed',
+        error: `Failed to fetch services: ${lastError?.message || 'All endpoints failed'}`,
+        details: `Tried ${endpointsToTry.length} endpoint(s) sequentially`,
       }, { status: 500 });
     }
 
