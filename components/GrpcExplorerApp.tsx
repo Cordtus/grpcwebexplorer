@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, ChevronLeft, ChevronRight, Pin, PinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExpandableBlock } from './ExpandableBlock';
 import NetworkBlock from './NetworkBlock';
@@ -16,11 +16,13 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { MessageTypeDefinition } from './ProtobufFormGenerator';
+import { debug } from '@/lib/utils/debug';
 
 interface GrpcNetwork {
   id: string;
   name: string;
   endpoint: string;
+  chainId?: string;
   tlsEnabled: boolean;
   services: GrpcService[];
   color: string;
@@ -57,6 +59,7 @@ interface MethodInstance {
   service: GrpcService;
   color: string;
   expanded?: boolean;
+  pinned?: boolean;
   params?: Record<string, any>;
 }
 
@@ -92,6 +95,7 @@ export default function GrpcExplorerApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -164,12 +168,14 @@ export default function GrpcExplorerApp() {
     const cached = getFromCache<any>(cacheKey);
 
     if (cached) {
-      console.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
+      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
+      const cachedChainId = cached.chainId || cached.status?.chainId;
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? {
               ...n,
               services: cached.services || [],
+              chainId: cachedChainId,
               loading: false,
               cached: true,
               cacheTimestamp: cached.timestamp || Date.now()
@@ -180,7 +186,7 @@ export default function GrpcExplorerApp() {
     }
 
     // Fetch services via reflection
-    console.log(`⟳ Fetching fresh services from ${endpoint}...`);
+    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
     try {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
@@ -196,10 +202,11 @@ export default function GrpcExplorerApp() {
       // Save to client-side cache with timestamp
       saveToCache(cacheKey, { ...data, timestamp: now });
 
-      // Update network with actual endpoint (in case chain marker was used)
+      // Update network with actual endpoint and chain ID (in case chain marker was used)
       const actualEndpoint = data.status?.endpoint || endpoint;
+      const chainId = data.chainId || data.status?.chainId;
 
-      console.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
+      debug.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
 
       setNetworks(prev => prev.map(n =>
         n.id === id
@@ -207,6 +214,7 @@ export default function GrpcExplorerApp() {
               ...n,
               services: data.services || [],
               endpoint: actualEndpoint,  // Use actual endpoint that worked
+              chainId,  // Store chain ID if available
               loading: false,
               cached: false,
               cacheTimestamp: now
@@ -238,7 +246,7 @@ export default function GrpcExplorerApp() {
     const { removeFromCache } = await import('@/lib/utils/client-cache');
     removeFromCache(cacheKey);
 
-    console.log(`🔄 Force refreshing ${network.endpoint}...`);
+    debug.log(`🔄 Force refreshing ${network.endpoint}...`);
 
     // Set loading state
     setNetworks(prev => prev.map(n => {
@@ -271,7 +279,8 @@ export default function GrpcExplorerApp() {
       saveToCache(cacheKey, { ...data, timestamp: now });
 
       const actualEndpoint = data.status?.endpoint || network.endpoint;
-      console.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
+      const chainId = data.chainId || data.status?.chainId;
+      debug.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
 
       setNetworks(prev => prev.map(n => {
         if (n.id === networkId) {
@@ -280,6 +289,7 @@ export default function GrpcExplorerApp() {
             ...rest,
             services: data.services || [],
             endpoint: actualEndpoint,
+            chainId,
             loading: false,
             cached: false,
             cacheTimestamp: now
@@ -443,12 +453,13 @@ export default function GrpcExplorerApp() {
               <button
                 onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                title={leftPanelCollapsed ? "Expand panel" : "Collapse panel"}
+                title={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
+                aria-label={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
               >
                 {leftPanelCollapsed ? (
-                  <PanelLeftOpen className="h-4 w-4" />
+                  <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                 ) : (
-                  <PanelLeftClose className="h-4 w-4" />
+                  <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                 )}
               </button>
               {!leftPanelCollapsed && (

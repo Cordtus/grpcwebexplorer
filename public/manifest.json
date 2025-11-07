@@ -1,0 +1,16 @@
+{
+  "name": "gRPC Web Explorer",
+  "short_name": "gRPC Explorer",
+  "description": "Explore and interact with gRPC services via reflection",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

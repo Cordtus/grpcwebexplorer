@@ -248,7 +248,7 @@ console.log(response);`;
               )}
             </button>
           </div>
-          <div className="flex-1 overflow-auto min-h-0">
+          <div className="flex-1 overflow-auto min-h-0 code-snippet-scroll">
             <div className="p-3 bg-gray-900 dark:bg-black rounded-lg">
               <pre className="text-[10px] text-gray-300 font-mono whitespace-pre">
                 {activeTab === 'curl' ? curlExample : codeExample}
@@ -257,7 +257,7 @@ console.log(response);`;
           </div>
           {activeTab === 'javascript' && (
             <div className="mt-1.5 text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
-              Proto files: <a href="https://github.com/cosmos/cosmos-sdk/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">cosmos-sdk</a>, <a href="https://github.com/cosmos/ibc-go/tree/main/proto" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">ibc-go</a>, or chain repo
+              Proto files: <a href="https://buf.build" target="_blank" rel="noopener" className="underline hover:text-gray-600 dark:hover:text-gray-400">buf.build</a> or project repository (usually under <code className="text-[8px] px-0.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">/proto</code>)
             </div>
           )}
         </div>

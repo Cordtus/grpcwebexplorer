@@ -33,9 +33,13 @@ yarn start:prod   # Production server (auto port selection)
 
 **Docker**:
 ```bash
+yarn docker:build # Build Docker image
 yarn docker:up    # Start container
 yarn docker:down  # Stop container
+yarn docker:logs  # View container logs
 ```
+
+**Note**: All deployment-related files (Docker, systemd, testing) are located in the `/deployment` directory. See [deployment/README.md](deployment/README.md) for detailed deployment instructions.
 
 ## Usage
 
@@ -131,14 +135,24 @@ The production build uses Next.js standalone output mode for optimized deploymen
 
 ### Docker Deployment
 
+For self-hosted Docker deployments:
+
 ```bash
-docker build -t grpc-explorer .
-docker run -p 3000:3000 grpc-explorer
+# Using yarn scripts (recommended)
+yarn docker:build
+yarn docker:up
+yarn docker:logs
+
+# Or using docker-compose directly
+cd deployment
+docker-compose up -d
 ```
+
+See [deployment/README.md](deployment/README.md) for complete Docker documentation, systemd service configuration, and other deployment options.
 
 ### Port Conflict Handling
 
-The custom `start-server.js` automatically finds an available port starting from 3000, preventing deployment failures when the default port is in use.
+The custom server automatically finds an available port starting from 3000, preventing deployment failures when the default port is in use. This is handled by `deployment/start-server.js`.
 
 ## Development
 
@@ -148,8 +162,9 @@ The custom `start-server.js` automatically finds an available port starting from
 /app/api/grpc/          # API routes for gRPC operations
 /components/            # React components (shadcn/ui + custom)
 /lib/grpc/             # gRPC reflection client and utilities
-/lib/utils/            # Utility functions (colors, client-cache)
+/lib/utils/            # Utility functions (colors, client-cache, debug)
 /lib/hooks/            # React hooks (keyboard shortcuts, history)
+/deployment/           # Docker, systemd, and testing files (not used by Vercel)
 ```
 
 ### Key Components
@@ -163,10 +178,11 @@ The custom `start-server.js` automatically finds an available port starting from
 
 ### Testing
 
-Run test script with Node.js:
+Run the comprehensive gRPC reflection test suite:
 
 ```bash
-node test-grpc-reflection.js     # Comprehensive reflection client tests
+# Ensure dev server is running first (yarn dev)
+yarn test:grpc
 ```
 
 The test validates:
@@ -174,6 +190,8 @@ The test validates:
 - Type definition extraction for form generation
 - Method invocation with various parameter types
 - Enum field detection and handling
+
+See [deployment/test-grpc-reflection.js](deployment/test-grpc-reflection.js) for test implementation details.
 
 ## Troubleshooting
 
