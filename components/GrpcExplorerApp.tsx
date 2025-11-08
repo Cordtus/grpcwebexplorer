@@ -612,11 +612,11 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex relative">
+    <div className="h-screen bg-background flex relative">
       {/* Left Panel - Networks (Full Height) - Collapsible */}
       <div
         className={cn(
-          "border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col transition-all duration-300",
+          "border-r border-border bg-card flex flex-col transition-all duration-300",
           leftPanelCollapsed ? "w-12" : "",
           isOverlayMode && !leftPanelCollapsed && "absolute top-0 left-0 h-full z-50 shadow-2xl"
         )}
@@ -628,28 +628,28 @@ export default function GrpcExplorerApp() {
             : undefined
         }
       >
-        <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+        <div className="sticky top-0 z-10 bg-card border-b border-border">
           <div className="flex items-center justify-between p-4">
             {!leftPanelCollapsed && (
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Networks</h2>
+              <h2 className="text-sm font-semibold text-foreground">Networks</h2>
             )}
             <div className="flex items-center gap-1">
               <button
                 onClick={handleLeftPanelToggle}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
                 title={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
                 aria-label={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
               >
                 {leftPanelCollapsed ? (
-                  <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                  <ChevronRight className="h-5 w-5 text-foreground" />
                 ) : (
-                  <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                  <ChevronLeft className="h-5 w-5 text-foreground" />
                 )}
               </button>
               {!leftPanelCollapsed && (
                 <button
                   onClick={() => setShowAddNetwork(true)}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
                   title="Add network"
                 >
                   <Plus className="h-4 w-4" />
@@ -706,36 +706,36 @@ export default function GrpcExplorerApp() {
 
         {/* Method Descriptor - Three size states */}
         {descriptorSize !== 'minimized' && (
-          <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="border-b border-border bg-card">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+              <h3 className="text-sm font-semibold text-foreground">
                 Method Descriptor
               </h3>
               <div className="flex items-center gap-1">
                 {descriptorSize === 'expanded' && (
                   <button
                     onClick={() => setDescriptorSize('small')}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                    className="p-1 hover:bg-secondary/50 rounded transition-colors"
                     title="Make descriptor smaller"
                   >
-                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   </button>
                 )}
                 {descriptorSize === 'small' && (
                   <>
                     <button
                       onClick={() => setDescriptorSize('expanded')}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                      className="p-1 hover:bg-secondary/50 rounded transition-colors"
                       title="Expand descriptor"
                     >
-                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </button>
                     <button
                       onClick={() => setDescriptorSize('minimized')}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                      className="p-1 hover:bg-secondary/50 rounded transition-colors"
                       title="Minimize descriptor"
                     >
-                      <ChevronUp className="h-4 w-4 text-gray-500" />
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
                     </button>
                   </>
                 )}
@@ -758,7 +758,7 @@ export default function GrpcExplorerApp() {
                 );
               })() : (
                 <div className={cn(
-                  "flex items-center justify-center text-gray-500 dark:text-gray-400",
+                  "flex items-center justify-center text-muted-foreground",
                   descriptorSize === 'expanded' ? 'h-64' : 'h-32'
                 )}>
                   <div className="text-center">
@@ -773,16 +773,16 @@ export default function GrpcExplorerApp() {
 
         {/* Minimized bar when panel is minimized */}
         {descriptorSize === 'minimized' && (
-          <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
+          <div className="border-b border-border bg-card">
             <button
               onClick={() => setDescriptorSize('small')}
-              className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-secondary/50 transition-colors"
               title="Expand descriptor panel"
             >
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 {selectedMethod ? `${selectedMethod.service.name}.${selectedMethod.method.name}` : 'Method Descriptor'}
               </span>
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </button>
           </div>
         )}
@@ -792,18 +792,18 @@ export default function GrpcExplorerApp() {
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Center Panel - Method Instances */}
             <ResizablePanel defaultSize={33} minSize={25} id="methods-panel" order={1} collapsible={false}>
-              <div className="h-full border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-          <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+              <div className="h-full border-r border-border bg-background overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-background border-b border-border">
             <div className="flex items-center justify-between p-4">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Method Instances</h2>
+              <h2 className="text-sm font-semibold text-foreground">Method Instances</h2>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-muted-foreground">
                   {methodInstances.length} active
                 </span>
                 {methodInstances.length > 0 && (
                   <button
                     onClick={handleClearAllMethods}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                    className="text-xs text-destructive hover:underline"
                   >
                     Clear All
                   </button>
@@ -814,7 +814,7 @@ export default function GrpcExplorerApp() {
 
           <div className="p-4 space-y-3">
             {methodInstances.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No methods selected</p>
                 <p className="text-xs mt-1">Select methods from the networks panel</p>
@@ -839,11 +839,11 @@ export default function GrpcExplorerApp() {
               </div>
             </ResizablePanel>
 
-            <ResizableHandle withHandle className="w-2 bg-gray-200 dark:bg-gray-800 hover:bg-blue-500 transition-colors" />
+            <ResizableHandle withHandle className="w-2 bg-border hover:bg-primary transition-colors" />
 
             {/* Right Panel - Results */}
             <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="results-panel" order={2} collapsible={false}>
-              <div className="h-full w-full bg-white dark:bg-gray-950 flex flex-col">
+              <div className="h-full w-full bg-card flex flex-col">
                 <ResultsPanel
                   result={currentResult || null}
                   isExecuting={isExecuting}
