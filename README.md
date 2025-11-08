@@ -1,134 +1,285 @@
 # gRPC Web Explorer
 
-Web interface for exploring and interacting with gRPC services via reflection. Multi-network support with auto-generated forms and real-time execution.
+Web interface for exploring and interacting with gRPC services via server reflection. Supports multiple concurrent endpoints with auto-generated forms and real-time execution.
 
 ## Features
 
-- **Multi-Network**: Connect to multiple gRPC endpoints with color-coded tabs
-- **Chain Registry**: Quick setup with 100+ Cosmos chains
-- **Auto Forms**: Type-specific inputs generated from protobuf definitions
-- **Client Caching**: 1-hour localStorage cache (configurable)
-- **Resizable Layout**: 3-panel interface with collapsible sections
+- **Multi-Network**: Concurrent connections to multiple gRPC endpoints with color-coded interface (8 colors)
+- **Chain Registry Integration**: Direct access to 100+ Cosmos chain endpoints with automatic fallback
+- **Auto-Generated Forms**: Type-specific input fields generated from protobuf definitions
+- **Client-Side Caching**: Configurable TTL (5min/15min/30min/1hr/6hr/24hr), localStorage-backed
+- **Resizable Layout**: 3-panel interface with adjustable widths and collapsible sections
+- **Responsive Design**: Overlay mode for screens <1024px, adaptive panel sizing 1024px-1600px
+- **Method Pinning**: Pin method panels to prevent auto-collapse
 - **Keyboard Shortcuts**: Full navigation support (`Cmd/Ctrl+Shift+?` for help)
-- **Dark Mode**: Automatic theme detection
+- **Theme Support**: Light, dark, retro (8-bit), or system preference
+- **Execution History**: Last 50 method executions with timing data
+
+## Requirements
+
+- Node.js 20+
+- Yarn package manager
 
 ## Quick Start
 
-**Requirements**: Node.js 20+, Yarn
+### Development
 
 ```bash
 yarn install
 yarn dev          # http://localhost:3000
 ```
 
-**Production**:
+### Production
+
 ```bash
 yarn build:prod
-yarn start:prod   # Auto port selection
+yarn start:prod   # Auto-detects available port (starts at 3000)
 ```
 
-**Docker**:
+### Docker
+
 ```bash
-yarn docker:build && yarn docker:up
+yarn docker:build
+yarn docker:up    # http://localhost:3000
+yarn docker:logs  # View logs
+yarn docker:down  # Stop container
 ```
 
-See [deployment/README.md](deployment/README.md) for advanced deployment options.
+See [deployment/README.md](deployment/README.md) for systemd service configuration and advanced deployment options.
 
 ## Usage
 
-### Add Network
+### Adding Networks
 
 **Direct endpoint**:
-1. Click "Add Network"
-2. Enter endpoint (e.g., `grpc.cosmos.directory:443`)
-3. Enable TLS for port 443
+1. Click "Add Network" (or `Cmd/Ctrl+N`)
+2. Enter endpoint: `grpc.example.com:443`
+3. Toggle TLS (enabled by default for port 443)
 4. Click "Add Network"
 
 **Chain registry**:
 1. Click "Add Network" → "Browse Chain Registry"
-2. Search and select chain
-3. Choose endpoint or use round-robin
+2. Search or scroll to select chain
+3. Select specific endpoint or "Use All Endpoints" for automatic fallback
 
-**Quick shortcut**: Enter chain name directly (e.g., "osmosis", "dydx")
+**Quick entry**: Type chain name directly (e.g., `osmosis`, `dydx`) and press Enter
 
-### Execute Methods
+### Executing Methods
 
-1. Select network → Expand service → Click method
-2. Fill auto-generated form
-3. Click "Execute Method"
-4. View response in right panel
+1. Expand network → service → click method name
+2. Complete auto-generated form fields
+3. Click "Execute Method" (or `Cmd/Ctrl+Enter`)
+4. View response in results panel (right side)
 
 ### Settings
 
-- **Cache Duration**: Adjust TTL (5min - 24hr)
-- **Auto-Collapse**: Toggle panel auto-collapse behavior
-- **Pin Methods**: Pin method panels to prevent auto-collapse
+Access via menu bar (top-right gear icon):
+
+- **Theme**: System, Light, Dark, or 8-bit Retro
+- **Cache Duration**: 5min/15min/30min/1hr/6hr/24hr
+- **Auto-Collapse**: Enable/disable automatic panel collapse on selection
+- **Request Timeout**: Default gRPC request timeout (1s-60s)
+- **Cache Management**: View statistics and clear cache
 
 ### Keyboard Shortcuts
 
-- `Cmd/Ctrl+N` - Add network
-- `Cmd/Ctrl+W` - Close method tab
-- `Cmd/Ctrl+Enter` - Execute method
-- `Cmd/Ctrl+Shift+?` - Help guide
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl+N` | Add network |
+| `Cmd/Ctrl+W` | Close active method tab |
+| `Cmd/Ctrl+Enter` | Execute selected method |
+| `Cmd/Ctrl+Shift+?` | Show help dialog |
+
+### Panel Management
+
+- **Method Descriptor Panel**: Three states (expanded/small/minimized) via chevron controls
+- **Network Panel**: Collapsible via chevron button, overlay mode on narrow screens
+- **Method Pinning**: Pin icon in method header prevents auto-collapse
+- **Resizable Dividers**: Drag handles between panels to adjust widths
 
 ## Architecture
 
-**Stack**: Next.js 14, TypeScript, Tailwind, shadcn/ui, @grpc/grpc-js
+### Technology Stack
 
-**Proxy Pattern**:
+- **Framework**: Next.js 14 (App Router, Server Components)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS 3.4
+- **UI Components**: shadcn/ui (Radix UI primitives)
+- **gRPC**: @grpc/grpc-js, @grpc/proto-loader, protobufjs
+- **State Management**: React hooks, localStorage persistence
+- **Layout**: react-resizable-panels
+- **Icons**: lucide-react
+
+### Proxy Architecture
+
 ```
-Browser (HTTP) → Next.js API → gRPC Server
+Browser (HTTP/JSON) → Next.js API Routes → gRPC Server (gRPC protocol)
 ```
 
-Required because browsers cannot connect to standard gRPC (non-gRPC-Web).
+Standard gRPC servers use HTTP/2 with protocol-specific framing that browsers cannot handle directly. This application proxies requests through Next.js API routes to translate between browser-compatible HTTP/JSON and native gRPC.
 
-**API Endpoints**:
-- `POST /api/grpc/services` - Service discovery
-- `POST /api/grpc/execute` - Method execution
-- `GET /api/chains` - Chain registry
+### API Routes
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/grpc/services` | POST | Service discovery via server reflection |
+| `/api/grpc/execute` | POST | Method invocation with parameter marshalling |
+| `/api/chains` | GET | Cosmos chain registry list |
+| `/api/chains?name={chain}` | GET | Chain-specific endpoint data |
+
+### Request Flow
+
+1. **Service Discovery**:
+   - POST to `/api/grpc/services` with `{endpoint, tlsEnabled}`
+   - Server uses gRPC reflection to enumerate services/methods
+   - Response cached client-side with configurable TTL
+   - Network state persisted to localStorage
+
+2. **Method Execution**:
+   - POST to `/api/grpc/execute` with `{endpoint, tlsEnabled, service, method, params}`
+   - Server constructs gRPC client, marshals parameters to protobuf
+   - Response unmarshalled to JSON and returned to client
+   - Execution result added to history (max 50 entries)
+
+3. **Chain Registry**:
+   - GET `/api/chains` fetches chain list from GitHub API (cached 1 hour)
+   - GET `/api/chains?name={chain}` fetches chain.json from cosmos/chain-registry
+   - gRPC endpoints extracted and normalized (port 443 → TLS enabled)
+
+### Caching Strategy
+
+- **Service Discovery**: Client-side localStorage with user-configurable TTL
+- **Network State**: Persisted to localStorage, restored on page load
+- **Chain Registry**: Server-side in-memory cache (1 hour TTL)
+- **Automatic Invalidation**: Cache respects TTL, manual clear available in settings
+
+### Directory Structure
+
+```
+/
+├── app/
+│   ├── api/
+│   │   ├── chains/         # Chain registry endpoints
+│   │   └── grpc/
+│   │       ├── execute/    # Method execution
+│   │       └── services/   # Service discovery
+│   ├── layout.tsx          # Root layout with theme provider
+│   └── page.tsx            # Entry point (dynamic import)
+├── components/
+│   ├── ui/                 # shadcn/ui primitives
+│   ├── AddNetworkDialog.tsx
+│   ├── GrpcExplorerApp.tsx # Main application component
+│   ├── MethodBlock.tsx
+│   ├── NetworkBlock.tsx
+│   ├── ProtobufFormGenerator.tsx
+│   ├── ResultsPanel.tsx
+│   ├── SettingsDialog.tsx
+│   └── ThemeProvider.tsx
+├── lib/
+│   ├── contexts/           # React contexts (TabManager)
+│   ├── grpc/              # gRPC reflection utilities
+│   ├── hooks/             # Custom hooks (keyboard shortcuts, execution history)
+│   ├── services/          # Chain registry API client
+│   ├── types/             # TypeScript type definitions
+│   └── utils/             # Client cache, colors, debug logging
+├── deployment/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── start-server.js    # Custom production server with port detection
+│   ├── systemd.service
+│   └── test-grpc-reflection.js
+├── public/                # Static assets (favicon, icons, manifest)
+└── styles/                # Global CSS
+
+```
 
 ## Development
 
-### Project Structure
+### Available Scripts
 
-```
-/app/api/grpc/     # API routes
-/components/       # React components
-/lib/grpc/        # gRPC client
-/lib/utils/       # Utilities
-/deployment/      # Docker, systemd, tests
+```bash
+yarn dev          # Development server (port 3000)
+yarn build        # Production build
+yarn build:prod   # Production build with telemetry disabled
+yarn start        # Start production server
+yarn start:prod   # Start production server (NODE_ENV=production)
+yarn lint         # ESLint
+yarn test:grpc    # gRPC reflection integration tests
 ```
 
 ### Key Components
 
-- `GrpcExplorerApp` - Main layout and state
-- `NetworkBlock` - Network panel with service tree
-- `MethodBlock` - Method instance with form
-- `ProtobufFormGenerator` - Type-aware form generation
-- `AddNetworkDialog` - Network setup with registry
+- **GrpcExplorerApp**: Root component managing networks, methods, and execution state
+- **NetworkBlock**: Collapsible network panel with service tree
+- **MethodBlock**: Method instance with form and execution controls
+- **ProtobufFormGenerator**: Recursive form generator for protobuf message types
+- **AddNetworkDialog**: Network configuration dialog with chain registry browser
+- **SettingsDialog**: Application settings (theme, cache, behavior)
+- **ThemeProvider**: Theme management with localStorage persistence
 
-### Testing
+### Adding New Features
 
-```bash
-yarn dev          # Start dev server
-yarn test:grpc    # Run reflection tests
-```
-
-## Troubleshooting
-
-**Cache issues**: Menu bar → Cache indicator → Clear cache
-
-**Reflection fails**:
-- Verify gRPC reflection enabled on server
-- Check TLS settings match endpoint
-
-**Chain registry rate limits**: 60 req/hour (GitHub API), cached 1 hour
+1. **New API Route**: Add route handler in `app/api/`
+2. **UI Component**: Add component in `components/`, use existing shadcn/ui primitives
+3. **Type Definitions**: Extend types in `lib/types/grpc.ts`
+4. **State Management**: Use React hooks in `GrpcExplorerApp.tsx` or create context in `lib/contexts/`
 
 ## Environment Variables
 
-- `NODE_ENV` - production | development
-- `PORT` - Server port (default: 3000)
-- `GRPC_ENDPOINTS` - Comma-separated default endpoints
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NODE_ENV` | Environment mode | `development` |
+| `PORT` | Server port (production) | `3000` |
+| `GRPC_ENDPOINTS` | Comma-separated default endpoints | None |
+| `NEXT_TELEMETRY_DISABLED` | Disable Next.js telemetry | `1` (prod build) |
+
+## Troubleshooting
+
+### Cache Issues
+
+- Menu bar → cache indicator → "Clear Cache" button
+- Or use Settings → Cache → "Clear Cache"
+- Check cache TTL in Settings if data appears stale
+
+### Reflection Failures
+
+- Verify gRPC server has reflection enabled
+- Confirm TLS setting matches server configuration (port 443 typically requires TLS)
+- Check endpoint format: `hostname:port` (no protocol prefix)
+
+### Chain Registry
+
+- Rate limit: 60 requests/hour (GitHub API)
+- Cached for 1 hour after first request
+- Fallback to manual endpoint entry if registry unavailable
+
+### Network Connectivity
+
+- Browser must be able to reach Next.js server
+- Next.js server must have network access to gRPC endpoints
+- Firewalls must allow outbound connections on gRPC ports (typically 9090, 443)
+
+### Build/Deploy Errors
+
+- Ensure Node.js 20+ installed (`node --version`)
+- Clear `.next` directory and rebuild
+- For Docker: verify Docker daemon running and sufficient disk space
+- For systemd: check service logs with `journalctl -u grpc-explorer -f`
+
+## Testing
+
+Run gRPC reflection integration tests:
+
+```bash
+yarn dev          # Start dev server in one terminal
+yarn test:grpc    # Run tests in another terminal
+```
+
+Tests validate:
+- Service discovery via reflection
+- Method invocation
+- Type definition parsing
+- Error handling
 
 ## License
 
