@@ -197,8 +197,8 @@ console.log(response);`;
             </button>
           </div>
           <div className="flex-1 overflow-auto min-h-0">
-            <div className="p-3 bg-gray-900 dark:bg-black rounded-lg">
-              <pre className="text-sm text-gray-200 dark:text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">
+            <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+              <pre className="text-sm text-gray-800 dark:text-gray-200 font-mono whitespace-pre-wrap leading-relaxed">
                 {protoDefinition}
               </pre>
             </div>
@@ -244,8 +244,8 @@ console.log(response);`;
             </button>
           </div>
           <div className="flex-1 overflow-auto min-h-0 code-snippet-scroll">
-            <div className="p-3 bg-gray-900 dark:bg-black rounded-lg">
-              <pre className="text-xs text-gray-200 dark:text-gray-300 font-mono whitespace-pre leading-relaxed">
+            <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+              <pre className="text-xs text-gray-800 dark:text-gray-200 font-mono whitespace-pre leading-relaxed">
                 {activeTab === 'curl' ? curlExample : codeExample}
               </pre>
             </div>
