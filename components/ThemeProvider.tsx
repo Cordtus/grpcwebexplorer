@@ -55,6 +55,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Add the effective theme class
     root.classList.add(effectiveTheme);
+
+    // Also add 'dark' class for retro mode so dark: Tailwind variants work
+    // This ensures retro mode gets both the retro CSS variables AND the dark: styling
+    if (effectiveTheme === 'retro') {
+      root.classList.add('dark');
+    }
+
     setResolvedTheme(effectiveTheme);
   };
 
