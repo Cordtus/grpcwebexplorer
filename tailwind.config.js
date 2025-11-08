@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-    darkMode: "class",
+    darkMode: ['variant', [
+      '@media (prefers-color-scheme: dark) { &:not(.light) }',
+      '&:is(.dark, .retro)'
+    ]],
     content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}"
