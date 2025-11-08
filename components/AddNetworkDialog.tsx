@@ -173,9 +173,44 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 
 	// Select chain from inline suggestions
 	const selectChainFromSuggestion = async (chainName: string) => {
-		await selectChain(chainName);
 		setShowChainSuggestions(false);
-		setShowChainRegistry(true); // Show the chain details view
+		setLoadingChainData(true);
+
+		try {
+			const response = await fetch(`/api/chains?name=${chainName}`);
+			const data = await response.json();
+
+			if (data.error) {
+				console.error('Error fetching chain data:', data.error);
+				return;
+			}
+
+			const grpcEndpoints = data.apis?.grpc || [];
+			const chainData: ChainData = {
+				chain_name: data.info.chain_name,
+				chain_id: data.info.chain_id,
+				pretty_name: data.info.pretty_name,
+				grpc_endpoints: grpcEndpoints.map((ep: any) => ({
+					address: ep.address,
+					provider: ep.provider
+				}))
+			};
+
+			// Automatically use all endpoints for this chain (expected behavior when searching by name)
+			const chainMarker = `chain:${chainData.chain_name}`;
+			setEndpoint(chainMarker);
+			setTlsEnabled(true);
+
+			debug.log(`Auto-selected all ${chainData.grpc_endpoints.length} endpoints for ${chainData.pretty_name}`);
+
+			// Also set selected chain so user can see details or pick specific endpoint
+			setSelectedChain(chainData);
+			setShowChainRegistry(true);
+		} catch (error) {
+			console.error('Error fetching chain data:', error);
+		} finally {
+			setLoadingChainData(false);
+		}
 	};
 
 	const selectEndpointFromChain = (address: string) => {

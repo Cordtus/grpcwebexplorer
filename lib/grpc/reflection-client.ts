@@ -793,13 +793,13 @@ export class ReflectionClient {
           });
         }
 
-        if (methods.length > 0) {
-          services.push({
-            name: queryService.fullname.split('.').pop() || queryService.fullname,
-            fullName: queryService.fullname,
-            methods,
-          });
-        }
+        // Always add the service, even if it has no methods from v2alpha1
+        // Standard reflection will populate methods later in the merge
+        services.push({
+          name: queryService.fullname.split('.').pop() || queryService.fullname,
+          fullName: queryService.fullname,
+          methods,
+        });
       }
 
       console.log(`[ReflectionClient] ✅ Found ${services.length} query services via v2alpha1`);
