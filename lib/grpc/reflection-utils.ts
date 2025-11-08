@@ -85,15 +85,41 @@ export async function fetchServicesWithCosmosOptimization(
         await client.initialize();
         const standardServices = client.getServices();
 
-        // Merge with v2alpha1 services, avoiding duplicates
-        const existingServiceNames = new Set(services.map(s => s.fullName));
-        for (const service of standardServices) {
-          if (!existingServiceNames.has(service.fullName)) {
-            services.push(service);
+        // Merge with v2alpha1 services
+        // For services that exist in both, merge their methods (v2alpha1 sometimes returns empty methods)
+        const serviceMap = new Map<string, import('./reflection-client').GrpcService>();
+
+        // Add v2alpha1 services to map
+        for (const service of services) {
+          serviceMap.set(service.fullName, service);
+        }
+
+        // Merge or add standard reflection services
+        for (const stdService of standardServices) {
+          const existing = serviceMap.get(stdService.fullName);
+
+          if (existing) {
+            // Service exists in both - merge methods
+            const existingMethodNames = new Set(existing.methods.map(m => m.name));
+            const newMethods = stdService.methods.filter(m => !existingMethodNames.has(m.name));
+
+            if (newMethods.length > 0) {
+              console.log(`[Reflection] Merging ${newMethods.length} additional methods into ${stdService.fullName} from standard reflection`);
+              existing.methods.push(...newMethods);
+            }
+          } else {
+            // New service not in v2alpha1 - add it
+            serviceMap.set(stdService.fullName, stdService);
           }
         }
 
-        console.log(`[Reflection] ✅ Found ${standardServices.length - services.length} additional services via standard reflection`);
+        // Convert map back to array
+        const mergedServices = Array.from(serviceMap.values());
+        const addedCount = mergedServices.length - services.length;
+
+        console.log(`[Reflection] ✅ Merged services: ${mergedServices.length} total (${addedCount} additional from standard reflection)`);
+
+        return mergedServices;
       } catch (err) {
         console.log('[Reflection] Standard reflection check failed, using v2alpha1 services only');
       }
