@@ -1,7 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ['variant', [
-      '&:is(.dark *, .retro *)'
+      '.dark &',
+      '.retro &'
     ]],
     content: [
     "./app/**/*.{js,ts,jsx,tsx}",
