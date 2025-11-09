@@ -58,8 +58,8 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
     }, 2000);
   };
 
-  if (data === null) return <span className="text-gray-500">null</span>;
-  if (data === undefined) return <span className="text-gray-500">undefined</span>;
+  if (data === null) return <span className="text-muted-foreground">null</span>;
+  if (data === undefined) return <span className="text-muted-foreground">undefined</span>;
 
   if (typeof data === 'string') {
     return <span className="text-green-600 dark:text-green-400 break-all">"{data}"</span>;
@@ -87,20 +87,20 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
         <div className="inline-flex items-center gap-1 group">
           <button
             onClick={() => toggleExpand(key)}
-            className="inline-flex items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1"
+            className="inline-flex items-center hover:bg-muted rounded px-1"
           >
             {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            <span className="text-gray-500 ml-1">[{data.length}]</span>
+            <span className="text-muted-foreground ml-1">[{data.length}]</span>
           </button>
           <button
             onClick={() => handleCopyValue(data, key)}
-            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
             title="Copy array"
           >
             {copiedKeys.has(key) ? (
               <Check className="h-3 w-3 text-green-500" />
             ) : (
-              <Copy className="h-3 w-3 text-gray-400" />
+              <Copy className="h-3 w-3 text-muted-foreground" />
             )}
           </button>
         </div>
@@ -108,14 +108,14 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
           <div className="ml-4 mt-1">
             {displayData.map((item, index) => (
               <div key={index} className="flex items-start">
-                <span className="text-gray-500 mr-2">{index}:</span>
+                <span className="text-muted-foreground mr-2">{index}:</span>
                 <div className="flex-1">
                   <JsonViewer data={item} level={level + 1} path={`${path}[${index}]`} />
                 </div>
               </div>
             ))}
             {hasMore && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 italic mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded">
+              <div className="text-xs text-muted-foreground italic mt-2 p-2 bg-muted rounded">
                 ... and {data.length - DISPLAY_LIMIT} more items (showing first {DISPLAY_LIMIT} of {data.length})
               </div>
             )}
@@ -142,13 +142,13 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                 {isObject && (
                   <button
                     onClick={() => toggleExpand(itemKey)}
-                    className="mr-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded p-0.5"
+                    className="mr-1 hover:bg-muted rounded p-0.5"
                   >
                     {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   </button>
                 )}
                 {!isObject && <span className="w-5" />}
-                <span className="text-gray-700 dark:text-gray-300 font-medium">{key}:</span>
+                <span className="text-foreground font-medium">{key}:</span>
                 <div className="ml-2 flex-1 flex items-start gap-1">
                   {isObject ? (
                     <>
@@ -157,19 +157,19 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                           <JsonViewer data={value} level={level + 1} path={itemKey} />
                         </div>
                       ) : (
-                        <span className="text-gray-500">
+                        <span className="text-muted-foreground">
                           {Array.isArray(value) ? `[${value.length}]` : '{...}'}
                         </span>
                       )}
                       <button
                         onClick={() => handleCopyValue(value, itemKey)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
                         title={`Copy ${Array.isArray(value) ? 'array' : 'object'}`}
                       >
                         {copiedKeys.has(itemKey) ? (
                           <Check className="h-3 w-3 text-green-500" />
                         ) : (
-                          <Copy className="h-3 w-3 text-gray-400" />
+                          <Copy className="h-3 w-3 text-muted-foreground" />
                         )}
                       </button>
                     </>
@@ -180,13 +180,13 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                       </div>
                       <button
                         onClick={() => handleCopyValue(value, itemKey)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
                         title="Copy value"
                       >
                         {copiedKeys.has(itemKey) ? (
                           <Check className="h-3 w-3 text-green-500" />
                         ) : (
-                          <Copy className="h-3 w-3 text-gray-400" />
+                          <Copy className="h-3 w-3 text-muted-foreground" />
                         )}
                       </button>
                     </>
@@ -246,10 +246,10 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0 overflow-hidden">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-background">
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Results</h2>
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border">
+        <h2 className="text-sm font-semibold text-foreground">Execution Results</h2>
         {result && (
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
@@ -258,8 +258,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 className={cn(
                   "px-2 py-1 text-xs rounded transition-colors",
                   viewMode === 'formatted'
-                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
                 )}
               >
                 Formatted
@@ -269,8 +269,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 className={cn(
                   "px-2 py-1 text-xs rounded transition-colors",
                   viewMode === 'raw'
-                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
                 )}
               >
                 Raw
@@ -278,20 +278,20 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
             </div>
             <button
               onClick={handleSaveAsJSON}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              className="p-1.5 hover:bg-muted rounded transition-colors"
               title="Save as JSON file"
             >
-              <Save className="h-4 w-4 text-gray-400" />
+              <Save className="h-4 w-4 text-muted-foreground" />
             </button>
             <button
               onClick={handleCopy}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              className="p-1.5 hover:bg-muted rounded transition-colors"
               title="Copy entire response"
             >
               {copied ? (
                 <Check className="h-4 w-4 text-green-500" />
               ) : (
-                <Copy className="h-4 w-4 text-gray-400" />
+                <Copy className="h-4 w-4 text-muted-foreground" />
               )}
             </button>
           </div>
@@ -305,9 +305,9 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-3" />
-              <p className="text-sm text-gray-600 dark:text-gray-400">Executing method...</p>
+              <p className="text-sm text-muted-foreground">Executing method...</p>
               {selectedMethod && (
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {selectedMethod.method.name}
                 </p>
               )}
@@ -334,11 +334,11 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
 
             {/* Metadata */}
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-1 text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 <span>{formatTimestamp(result.timestamp)}</span>
               </div>
-              <div className="text-right text-gray-600 dark:text-gray-400">
+              <div className="text-right text-muted-foreground">
                 Duration: {formatDuration(result.duration)}
               </div>
             </div>
@@ -352,28 +352,28 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 </pre>
               </div>
             ) : result.data ? (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-w-full overflow-hidden">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Response Data</h3>
+              <div className="border border-primary/20 rounded-lg p-3 max-w-full overflow-hidden">
+                <h3 className="text-sm font-medium text-foreground mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
                   <div className="text-xs font-mono break-all overflow-wrap-anywhere max-w-full">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
-                  <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-all font-mono bg-gray-50 dark:bg-gray-800 p-3 rounded max-w-full overflow-hidden">
+                  <pre className="text-xs text-foreground whitespace-pre-wrap break-all font-mono bg-black/40 dark:bg-black/60 p-3 rounded max-w-full overflow-hidden">
                     {JSON.stringify(result.data, null, 2)}
                   </pre>
                 )}
               </div>
             ) : (
-              <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+              <div className="text-center text-muted-foreground py-4">
                 <p className="text-sm">No response data</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+          <div className="h-full flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
                 <Clock className="h-6 w-6 opacity-50" />
               </div>
               <p className="text-sm">No execution results yet</p>

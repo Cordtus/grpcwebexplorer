@@ -116,22 +116,22 @@ const MethodBlock = React.memo(function MethodBlock({
               </span>
             )}
             {!instance.method.requestStreaming && !instance.method.responseStreaming && (
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+              <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
                 Unary
               </span>
             )}
           </div>
 
           {/* Request/Response types */}
-          <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <div className="space-y-2 p-3 bg-black/40 dark:bg-black/60 rounded-lg">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Request:</span>
+              <span className="text-muted-foreground">Request:</span>
               <code className="font-mono text-blue-600 dark:text-blue-400">
                 {instance.method.requestType}
               </code>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Response:</span>
+              <span className="text-muted-foreground">Response:</span>
               <code className="font-mono text-green-600 dark:text-green-400">
                 {instance.method.responseType}
               </code>
@@ -140,7 +140,7 @@ const MethodBlock = React.memo(function MethodBlock({
 
           {/* Parameter inputs - using ProtobufFormGenerator */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Parameters</h4>
+            <h4 className="text-xs font-semibold text-foreground">Parameters</h4>
             <ProtobufFormGenerator
               messageType={instance.method.requestTypeDefinition}
               value={params}
