@@ -172,7 +172,7 @@ console.log(response);`;
   const codeExample = generateCodeExample();
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-4 bg-background">
       {/* Header with Full Path */}
       <div className="mb-4 space-y-3">
         {/* Full Path - Copyable */}
@@ -183,7 +183,7 @@ console.log(response);`;
           />
           <button
             onClick={() => handleCopy(`${service.fullName}.${method.name}`, 'fullpath')}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors group flex-1 min-w-0"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded transition-colors group flex-1 min-w-0"
             title="Click to copy full path"
           >
             <code className="font-mono truncate">{service.fullName}.{method.name}</code>
@@ -197,17 +197,17 @@ console.log(response);`;
           {/* Streaming badges */}
           <div className="flex items-center gap-2 shrink-0">
             {method.requestStreaming && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
                 Client Stream
               </span>
             )}
             {method.responseStreaming && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">
                 Server Stream
               </span>
             )}
             {!method.requestStreaming && !method.responseStreaming && (
-              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/20 text-primary border border-primary/30">
                 Unary
               </span>
             )}
@@ -217,14 +217,14 @@ console.log(response);`;
         {/* Request/Response Types */}
         <div className="flex items-center gap-4 text-xs pl-5">
           <div className="flex items-center gap-2">
-            <span className="text-gray-500 dark:text-gray-400">Request:</span>
-            <code className="font-mono font-medium text-blue-600 dark:text-blue-400 break-all">
+            <span className="text-muted-foreground">Request:</span>
+            <code className="font-mono font-medium text-blue-400 break-all">
               {method.requestType}
             </code>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-gray-500 dark:text-gray-400">Response:</span>
-            <code className="font-mono font-medium text-green-600 dark:text-green-400 break-all">
+            <span className="text-muted-foreground">Response:</span>
+            <code className="font-mono font-medium text-green-400 break-all">
               {method.responseType}
             </code>
           </div>
@@ -236,24 +236,24 @@ console.log(response);`;
         {/* Proto Definition */}
         <div className="flex flex-col min-h-0">
           <div className="shrink-0 flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-              <FileCode className="h-3.5 w-3.5" />
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <FileCode className="h-3.5 w-3.5 text-primary" />
               Proto Definition
             </h3>
             <button
               onClick={() => handleCopy(protoDefinition, 'proto')}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              className="p-1 hover:bg-muted rounded transition-colors"
             >
               {copied === 'proto' ? (
                 <Check className="h-3.5 w-3.5 text-green-500" />
               ) : (
-                <Copy className="h-3.5 w-3.5 text-gray-400" />
+                <Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
               )}
             </button>
           </div>
           <div className="flex-1 overflow-auto min-h-0">
-            <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-              <pre className="text-sm text-gray-800 dark:text-gray-200 font-mono whitespace-pre-wrap leading-relaxed">
+            <div className="p-4 bg-black/40 dark:bg-black/60 rounded-lg border border-primary/20 shadow-lg">
+              <pre className="text-sm text-blue-100 dark:text-blue-50 font-mono whitespace-pre-wrap leading-relaxed">
                 {protoDefinition}
               </pre>
             </div>
@@ -269,8 +269,8 @@ console.log(response);`;
                 className={cn(
                   "px-2.5 py-1 text-xs font-semibold rounded transition-colors",
                   activeTab === 'curl'
-                    ? "bg-gray-700 dark:bg-gray-600 text-white"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted"
                 )}
               >
                 cURL
@@ -280,8 +280,8 @@ console.log(response);`;
                 className={cn(
                   "px-2.5 py-1 text-xs font-semibold rounded transition-colors",
                   activeTab === 'javascript'
-                    ? "bg-gray-700 dark:bg-gray-600 text-white"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted"
                 )}
               >
                 JavaScript
@@ -289,25 +289,25 @@ console.log(response);`;
             </div>
             <button
               onClick={() => handleCopy(activeTab === 'curl' ? curlExample : codeExample, activeTab)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+              className="p-1 hover:bg-muted rounded transition-colors"
             >
               {copied === activeTab ? (
                 <Check className="h-3.5 w-3.5 text-green-500" />
               ) : (
-                <Copy className="h-3.5 w-3.5 text-gray-400" />
+                <Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
               )}
             </button>
           </div>
           <div className="flex-1 overflow-auto min-h-0 code-snippet-scroll">
-            <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-              <pre className="text-xs text-gray-800 dark:text-gray-200 font-mono whitespace-pre leading-relaxed">
+            <div className="p-4 bg-black/40 dark:bg-black/60 rounded-lg border border-primary/20 shadow-lg">
+              <pre className="text-xs text-blue-100 dark:text-blue-50 font-mono whitespace-pre leading-relaxed">
                 {activeTab === 'curl' ? curlExample : codeExample}
               </pre>
             </div>
           </div>
           {activeTab === 'javascript' && (
-            <div className="mt-1.5 text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
-              Proto files: <a href="https://buf.build" target="_blank" rel="noopener" className="underline hover:text-gray-800 dark:hover:text-gray-300">buf.build</a> or project repository (usually under <code className="text-[10px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-medium">/proto</code>)
+            <div className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+              Proto files: <a href="https://buf.build" target="_blank" rel="noopener" className="underline hover:text-primary transition-colors">buf.build</a> or project repository (usually under <code className="text-[10px] px-1 py-0.5 rounded bg-muted font-medium">/proto</code>)
             </div>
           )}
         </div>
