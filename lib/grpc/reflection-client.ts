@@ -466,6 +466,16 @@ export class ReflectionClient {
     }
 
     const missingType = match[1];
+
+    // Check if the type already exists in the root
+    try {
+      this.root.lookupTypeOrEnum(missingType);
+      console.log(`[ReflectionClient] Type ${missingType} already exists in root, skipping load`);
+      return; // Type already loaded
+    } catch (lookupErr) {
+      // Type doesn't exist, continue with loading
+    }
+
     console.log(`[ReflectionClient] Loading missing type: ${missingType}`);
 
     try {
@@ -484,12 +494,13 @@ export class ReflectionClient {
   private async loadAllMissingTypes(
     responseType: protobuf.Type,
     responseBuffer: Buffer,
-    depth: number
+    depth: number,
+    loadedTypes: Set<string> = new Set()
   ): Promise<any> {
-    const MAX_DEPTH = 10; // Prevent infinite loops
+    const MAX_DEPTH = 50; // Increased from 10 to handle deeply nested Penumbra structures
 
     if (depth >= MAX_DEPTH) {
-      throw new Error(`Exceeded maximum dependency depth (${MAX_DEPTH}). Possible circular dependency.`);
+      throw new Error(`Exceeded maximum dependency depth (${MAX_DEPTH}). Loaded types: ${Array.from(loadedTypes).join(', ')}`);
     }
 
     try {
@@ -505,20 +516,32 @@ export class ReflectionClient {
         oneofs: true,
       });
 
-      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${depth} level(s) of dependencies`);
+      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s)`);
       return json;
     } catch (decodeErr: any) {
       const errorMsg = decodeErr.message || String(decodeErr);
 
       // Check if it's a missing type error
       if (errorMsg.includes('no such Type or Enum')) {
-        console.log(`[ReflectionClient] Missing type at depth ${depth}, loading and retrying...`);
+        // Extract the missing type name
+        const match = errorMsg.match(/no such Type or Enum '([^']+)'/);
+        const missingType = match ? match[1] : 'unknown';
+
+        console.log(`[ReflectionClient] Missing type at depth ${depth}: ${missingType}`);
+
+        // Check if we've already loaded this type in this recursion chain
+        if (loadedTypes.has(missingType)) {
+          throw new Error(`Circular dependency detected: type '${missingType}' was already loaded but decode still fails. This suggests a different issue.`);
+        }
 
         // Extract and load the missing type
         await this.loadMissingTypes(errorMsg);
 
+        // Track that we've loaded this type
+        loadedTypes.add(missingType);
+
         // Recursively retry with increased depth
-        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1);
+        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1, loadedTypes);
       } else {
         // Not a missing type error, throw it
         throw new Error(`Decode error at depth ${depth}: ${errorMsg}`);
