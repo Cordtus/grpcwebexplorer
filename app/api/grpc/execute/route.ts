@@ -48,15 +48,15 @@ export async function POST(req: Request) {
       const client = new ReflectionClient({
         endpoint: endpointWithPort,
         tls: usedTls,
-        timeout: 30000, // Increased to 30s for slow Penumbra methods
+        timeout: 60000, // 60s for very slow Penumbra methods (e.g. ValidatorInfo)
       });
 
       try {
         // Initialize only the specific service we need (fast!)
         await client.initializeForMethod(service);
 
-        // Invoke method (30s timeout for complex queries like ValidatorInfo)
-        result = await client.invokeMethod(service, method, params || {}, 30000);
+        // Invoke method (60s timeout for complex queries like ValidatorInfo)
+        result = await client.invokeMethod(service, method, params || {}, 60000);
 
       } finally {
         client.close();
@@ -75,12 +75,12 @@ export async function POST(req: Request) {
         const retryClient = new ReflectionClient({
           endpoint: endpointWithPort,
           tls: false,
-          timeout: 30000, // Increased to 30s for slow Penumbra methods
+          timeout: 60000, // 60s for very slow Penumbra methods
         });
 
         try {
           await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, 30000);
+          result = await retryClient.invokeMethod(service, method, params || {}, 60000);
           console.log(`[Execute] ✅ Success without TLS`);
         } finally {
           retryClient.close();

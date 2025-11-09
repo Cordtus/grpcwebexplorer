@@ -946,12 +946,14 @@ export class ReflectionClient {
         }));
         console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
 
-        // Make call
+        // Make call with deadline
+        const deadline = new Date(Date.now() + timeout);
         const call = client.makeUnaryRequest(
           methodPath,
           (buf: Buffer) => buf,
           (buf: Buffer) => buf,
           requestBuffer,
+          { deadline }, // Add deadline option for gRPC client
           (error: grpc.ServiceError | null, response?: Buffer) => {
             client.close();
 
