@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60 seconds for slow methods like ValidatorInfo
+export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
 
 export async function POST(req: Request) {
   const startTime = Date.now();
