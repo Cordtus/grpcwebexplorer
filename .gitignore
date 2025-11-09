@@ -1,18 +1,18 @@
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp/
 .pnp.js
 .yarn/install-state.gz
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -46,7 +46,7 @@ Thumbs.db
 desktop.ini
 
 # Project specific
-/public/output/
+public/output/
 CLAUDE.md
 .cache/
 *.bak
@@ -54,4 +54,4 @@ CLAUDE.md
 .claude/
 
 # Internal documentation (gitignored)
-/docs/
+docs/
