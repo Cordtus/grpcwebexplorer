@@ -937,6 +937,13 @@ export class ReflectionClient {
         const requestMessage = requestType.fromObject(params || {});
         const requestBuffer = Buffer.from(requestType.encode(requestMessage).finish());
 
+        // Log encoded request for debugging
+        console.log(`[ReflectionClient] Encoded request message:`, requestType.toObject(requestMessage, {
+          longs: String,
+          enums: String,
+          bytes: String,
+          defaults: true,
+        }));
         console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
 
         // Make call
