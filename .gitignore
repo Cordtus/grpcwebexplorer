@@ -51,6 +51,7 @@ CLAUDE.md
 .cache/
 *.bak
 .playwright-mcp/
+.claude/
 
 # Internal documentation (gitignored)
 /docs/
