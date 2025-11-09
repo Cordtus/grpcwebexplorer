@@ -370,7 +370,16 @@ export class ReflectionClient {
 
     try {
       await this.loadServiceDescriptor(serviceName);
-      console.log(`[ReflectionClient] Loaded ${serviceName}`);
+
+      // Verify the service was loaded
+      const service = this.root.lookupService(serviceName);
+      const methodCount = Object.keys(service.methods || {}).length;
+
+      console.log(`[ReflectionClient] ✅ Loaded ${serviceName} with ${methodCount} methods`);
+
+      if (methodCount === 0) {
+        console.warn(`[ReflectionClient] ⚠️  Warning: Service ${serviceName} has no methods!`);
+      }
     } catch (err) {
       throw new Error(`Failed to load service ${serviceName}: ${(err as Error).message}`);
     }
@@ -811,6 +820,13 @@ export class ReflectionClient {
     }
 
     const { requestType, responseType } = methodInfo;
+    const methodPath = `/${serviceName}/${methodName}`;
+
+    console.log(`[ReflectionClient] Invoking method:`);
+    console.log(`  Path: ${methodPath}`);
+    console.log(`  Request type: ${requestType.name}`);
+    console.log(`  Response type: ${responseType.name}`);
+    console.log(`  Params:`, JSON.stringify(params || {}, null, 2));
 
     return new Promise((resolve, reject) => {
       const client = new grpc.Client(this.options.endpoint,
@@ -826,9 +842,11 @@ export class ReflectionClient {
         const requestMessage = requestType.fromObject(params || {});
         const requestBuffer = Buffer.from(requestType.encode(requestMessage).finish());
 
+        console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
+
         // Make call
         const call = client.makeUnaryRequest(
-          `/${serviceName}/${methodName}`,
+          methodPath,
           (buf: Buffer) => buf,
           (buf: Buffer) => buf,
           requestBuffer,
@@ -836,7 +854,11 @@ export class ReflectionClient {
             client.close();
 
             if (error) {
-              reject(new Error(`gRPC Error: ${error.message}`));
+              console.error(`[ReflectionClient] gRPC Error for ${methodPath}:`);
+              console.error(`  Code: ${error.code}`);
+              console.error(`  Message: ${error.message}`);
+              console.error(`  Details: ${error.details || 'none'}`);
+              reject(new Error(`gRPC Error (code ${error.code}): ${error.message}`));
               return;
             }
 
