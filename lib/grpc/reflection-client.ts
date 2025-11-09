@@ -455,6 +455,29 @@ export class ReflectionClient {
   }
 
   /**
+   * Load missing types referenced in a response
+   * Extracts missing type names from error message and loads them
+   */
+  private async loadMissingTypes(errorMessage: string): Promise<void> {
+    // Extract type name from error: "no such Type or Enum 'package.Type'"
+    const match = errorMessage.match(/no such Type or Enum '([^']+)'/);
+    if (!match) {
+      return; // Not a missing type error
+    }
+
+    const missingType = match[1];
+    console.log(`[ReflectionClient] Loading missing type: ${missingType}`);
+
+    try {
+      await this.loadServiceDescriptor(missingType);
+      console.log(`[ReflectionClient] ✅ Loaded missing type: ${missingType}`);
+    } catch (err) {
+      console.warn(`[ReflectionClient] Failed to load missing type ${missingType}:`, err);
+      throw err;
+    }
+  }
+
+  /**
    * Process and register file descriptor
    */
   private processFileDescriptor(fdBytes: Buffer): void {
@@ -879,8 +902,37 @@ export class ReflectionClient {
                 oneofs: true,
               });
               resolve(json);
-            } catch (decodeErr) {
-              reject(new Error(`Failed to decode response: ${decodeErr}`));
+            } catch (decodeErr: any) {
+              // Check if this is a missing type error
+              const errorMsg = decodeErr.message || String(decodeErr);
+              if (errorMsg.includes('no such Type or Enum')) {
+                console.warn(`[ReflectionClient] Missing type detected during decode, attempting to load...`);
+                // Try to load the missing type and retry decode
+                this.loadMissingTypes(errorMsg)
+                  .then(() => {
+                    try {
+                      // Retry decode with newly loaded types
+                      const decoded = responseType.decode(new Uint8Array(response));
+                      const json = responseType.toObject(decoded, {
+                        longs: String,
+                        enums: String,
+                        bytes: String,
+                        defaults: true,
+                        arrays: true,
+                        objects: true,
+                        oneofs: true,
+                      });
+                      resolve(json);
+                    } catch (retryErr) {
+                      reject(new Error(`Failed to decode response after loading missing types: ${retryErr}`));
+                    }
+                  })
+                  .catch((loadErr) => {
+                    reject(new Error(`Failed to load missing types: ${loadErr.message}. Original error: ${errorMsg}`));
+                  });
+              } else {
+                reject(new Error(`Failed to decode response: ${decodeErr}`));
+              }
             }
           }
         );
