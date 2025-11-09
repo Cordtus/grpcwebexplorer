@@ -11,17 +11,17 @@ export default {
   theme: {
   	extend: {
   		colors: {
-  			'dark-bg': '#1e1e1e',
-  			'dark-surface': '#252525',
-  			'dark-border': '#3c3c3c',
-  			'dark-highlight': '#2d2d2d',
+  			'dark-bg': '#000000',
+  			'dark-surface': '#141414',
+  			'dark-border': '#262626',
+  			'dark-highlight': '#1f1f1f',
   			'blue-accent': '#0a84ff',
   			'blue-accent-hover': '#0074e0',
-  			'text-primary': '#f0f0f0',
-  			'text-secondary': '#888',
-  			'error-red': '#FF605C',
-  			'warning-yellow': '#FFBD44',
-  			'success-green': '#00CA4E',
+  			'text-primary': '#fafafa',
+  			'text-secondary': '#999999',
+  			'error-red': '#ee4444',
+  			'warning-yellow': '#eebb44',
+  			'success-green': '#44ee66',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

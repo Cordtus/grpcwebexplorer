@@ -47,44 +47,44 @@
 
   /* Dark theme */
   .dark {
-    --background: 0 0% 11.8%; /* #1e1e1e */
-    --foreground: 0 0% 94.1%; /* #f0f0f0 */
+    --background: 0 0% 0%; /* #000000 - true black */
+    --foreground: 0 0% 98%; /* #fafafa - near white */
 
-    --card: 0 0% 14.5%; /* #252525 */
-    --card-foreground: 0 0% 94.1%;
+    --card: 0 0% 8%; /* #141414 - very dark grey */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 17.6%; /* #2d2d2d */
-    --popover-foreground: 0 0% 94.1%;
+    --popover: 0 0% 8%; /* #141414 */
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 211 100% 50%; /* #0a84ff */
+    --primary: 211 100% 50%; /* #0a84ff - blue accent */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 17.6%; /* #2d2d2d */
-    --secondary-foreground: 0 0% 94.1%;
+    --secondary: 0 0% 12%; /* #1f1f1f - dark grey */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 23.5%; /* #3c3c3c */
-    --muted-foreground: 0 0% 53.3%; /* #888 */
+    --muted: 0 0% 20%; /* #333333 - medium grey */
+    --muted-foreground: 0 0% 60%; /* #999999 - light grey */
 
-    --accent: 211 100% 50%; /* #0a84ff */
+    --accent: 211 100% 50%; /* #0a84ff - blue accent */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 2 100% 68%; /* #FF605C */
+    --destructive: 0 85% 60%; /* #ee4444 - red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 23.5%; /* #3c3c3c */
-    --input: 0 0% 23.5%;
+    --border: 0 0% 15%; /* #262626 - dark grey */
+    --input: 0 0% 12%; /* #1f1f1f */
     --ring: 211 100% 50%;
 
     --radius: 0.375rem;
 
-    --glass-bg: rgba(37, 37, 37, 0.55);
-    --glass-border: rgba(60, 60, 60, 0.5);
-    --hover-bg: rgba(45, 45, 45, 0.8);
-    --shadow-color: rgba(0, 0, 0, 0.5);
+    --glass-bg: rgba(20, 20, 20, 0.85);
+    --glass-border: rgba(38, 38, 38, 0.5);
+    --hover-bg: rgba(31, 31, 31, 0.8);
+    --shadow-color: rgba(0, 0, 0, 0.8);
 
-    --traffic-red: #FF605C;
-    --traffic-yellow: #FFBD44;
-    --traffic-green: #00CA4E;
+    --traffic-red: #ee4444;
+    --traffic-yellow: #eebb44;
+    --traffic-green: #44ee66;
   }
 
   /* 8-bit theme - authentic VGA/EGA palette with pure, saturated colors */
