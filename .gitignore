@@ -51,6 +51,7 @@ CLAUDE.md
 .cache/
 *.bak
 .playwright-mcp/
+.claude/
 test-penumbra-*.ts
 test-penumbra-*.js
 
