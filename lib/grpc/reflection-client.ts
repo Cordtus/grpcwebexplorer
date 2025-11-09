@@ -495,7 +495,8 @@ export class ReflectionClient {
     responseType: protobuf.Type,
     responseBuffer: Buffer,
     depth: number,
-    loadedTypes: Set<string> = new Set()
+    loadedTypes: Set<string> = new Set(),
+    startTime: number = Date.now()
   ): Promise<any> {
     const MAX_DEPTH = 50; // Increased from 10 to handle deeply nested Penumbra structures
 
@@ -505,6 +506,7 @@ export class ReflectionClient {
 
     try {
       // Try to decode
+      const decodeStart = Date.now();
       const decoded = responseType.decode(new Uint8Array(responseBuffer));
       const json = responseType.toObject(decoded, {
         longs: String,
@@ -515,8 +517,10 @@ export class ReflectionClient {
         objects: true,
         oneofs: true,
       });
+      const decodeTime = Date.now() - decodeStart;
 
-      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s)`);
+      const totalTime = Date.now() - startTime;
+      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
       return json;
     } catch (decodeErr: any) {
       const errorMsg = decodeErr.message || String(decodeErr);
@@ -535,13 +539,16 @@ export class ReflectionClient {
         }
 
         // Extract and load the missing type
+        const loadStart = Date.now();
         await this.loadMissingTypes(errorMsg);
+        const loadTime = Date.now() - loadStart;
+        console.log(`[ReflectionClient] ⏱️  Loaded ${missingType} in ${loadTime}ms (total elapsed: ${Date.now() - startTime}ms)`);
 
         // Track that we've loaded this type
         loadedTypes.add(missingType);
 
         // Recursively retry with increased depth
-        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1, loadedTypes);
+        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1, loadedTypes, startTime);
       } else {
         // Not a missing type error, throw it
         throw new Error(`Decode error at depth ${depth}: ${errorMsg}`);
@@ -917,6 +924,7 @@ export class ReflectionClient {
     const { requestType, responseType } = methodInfo;
     const methodPath = `/${serviceName}/${methodName}`;
 
+    const invokeStartTime = Date.now();
     console.log(`[ReflectionClient] Invoking method:`);
     console.log(`  Path: ${methodPath}`);
     console.log(`  Request type: ${requestType.name}`);
@@ -924,6 +932,7 @@ export class ReflectionClient {
     console.log(`  Params:`, JSON.stringify(params || {}, null, 2));
 
     return new Promise((resolve, reject) => {
+      const grpcCallStartTime = Date.now();
       const client = new grpc.Client(this.options.endpoint,
         this.options.tls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
         {
@@ -970,6 +979,9 @@ export class ReflectionClient {
               reject(new Error('No response received'));
               return;
             }
+
+            const grpcCallTime = Date.now() - grpcCallStartTime;
+            console.log(`[ReflectionClient] ⏱️  gRPC call completed in ${grpcCallTime}ms, response size: ${response.length} bytes`);
 
             try {
               const decoded = responseType.decode(new Uint8Array(response));
