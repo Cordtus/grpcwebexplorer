@@ -478,6 +478,55 @@ export class ReflectionClient {
   }
 
   /**
+   * Recursively load all missing types until decode succeeds
+   * Handles complex responses with multiple nested dependencies
+   */
+  private async loadAllMissingTypes(
+    responseType: protobuf.Type,
+    responseBuffer: Buffer,
+    depth: number
+  ): Promise<any> {
+    const MAX_DEPTH = 10; // Prevent infinite loops
+
+    if (depth >= MAX_DEPTH) {
+      throw new Error(`Exceeded maximum dependency depth (${MAX_DEPTH}). Possible circular dependency.`);
+    }
+
+    try {
+      // Try to decode
+      const decoded = responseType.decode(new Uint8Array(responseBuffer));
+      const json = responseType.toObject(decoded, {
+        longs: String,
+        enums: String,
+        bytes: String,
+        defaults: true,
+        arrays: true,
+        objects: true,
+        oneofs: true,
+      });
+
+      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${depth} level(s) of dependencies`);
+      return json;
+    } catch (decodeErr: any) {
+      const errorMsg = decodeErr.message || String(decodeErr);
+
+      // Check if it's a missing type error
+      if (errorMsg.includes('no such Type or Enum')) {
+        console.log(`[ReflectionClient] Missing type at depth ${depth}, loading and retrying...`);
+
+        // Extract and load the missing type
+        await this.loadMissingTypes(errorMsg);
+
+        // Recursively retry with increased depth
+        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1);
+      } else {
+        // Not a missing type error, throw it
+        throw new Error(`Decode error at depth ${depth}: ${errorMsg}`);
+      }
+    }
+  }
+
+  /**
    * Process and register file descriptor
    */
   private processFileDescriptor(fdBytes: Buffer): void {
@@ -906,29 +955,14 @@ export class ReflectionClient {
               // Check if this is a missing type error
               const errorMsg = decodeErr.message || String(decodeErr);
               if (errorMsg.includes('no such Type or Enum')) {
-                console.warn(`[ReflectionClient] Missing type detected during decode, attempting to load...`);
-                // Try to load the missing type and retry decode
-                this.loadMissingTypes(errorMsg)
-                  .then(() => {
-                    try {
-                      // Retry decode with newly loaded types
-                      const decoded = responseType.decode(new Uint8Array(response));
-                      const json = responseType.toObject(decoded, {
-                        longs: String,
-                        enums: String,
-                        bytes: String,
-                        defaults: true,
-                        arrays: true,
-                        objects: true,
-                        oneofs: true,
-                      });
-                      resolve(json);
-                    } catch (retryErr) {
-                      reject(new Error(`Failed to decode response after loading missing types: ${retryErr}`));
-                    }
+                console.warn(`[ReflectionClient] Missing type detected during decode, attempting recursive dependency loading...`);
+                // Recursively load all missing types with retry limit
+                this.loadAllMissingTypes(responseType, response, 0)
+                  .then((json) => {
+                    resolve(json);
                   })
                   .catch((loadErr) => {
-                    reject(new Error(`Failed to load missing types: ${loadErr.message}. Original error: ${errorMsg}`));
+                    reject(new Error(`Failed to load all missing types: ${loadErr.message}`));
                   });
               } else {
                 reject(new Error(`Failed to decode response: ${decodeErr}`));
