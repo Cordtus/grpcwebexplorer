@@ -26,12 +26,67 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
   // Generate proto definition
   const protoDefinition = `rpc ${method.name}(${method.requestStreaming ? 'stream ' : ''}${method.requestType}) returns (${method.responseStreaming ? 'stream ' : ''}${method.responseType});`;
 
+  // Generate realistic request data for grpcurl based on actual fields
+  const generateRequestData = () => {
+    const requestTypeName = method.requestType.split('.').pop() || method.requestType;
+
+    // Check if request type is Empty
+    if (requestTypeName.includes('Empty') || method.requestType === 'google.protobuf.Empty') {
+      return '{}';
+    }
+
+    // If we have field definitions, use them
+    if (method.requestTypeDefinition && method.requestTypeDefinition.fields.length > 0) {
+      const fields = method.requestTypeDefinition.fields;
+      const exampleFields: Record<string, any> = {};
+
+      // Generate example values for each field
+      for (const field of fields) {
+        // Skip optional fields in the example to keep it minimal
+        if (field.rule === 'optional') continue;
+
+        // Generate example value based on type
+        if (field.enumValues && field.enumValues.length > 0) {
+          exampleFields[field.name] = field.enumValues[0];
+        } else if (field.type === 'string') {
+          exampleFields[field.name] = '';
+        } else if (['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64'].includes(field.type)) {
+          exampleFields[field.name] = 0;
+        } else if (field.type === 'bool') {
+          exampleFields[field.name] = false;
+        } else if (field.type === 'bytes') {
+          exampleFields[field.name] = '';
+        } else if (['double', 'float'].includes(field.type)) {
+          exampleFields[field.name] = 0.0;
+        } else if (field.rule === 'repeated') {
+          exampleFields[field.name] = [];
+        } else if (field.nested) {
+          exampleFields[field.name] = {};
+        }
+      }
+
+      // If no required fields, return empty object
+      if (Object.keys(exampleFields).length === 0) {
+        return '{}';
+      }
+
+      return JSON.stringify(exampleFields, null, 2);
+    }
+
+    // Fallback: empty object for unknown types
+    return '{}';
+  };
+
+  const requestData = generateRequestData();
+
   // Generate curl example
   const plaintextFlag = tlsEnabled ? '' : '  -plaintext \\\n';
   const exampleEndpoint = endpoint || 'localhost:9090';
+
+  // Only include -d flag if request data is not empty
+  const dataFlag = requestData === '{}' ? '' : `  -d '${requestData}' \\\n`;
   const curlExample = `grpcurl \\
-${plaintextFlag}  -d '{"example": "data"}' \\
-  ${exampleEndpoint} \\
+${plaintextFlag}${dataFlag}  ${exampleEndpoint} \\
   ${service.fullName}/${method.name}`;
 
   // Generate code example with realistic inputs
