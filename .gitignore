@@ -51,6 +51,8 @@ CLAUDE.md
 .cache/
 *.bak
 .playwright-mcp/
+test-penumbra-*.ts
+test-penumbra-*.js
 
 # Internal documentation (gitignored)
 /docs/
