@@ -370,7 +370,16 @@ export class ReflectionClient {
 
     try {
       await this.loadServiceDescriptor(serviceName);
-      console.log(`[ReflectionClient] Loaded ${serviceName}`);
+
+      // Verify the service was loaded
+      const service = this.root.lookupService(serviceName);
+      const methodCount = Object.keys(service.methods || {}).length;
+
+      console.log(`[ReflectionClient] ✅ Loaded ${serviceName} with ${methodCount} methods`);
+
+      if (methodCount === 0) {
+        console.warn(`[ReflectionClient] ⚠️  Warning: Service ${serviceName} has no methods!`);
+      }
     } catch (err) {
       throw new Error(`Failed to load service ${serviceName}: ${(err as Error).message}`);
     }
@@ -443,6 +452,29 @@ export class ReflectionClient {
       call.write({ fileContainingSymbol: symbol });
       call.end();
     });
+  }
+
+  /**
+   * Load missing types referenced in a response
+   * Extracts missing type names from error message and loads them
+   */
+  private async loadMissingTypes(errorMessage: string): Promise<void> {
+    // Extract type name from error: "no such Type or Enum 'package.Type'"
+    const match = errorMessage.match(/no such Type or Enum '([^']+)'/);
+    if (!match) {
+      return; // Not a missing type error
+    }
+
+    const missingType = match[1];
+    console.log(`[ReflectionClient] Loading missing type: ${missingType}`);
+
+    try {
+      await this.loadServiceDescriptor(missingType);
+      console.log(`[ReflectionClient] ✅ Loaded missing type: ${missingType}`);
+    } catch (err) {
+      console.warn(`[ReflectionClient] Failed to load missing type ${missingType}:`, err);
+      throw err;
+    }
   }
 
   /**
@@ -811,6 +843,13 @@ export class ReflectionClient {
     }
 
     const { requestType, responseType } = methodInfo;
+    const methodPath = `/${serviceName}/${methodName}`;
+
+    console.log(`[ReflectionClient] Invoking method:`);
+    console.log(`  Path: ${methodPath}`);
+    console.log(`  Request type: ${requestType.name}`);
+    console.log(`  Response type: ${responseType.name}`);
+    console.log(`  Params:`, JSON.stringify(params || {}, null, 2));
 
     return new Promise((resolve, reject) => {
       const client = new grpc.Client(this.options.endpoint,
@@ -826,9 +865,11 @@ export class ReflectionClient {
         const requestMessage = requestType.fromObject(params || {});
         const requestBuffer = Buffer.from(requestType.encode(requestMessage).finish());
 
+        console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
+
         // Make call
         const call = client.makeUnaryRequest(
-          `/${serviceName}/${methodName}`,
+          methodPath,
           (buf: Buffer) => buf,
           (buf: Buffer) => buf,
           requestBuffer,
@@ -836,7 +877,11 @@ export class ReflectionClient {
             client.close();
 
             if (error) {
-              reject(new Error(`gRPC Error: ${error.message}`));
+              console.error(`[ReflectionClient] gRPC Error for ${methodPath}:`);
+              console.error(`  Code: ${error.code}`);
+              console.error(`  Message: ${error.message}`);
+              console.error(`  Details: ${error.details || 'none'}`);
+              reject(new Error(`gRPC Error (code ${error.code}): ${error.message}`));
               return;
             }
 
@@ -857,8 +902,37 @@ export class ReflectionClient {
                 oneofs: true,
               });
               resolve(json);
-            } catch (decodeErr) {
-              reject(new Error(`Failed to decode response: ${decodeErr}`));
+            } catch (decodeErr: any) {
+              // Check if this is a missing type error
+              const errorMsg = decodeErr.message || String(decodeErr);
+              if (errorMsg.includes('no such Type or Enum')) {
+                console.warn(`[ReflectionClient] Missing type detected during decode, attempting to load...`);
+                // Try to load the missing type and retry decode
+                this.loadMissingTypes(errorMsg)
+                  .then(() => {
+                    try {
+                      // Retry decode with newly loaded types
+                      const decoded = responseType.decode(new Uint8Array(response));
+                      const json = responseType.toObject(decoded, {
+                        longs: String,
+                        enums: String,
+                        bytes: String,
+                        defaults: true,
+                        arrays: true,
+                        objects: true,
+                        oneofs: true,
+                      });
+                      resolve(json);
+                    } catch (retryErr) {
+                      reject(new Error(`Failed to decode response after loading missing types: ${retryErr}`));
+                    }
+                  })
+                  .catch((loadErr) => {
+                    reject(new Error(`Failed to load missing types: ${loadErr.message}. Original error: ${errorMsg}`));
+                  });
+              } else {
+                reject(new Error(`Failed to decode response: ${decodeErr}`));
+              }
             }
           }
         );
