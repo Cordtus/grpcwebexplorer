@@ -93,8 +93,8 @@ const MethodBlock = React.memo(function MethodBlock({
             className={cn(
               "p-1 rounded transition-colors",
               instance.pinned
-                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
-                : "text-gray-400 dark:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-400"
+                ? "bg-primary/20 text-primary hover:bg-primary/30"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title={instance.pinned ? "Unpin method (allow auto-collapse)" : "Pin method (prevent auto-collapse)"}
           >
@@ -158,8 +158,8 @@ const MethodBlock = React.memo(function MethodBlock({
             className={cn(
               "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
               isValid && !isExecuting
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                : "bg-muted text-muted-foreground cursor-not-allowed"
             )}
           >
             {isExecuting ? (

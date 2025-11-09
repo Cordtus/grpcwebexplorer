@@ -36,7 +36,7 @@ const ProtobufFormGenerator: React.FC<ProtobufFormGeneratorProps> = ({
   // If no fields, show empty state (methods with no parameters)
   if (!messageType.fields || messageType.fields.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center h-32 text-muted-foreground">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
           <p className="text-sm">No input parameters required</p>
@@ -122,22 +122,22 @@ const FieldInput: React.FC<FieldInputProps> = ({
   if (field.rule === 'repeated') {
     const arrayValue = value || [];
     return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+      <div className="border border-border rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+              className="p-0.5 hover:bg-muted rounded"
             >
               {expanded ? (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-gray-500" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
             </button>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-foreground">
               {field.name}
-              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+              <span className="ml-2 text-xs text-muted-foreground">
                 ({field.type}[])
               </span>
             </label>
@@ -145,7 +145,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
           {!readonly && (
             <button
               onClick={onArrayAdd}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 text-primary rounded hover:bg-primary/30 transition-colors"
             >
               <Plus className="h-3 w-3" />
               Add
@@ -153,12 +153,12 @@ const FieldInput: React.FC<FieldInputProps> = ({
           )}
         </div>
         {field.comment && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{field.comment}</p>
+          <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
         )}
         {expanded && (
           <div className="space-y-2 mt-2 max-h-96 overflow-y-auto">
             {arrayValue.length === 0 ? (
-              <div className="text-xs text-gray-500 dark:text-gray-400 italic py-2">
+              <div className="text-xs text-muted-foreground italic py-2">
                 Empty array - click &quot;Add&quot; to add items
               </div>
             ) : (
@@ -194,17 +194,17 @@ const FieldInput: React.FC<FieldInputProps> = ({
   // Nested message field
   if (field.nested) {
     return (
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-900/30">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+      <div className="border border-border rounded-lg p-3 bg-muted/30">
+        <label className="text-sm font-medium text-foreground mb-2 block">
           {field.name}
-          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+          <span className="ml-2 text-xs text-muted-foreground">
             ({field.type})
           </span>
         </label>
         {field.comment && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{field.comment}</p>
+          <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
         )}
-        <div className="text-xs text-gray-500 dark:text-gray-400 italic py-2">
+        <div className="text-xs text-muted-foreground italic py-2">
           Nested message - use JSON editor for complex types
         </div>
         <textarea
@@ -221,9 +221,9 @@ const FieldInput: React.FC<FieldInputProps> = ({
           placeholder={`{"field": "value"}`}
           className={cn(
             "w-full px-3 py-2 rounded text-sm font-mono",
-            "bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700",
-            "focus:outline-none focus:ring-2 focus:ring-blue-500",
-            readonly && "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+            "bg-input border border-border",
+            "focus:outline-none focus:ring-2 focus:ring-primary",
+            readonly && "bg-muted cursor-not-allowed"
           )}
           rows={4}
         />
@@ -234,17 +234,17 @@ const FieldInput: React.FC<FieldInputProps> = ({
   // Regular field
   return (
     <div>
-      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+      <label className="text-sm font-medium text-foreground mb-1.5 block">
         {field.name}
         {field.rule === 'required' && (
-          <span className="ml-1 text-red-500">*</span>
+          <span className="ml-1 text-destructive">*</span>
         )}
-        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+        <span className="ml-2 text-xs text-muted-foreground">
           ({field.type})
         </span>
       </label>
       {field.comment && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">{field.comment}</p>
+        <p className="text-xs text-muted-foreground mb-1.5">{field.comment}</p>
       )}
       <PrimitiveInput
         type={field.type}
@@ -284,9 +284,9 @@ const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
         disabled={readonly}
         className={cn(
           "w-full px-3 py-2 rounded text-sm",
-          "bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500",
-          readonly && "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+          "bg-input border border-border",
+          "focus:outline-none focus:ring-2 focus:ring-primary",
+          readonly && "bg-muted cursor-not-allowed"
         )}
       >
         <option value="">Select value...</option>
@@ -308,9 +308,9 @@ const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
           checked={value || false}
           onChange={(e) => onChange(e.target.checked)}
           disabled={readonly}
-          className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500"
+          className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
         />
-        <span className="text-sm text-gray-600 dark:text-gray-400">
+        <span className="text-sm text-muted-foreground">
           {value ? 'true' : 'false'}
         </span>
       </label>
@@ -333,9 +333,9 @@ const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
         placeholder={placeholder || 'Enter number'}
         className={cn(
           "w-full px-3 py-2 rounded text-sm",
-          "bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500",
-          readonly && "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+          "bg-input border border-border",
+          "focus:outline-none focus:ring-2 focus:ring-primary",
+          readonly && "bg-muted cursor-not-allowed"
         )}
       />
     );
@@ -351,9 +351,9 @@ const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
         placeholder={placeholder || 'Enter base64 encoded bytes'}
         className={cn(
           "w-full px-3 py-2 rounded text-sm font-mono",
-          "bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500",
-          readonly && "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+          "bg-input border border-border",
+          "focus:outline-none focus:ring-2 focus:ring-primary",
+          readonly && "bg-muted cursor-not-allowed"
         )}
         rows={3}
       />
@@ -370,9 +370,9 @@ const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
       placeholder={placeholder || 'Enter text'}
       className={cn(
         "w-full px-3 py-2 rounded text-sm",
-        "bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700",
-        "focus:outline-none focus:ring-2 focus:ring-blue-500",
-        readonly && "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+        "bg-input border border-border",
+        "focus:outline-none focus:ring-2 focus:ring-primary",
+        readonly && "bg-muted cursor-not-allowed"
       )}
     />
   );

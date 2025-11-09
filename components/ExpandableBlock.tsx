@@ -51,7 +51,7 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
     >
       <div
         className={cn(
-          "flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
+          "flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted transition-colors",
           headerClassName
         )}
         onClick={onToggle}
@@ -59,19 +59,19 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="transition-transform duration-200">
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-gray-500" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
           </div>
-          
+
           {icon || (
-            <Circle 
-              className="h-3 w-3 flex-shrink-0" 
-              style={{ color, fill: color }} 
+            <Circle
+              className="h-3 w-3 flex-shrink-0"
+              style={{ color, fill: color }}
             />
           )}
-          
+
           <div className="flex-1 min-w-0">
             <div className="marquee-container font-medium text-sm">
               <span className="marquee-text" data-long={title.length > 30 ? "true" : "false"}>
@@ -79,7 +79,7 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
               </span>
             </div>
             {subtitle && (
-              <div className="marquee-container text-xs text-gray-500">
+              <div className="marquee-container text-xs text-muted-foreground">
                 <span className="marquee-text" data-long={subtitle.length > 35 ? "true" : "false"}>
                   {subtitle}
                 </span>
@@ -87,10 +87,10 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2 ml-2">
           {badge !== undefined && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800">
+            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-muted">
               {badge}
             </span>
           )}
@@ -103,7 +103,7 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
                 e.stopPropagation();
                 onRemove();
               }}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1 hover:bg-muted rounded transition-colors"
             >
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -114,9 +114,9 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
       </div>
       
       {isExpanded && (
-        <div 
+        <div
           className={cn(
-            "border-t bg-gray-50/50 dark:bg-gray-900/50",
+            "border-t bg-muted/30",
             contentClassName
           )}
           style={{ borderColor: color + '20' }}

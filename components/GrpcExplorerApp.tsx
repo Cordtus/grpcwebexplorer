@@ -662,12 +662,12 @@ export default function GrpcExplorerApp() {
         {!leftPanelCollapsed && (
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {networks.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No networks added</p>
                 <button
                   onClick={() => setShowAddNetwork(true)}
-                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  className="mt-3 text-xs text-primary hover:underline"
                 >
                   Add your first network
                 </button>

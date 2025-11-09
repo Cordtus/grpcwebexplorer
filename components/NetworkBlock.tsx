@@ -143,8 +143,8 @@ const NetworkBlock = React.memo(function NetworkBlock({
           className={cn(
             "p-1.5 rounded-md transition-colors",
             network.loading
-              ? "text-gray-400 cursor-not-allowed"
-              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+              ? "text-muted-foreground cursor-not-allowed"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
           )}
           title="Refresh services (clear cache)"
         >
@@ -154,12 +154,12 @@ const NetworkBlock = React.memo(function NetworkBlock({
       className="shadow-sm"
     >
       {network.loading ? (
-        <div className="flex items-center justify-center py-8 text-gray-500">
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
           <span className="text-sm">Loading services...</span>
         </div>
       ) : network.error ? (
-        <div className="flex items-center text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+        <div className="flex items-center text-destructive p-4 bg-destructive/10 rounded-lg">
           <AlertCircle className="h-4 w-4 mr-2" />
           <span className="text-sm">{network.error}</span>
         </div>
@@ -169,13 +169,13 @@ const NetworkBlock = React.memo(function NetworkBlock({
           {network.services.length > 0 && (
             <div className="mb-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search methods..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-900"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-input"
                 />
               </div>
             </div>
@@ -184,17 +184,17 @@ const NetworkBlock = React.memo(function NetworkBlock({
           {/* Namespaces */}
           <div className="space-y-2">
             {filteredGroups.length === 0 ? (
-              <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-4 text-muted-foreground">
                 <p className="text-sm">
                   {searchTerm ? 'No methods found' : 'No services available'}
                 </p>
               </div>
             ) : (
               filteredGroups.map(group => (
-                <div key={group.namespace} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div key={group.namespace} className="border border-border rounded-lg overflow-hidden">
                   <button
                     onClick={() => toggleNamespace(group.namespace)}
-                    className="w-full flex items-center gap-2 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    className="w-full flex items-center gap-2 p-3 hover:bg-muted transition-colors"
                   >
                     <ChevronRight
                       className={cn(
@@ -210,41 +210,41 @@ const NetworkBlock = React.memo(function NetworkBlock({
                   </button>
 
                   {expandedNamespaces.has(group.namespace) && (
-                    <div className="border-t border-gray-200 dark:border-gray-700">
+                    <div className="border-t border-border">
                       {group.services.map(({ service, methods }) => (
-                        <div key={service.fullName} className="divide-y divide-gray-100 dark:divide-gray-800">
+                        <div key={service.fullName} className="divide-y divide-border">
                           {methods.map(method => (
                             <button
                               key={method.fullName}
                               onClick={() => onSelectMethod(service, method)}
-                              className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                              className="w-full px-4 py-2 text-left hover:bg-muted transition-colors group"
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <div className="marquee-container flex-1 min-w-0">
-                                      <code className="marquee-text text-xs font-mono text-blue-600 dark:text-blue-400" data-long={method.name.length > 25 ? "true" : "false"}>
+                                      <code className="marquee-text text-xs font-mono text-primary" data-long={method.name.length > 25 ? "true" : "false"}>
                                         {method.name}
                                       </code>
                                     </div>
                                     {method.requestStreaming && (
-                                      <span className="text-[10px] px-1 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 shrink-0">
+                                      <span className="text-[10px] px-1 py-0.5 rounded bg-success-green/20 text-success-green shrink-0">
                                         stream
                                       </span>
                                     )}
                                     {method.responseStreaming && (
-                                      <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 shrink-0">
+                                      <span className="text-[10px] px-1 py-0.5 rounded bg-primary/20 text-primary shrink-0">
                                         stream
                                       </span>
                                     )}
                                   </div>
-                                  <div className="marquee-container text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                  <div className="marquee-container text-[10px] text-muted-foreground mt-0.5">
                                     <span className="marquee-text" data-long={service.fullName.length > 40 ? "true" : "false"}>
                                       {service.fullName}
                                     </span>
                                   </div>
                                 </div>
-                                <ChevronRight className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </div>
                             </button>
                           ))}

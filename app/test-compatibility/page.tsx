@@ -67,13 +67,13 @@ export default function TestCompatibilityPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'success': return 'text-green-600';
-      case 'error': return 'text-red-600';
-      case 'internal_error': return 'text-red-700 font-bold';
-      case 'unimplemented': return 'text-yellow-600';
-      case 'requires_params': return 'text-blue-600';
-      case 'skip': return 'text-gray-400';
-      default: return 'text-gray-600';
+      case 'success': return 'text-success-green';
+      case 'error': return 'text-error-red';
+      case 'internal_error': return 'text-destructive font-bold';
+      case 'unimplemented': return 'text-warning-yellow';
+      case 'requires_params': return 'text-primary';
+      case 'skip': return 'text-muted-foreground';
+      default: return 'text-muted-foreground';
     }
   };
 
@@ -133,7 +133,7 @@ export default function TestCompatibilityPage() {
         <button
           onClick={runTest}
           disabled={testing || !endpoint}
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="bg-primary text-primary-foreground px-6 py-2 rounded hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed"
         >
           {testing ? 'Testing... (this may take a few minutes)' : 'Run Compatibility Test'}
         </button>
@@ -151,24 +151,24 @@ export default function TestCompatibilityPage() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">{stats.successful}</div>
-              <div className="text-sm text-gray-600">Successful</div>
+              <div className="text-3xl font-bold text-success-green">{stats.successful}</div>
+              <div className="text-sm text-muted-foreground">Successful</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-red-600">{stats.errors + stats.internalErrors}</div>
-              <div className="text-sm text-gray-600">Errors</div>
+              <div className="text-3xl font-bold text-error-red">{stats.errors + stats.internalErrors}</div>
+              <div className="text-sm text-muted-foreground">Errors</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-yellow-600">{stats.unimplemented}</div>
-              <div className="text-sm text-gray-600">Unimplemented</div>
+              <div className="text-3xl font-bold text-warning-yellow">{stats.unimplemented}</div>
+              <div className="text-sm text-muted-foreground">Unimplemented</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600">{stats.requiresParams}</div>
-              <div className="text-sm text-gray-600">Requires Params</div>
+              <div className="text-3xl font-bold text-primary">{stats.requiresParams}</div>
+              <div className="text-sm text-muted-foreground">Requires Params</div>
             </div>
           </div>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             Total: {stats.total} methods tested in {(stats.totalTime / 1000).toFixed(2)}s
           </div>
         </div>
@@ -185,7 +185,7 @@ export default function TestCompatibilityPage() {
               </h3>
               <ul className="list-disc list-inside pl-4 space-y-1">
                 {methods.map((method, idx) => (
-                  <li key={idx} className="text-sm font-mono text-gray-700">{method}</li>
+                  <li key={idx} className="text-sm font-mono text-foreground">{method}</li>
                 ))}
               </ul>
             </div>
@@ -212,7 +212,7 @@ export default function TestCompatibilityPage() {
                   </div>
                 </div>
                 {result.error && result.status !== 'unimplemented' && result.status !== 'requires_params' && (
-                  <div className="text-xs text-gray-600 mt-1 pl-8 font-mono whitespace-pre-wrap">
+                  <div className="text-xs text-muted-foreground mt-1 pl-8 font-mono whitespace-pre-wrap">
                     {result.error.substring(0, 200)}
                     {result.error.length > 200 ? '...' : ''}
                   </div>
