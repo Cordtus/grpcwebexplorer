@@ -5,8 +5,67 @@ import * as grpc from '@grpc/grpc-js';
 import * as protobuf from 'protobufjs';
 import descriptorJson from 'protobufjs/google/protobuf/descriptor.json';
 
-// Inline reflection.proto definition
-const REFLECTION_PROTO_SOURCE = `
+// Inline reflection.proto definitions for both v1 and v1alpha
+const REFLECTION_PROTO_V1_SOURCE = `
+syntax = "proto3";
+package grpc.reflection.v1;
+
+service ServerReflection {
+  rpc ServerReflectionInfo(stream ServerReflectionRequest)
+      returns (stream ServerReflectionResponse);
+}
+
+message ServerReflectionRequest {
+  string host = 1;
+  oneof message_request {
+    string file_by_filename = 3;
+    string file_containing_symbol = 4;
+    ExtensionRequest file_containing_extension = 5;
+    string all_extension_numbers_of_type = 6;
+    string list_services = 7;
+  }
+}
+
+message ServerReflectionResponse {
+  string valid_host = 1;
+  ServerReflectionRequest original_request = 2;
+  oneof message_response {
+    FileDescriptorResponse file_descriptor_response = 4;
+    ExtensionNumberResponse all_extension_numbers_response = 5;
+    ListServiceResponse list_services_response = 6;
+    ErrorResponse error_response = 7;
+  }
+}
+
+message FileDescriptorResponse {
+  repeated bytes file_descriptor_proto = 1;
+}
+
+message ExtensionRequest {
+  string containing_type = 1;
+  int32 extension_number = 2;
+}
+
+message ExtensionNumberResponse {
+  string base_type_name = 1;
+  repeated int32 extension_number = 2;
+}
+
+message ListServiceResponse {
+  repeated ServiceResponse service = 1;
+}
+
+message ServiceResponse {
+  string name = 1;
+}
+
+message ErrorResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}
+`;
+
+const REFLECTION_PROTO_V1ALPHA_SOURCE = `
 syntax = "proto3";
 package grpc.reflection.v1alpha;
 
@@ -116,6 +175,7 @@ export class ReflectionClient {
   private root: protobuf.Root;
   private seenFiles = new Set<string>();
   private descriptorRoot: protobuf.Root | null = null;
+  private reflectionVersion: 'v1' | 'v1alpha' | null = null;
 
   constructor(private options: ReflectionOptions) {
     const credentials = options.tls
@@ -132,36 +192,116 @@ export class ReflectionClient {
 
   /**
    * Initialize reflection stub (lightweight setup without loading all services)
+   * Tries v1 first, falls back to v1alpha if v1 fails
    */
   private async initializeReflectionStub(): Promise<void> {
     if (this.reflectionStub) return; // Already initialized
 
     this.descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
 
-    const reflectionRoot = protobuf.parse(REFLECTION_PROTO_SOURCE).root;
     const credentials = this.options.tls
       ? grpc.credentials.createSsl()
       : grpc.credentials.createInsecure();
 
-    const ServerReflectionClient = grpc.makeGenericClientConstructor({
-      ServerReflectionInfo: {
-        path: '/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo',
-        requestStream: true,
-        responseStream: true,
-        requestSerialize: (value: any) => Buffer.from(
-          reflectionRoot.lookupType('grpc.reflection.v1alpha.ServerReflectionRequest').encode(value).finish()
-        ),
-        requestDeserialize: (buffer: Buffer) =>
-          reflectionRoot.lookupType('grpc.reflection.v1alpha.ServerReflectionRequest').decode(buffer),
-        responseSerialize: (value: any) => Buffer.from(
-          reflectionRoot.lookupType('grpc.reflection.v1alpha.ServerReflectionResponse').encode(value).finish()
-        ),
-        responseDeserialize: (buffer: Buffer) =>
-          reflectionRoot.lookupType('grpc.reflection.v1alpha.ServerReflectionResponse').decode(buffer),
-      },
-    }, 'ServerReflection', {});
+    // Try v1 first (newer, stable version)
+    try {
+      console.log('[ReflectionClient] Attempting to use grpc.reflection.v1...');
+      const reflectionRootV1 = protobuf.parse(REFLECTION_PROTO_V1_SOURCE).root;
 
-    this.reflectionStub = new ServerReflectionClient(this.options.endpoint, credentials);
+      const ServerReflectionClientV1 = grpc.makeGenericClientConstructor({
+        ServerReflectionInfo: {
+          path: '/grpc.reflection.v1.ServerReflection/ServerReflectionInfo',
+          requestStream: true,
+          responseStream: true,
+          requestSerialize: (value: any) => Buffer.from(
+            reflectionRootV1.lookupType('grpc.reflection.v1.ServerReflectionRequest').encode(value).finish()
+          ),
+          requestDeserialize: (buffer: Buffer) =>
+            reflectionRootV1.lookupType('grpc.reflection.v1.ServerReflectionRequest').decode(buffer),
+          responseSerialize: (value: any) => Buffer.from(
+            reflectionRootV1.lookupType('grpc.reflection.v1.ServerReflectionResponse').encode(value).finish()
+          ),
+          responseDeserialize: (buffer: Buffer) =>
+            reflectionRootV1.lookupType('grpc.reflection.v1.ServerReflectionResponse').decode(buffer),
+        },
+      }, 'ServerReflection', {});
+
+      this.reflectionStub = new ServerReflectionClientV1(this.options.endpoint, credentials);
+
+      // Test if v1 works by attempting to list services
+      await this.testReflectionStub();
+
+      this.reflectionVersion = 'v1';
+      console.log('[ReflectionClient] ✅ Using grpc.reflection.v1');
+      return;
+    } catch (v1Error: any) {
+      console.log(`[ReflectionClient] grpc.reflection.v1 failed: ${v1Error.message}, trying v1alpha...`);
+      this.reflectionStub = null;
+    }
+
+    // Fall back to v1alpha (older version)
+    try {
+      console.log('[ReflectionClient] Attempting to use grpc.reflection.v1alpha...');
+      const reflectionRootV1Alpha = protobuf.parse(REFLECTION_PROTO_V1ALPHA_SOURCE).root;
+
+      const ServerReflectionClientV1Alpha = grpc.makeGenericClientConstructor({
+        ServerReflectionInfo: {
+          path: '/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo',
+          requestStream: true,
+          responseStream: true,
+          requestSerialize: (value: any) => Buffer.from(
+            reflectionRootV1Alpha.lookupType('grpc.reflection.v1alpha.ServerReflectionRequest').encode(value).finish()
+          ),
+          requestDeserialize: (buffer: Buffer) =>
+            reflectionRootV1Alpha.lookupType('grpc.reflection.v1alpha.ServerReflectionRequest').decode(buffer),
+          responseSerialize: (value: any) => Buffer.from(
+            reflectionRootV1Alpha.lookupType('grpc.reflection.v1alpha.ServerReflectionResponse').encode(value).finish()
+          ),
+          responseDeserialize: (buffer: Buffer) =>
+            reflectionRootV1Alpha.lookupType('grpc.reflection.v1alpha.ServerReflectionResponse').decode(buffer),
+        },
+      }, 'ServerReflection', {});
+
+      this.reflectionStub = new ServerReflectionClientV1Alpha(this.options.endpoint, credentials);
+
+      // Test if v1alpha works
+      await this.testReflectionStub();
+
+      this.reflectionVersion = 'v1alpha';
+      console.log('[ReflectionClient] ✅ Using grpc.reflection.v1alpha');
+    } catch (v1alphaError: any) {
+      throw new Error(`Failed to initialize reflection stub with both v1 and v1alpha: ${v1alphaError.message}`);
+    }
+  }
+
+  /**
+   * Test if the reflection stub works by attempting a simple list operation
+   */
+  private async testReflectionStub(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const call = this.reflectionStub.ServerReflectionInfo();
+      let hasData = false;
+
+      const timeout = setTimeout(() => {
+        call.cancel();
+        reject(new Error('Reflection test timeout'));
+      }, 5000);
+
+      call.on('data', () => {
+        hasData = true;
+        clearTimeout(timeout);
+        call.cancel();
+        resolve();
+      });
+
+      call.on('error', (err: Error) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+
+      call.write({ listServices: '*' });
+      call.end();
+    });
   }
 
   /**
