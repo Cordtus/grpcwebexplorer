@@ -124,9 +124,9 @@ const MethodInteractionPanel: React.FC<MethodInteractionPanelProps> = ({
   }
   
   return (
-    <div className="h-full flex flex-col bg-background/50">
+    <div className="h-full flex flex-col bg-black/40 dark:bg-black/60 border-r border-primary/20">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border bg-card/30">
+      <div className="px-4 py-3 border-b border-border bg-black/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={cn("w-2 h-2 rounded-full", activeMethod.color.accent)} />
