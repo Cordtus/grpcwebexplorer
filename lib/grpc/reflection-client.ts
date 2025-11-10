@@ -138,6 +138,7 @@ export interface MessageField {
   comment?: string;
   nested?: boolean;
   enumValues?: string[];
+  nestedFields?: MessageField[]; // Recursively populated for nested message types
 }
 
 export interface MessageTypeDefinition {
@@ -747,7 +748,7 @@ export class ReflectionClient {
    * Always returns a valid MessageTypeDefinition - never undefined
    * Methods with no parameters will have an empty fields array
    */
-  private extractMessageTypeDefinition(typeName: string): MessageTypeDefinition {
+  private extractMessageTypeDefinition(typeName: string, visitedTypes: Set<string> = new Set()): MessageTypeDefinition {
     try {
       const message = this.root.lookupType(typeName);
       if (!message) {
@@ -779,14 +780,24 @@ export class ReflectionClient {
 
           // Check if this is an enum
           let enumValues: string[] | undefined;
+          let nestedFields: MessageField[] | undefined;
+
           if (isNested) {
             try {
               const nestedType = this.root.lookup(fieldType);
               if (nestedType && (nestedType as any).valuesById) {
+                // It's an enum
                 enumValues = Object.values((nestedType as any).valuesById) as string[];
+              } else if (nestedType && !visitedTypes.has(fieldType)) {
+                // It's a nested message - recursively extract its fields
+                visitedTypes.add(fieldType);
+                const nestedDefinition = this.extractMessageTypeDefinition(fieldType, visitedTypes);
+                nestedFields = nestedDefinition.fields;
+                visitedTypes.delete(fieldType);
               }
             } catch (e) {
-              // Not an enum, must be a nested message
+              // Failed to lookup nested type, will remain as generic nested field
+              console.warn(`[ReflectionClient] Failed to lookup nested type ${fieldType}:`, e);
             }
           }
 
@@ -801,6 +812,11 @@ export class ReflectionClient {
           // Only add enumValues if it's defined (don't set to undefined)
           if (enumValues) {
             fieldDef.enumValues = enumValues;
+          }
+
+          // Add nested fields if we recursively extracted them
+          if (nestedFields && nestedFields.length > 0) {
+            fieldDef.nestedFields = nestedFields;
           }
 
           fields.push(fieldDef);
