@@ -12,6 +12,7 @@ export interface MessageField {
   comment?: string;
   nested?: boolean;
   enumValues?: string[];
+  nestedFields?: MessageField[]; // Recursively populated for nested message types
 }
 
 export interface MessageTypeDefinition {
@@ -193,6 +194,59 @@ const FieldInput: React.FC<FieldInputProps> = ({
 
   // Nested message field
   if (field.nested) {
+    // If we have nested field definitions, render them as expandable fields
+    if (field.nestedFields && field.nestedFields.length > 0) {
+      const nestedValue = value || {};
+
+      return (
+        <div className="border border-border rounded-lg p-3 bg-muted/30">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="p-0.5 hover:bg-muted rounded"
+              >
+                {expanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+              <label className="text-sm font-medium text-foreground">
+                {field.name}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({field.type})
+                </span>
+              </label>
+            </div>
+          </div>
+          {field.comment && (
+            <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
+          )}
+          {expanded && (
+            <div className="space-y-3 mt-2 pl-4 border-l-2 border-border">
+              {field.nestedFields.map((nestedField) => (
+                <FieldInput
+                  key={nestedField.name}
+                  field={nestedField}
+                  value={nestedValue[nestedField.name]}
+                  onChange={(v) => {
+                    const updated = { ...nestedValue, [nestedField.name]: v };
+                    onChange(updated);
+                  }}
+                  onArrayAdd={() => {}}
+                  onArrayRemove={() => {}}
+                  onArrayItemChange={() => {}}
+                  readonly={readonly}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Fallback: if no nested fields available, use JSON editor
     return (
       <div className="border border-border rounded-lg p-3 bg-muted/30">
         <label className="text-sm font-medium text-foreground mb-2 block">
