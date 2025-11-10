@@ -93,8 +93,8 @@ const MethodBlock = React.memo(function MethodBlock({
             className={cn(
               "p-1 rounded transition-colors",
               instance.pinned
-                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
-                : "text-gray-400 dark:text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-400"
+                ? "bg-primary/20 text-primary hover:bg-primary/30"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title={instance.pinned ? "Unpin method (allow auto-collapse)" : "Pin method (prevent auto-collapse)"}
           >
@@ -116,22 +116,22 @@ const MethodBlock = React.memo(function MethodBlock({
               </span>
             )}
             {!instance.method.requestStreaming && !instance.method.responseStreaming && (
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+              <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
                 Unary
               </span>
             )}
           </div>
 
           {/* Request/Response types */}
-          <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <div className="space-y-2 p-3 bg-black/40 dark:bg-black/60 rounded-lg">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Request:</span>
+              <span className="text-muted-foreground">Request:</span>
               <code className="font-mono text-blue-600 dark:text-blue-400">
                 {instance.method.requestType}
               </code>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Response:</span>
+              <span className="text-muted-foreground">Response:</span>
               <code className="font-mono text-green-600 dark:text-green-400">
                 {instance.method.responseType}
               </code>
@@ -140,7 +140,7 @@ const MethodBlock = React.memo(function MethodBlock({
 
           {/* Parameter inputs - using ProtobufFormGenerator */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Parameters</h4>
+            <h4 className="text-xs font-semibold text-foreground">Parameters</h4>
             <ProtobufFormGenerator
               messageType={instance.method.requestTypeDefinition}
               value={params}
@@ -158,8 +158,8 @@ const MethodBlock = React.memo(function MethodBlock({
             className={cn(
               "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
               isValid && !isExecuting
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                : "bg-muted text-muted-foreground cursor-not-allowed"
             )}
           >
             {isExecuting ? (

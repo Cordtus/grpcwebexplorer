@@ -466,6 +466,16 @@ export class ReflectionClient {
     }
 
     const missingType = match[1];
+
+    // Check if the type already exists in the root
+    try {
+      this.root.lookupTypeOrEnum(missingType);
+      console.log(`[ReflectionClient] Type ${missingType} already exists in root, skipping load`);
+      return; // Type already loaded
+    } catch (lookupErr) {
+      // Type doesn't exist, continue with loading
+    }
+
     console.log(`[ReflectionClient] Loading missing type: ${missingType}`);
 
     try {
@@ -474,6 +484,75 @@ export class ReflectionClient {
     } catch (err) {
       console.warn(`[ReflectionClient] Failed to load missing type ${missingType}:`, err);
       throw err;
+    }
+  }
+
+  /**
+   * Recursively load all missing types until decode succeeds
+   * Handles complex responses with multiple nested dependencies
+   */
+  private async loadAllMissingTypes(
+    responseType: protobuf.Type,
+    responseBuffer: Buffer,
+    depth: number,
+    loadedTypes: Set<string> = new Set(),
+    startTime: number = Date.now()
+  ): Promise<any> {
+    const MAX_DEPTH = 50; // Increased from 10 to handle deeply nested Penumbra structures
+
+    if (depth >= MAX_DEPTH) {
+      throw new Error(`Exceeded maximum dependency depth (${MAX_DEPTH}). Loaded types: ${Array.from(loadedTypes).join(', ')}`);
+    }
+
+    try {
+      // Try to decode
+      const decodeStart = Date.now();
+      const decoded = responseType.decode(new Uint8Array(responseBuffer));
+      const json = responseType.toObject(decoded, {
+        longs: String,
+        enums: String,
+        bytes: String,
+        defaults: true,
+        arrays: true,
+        objects: true,
+        oneofs: true,
+      });
+      const decodeTime = Date.now() - decodeStart;
+
+      const totalTime = Date.now() - startTime;
+      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
+      return json;
+    } catch (decodeErr: any) {
+      const errorMsg = decodeErr.message || String(decodeErr);
+
+      // Check if it's a missing type error
+      if (errorMsg.includes('no such Type or Enum')) {
+        // Extract the missing type name
+        const match = errorMsg.match(/no such Type or Enum '([^']+)'/);
+        const missingType = match ? match[1] : 'unknown';
+
+        console.log(`[ReflectionClient] Missing type at depth ${depth}: ${missingType}`);
+
+        // Check if we've already loaded this type in this recursion chain
+        if (loadedTypes.has(missingType)) {
+          throw new Error(`Circular dependency detected: type '${missingType}' was already loaded but decode still fails. This suggests a different issue.`);
+        }
+
+        // Extract and load the missing type
+        const loadStart = Date.now();
+        await this.loadMissingTypes(errorMsg);
+        const loadTime = Date.now() - loadStart;
+        console.log(`[ReflectionClient] ⏱️  Loaded ${missingType} in ${loadTime}ms (total elapsed: ${Date.now() - startTime}ms)`);
+
+        // Track that we've loaded this type
+        loadedTypes.add(missingType);
+
+        // Recursively retry with increased depth
+        return this.loadAllMissingTypes(responseType, responseBuffer, depth + 1, loadedTypes, startTime);
+      } else {
+        // Not a missing type error, throw it
+        throw new Error(`Decode error at depth ${depth}: ${errorMsg}`);
+      }
     }
   }
 
@@ -845,6 +924,7 @@ export class ReflectionClient {
     const { requestType, responseType } = methodInfo;
     const methodPath = `/${serviceName}/${methodName}`;
 
+    const invokeStartTime = Date.now();
     console.log(`[ReflectionClient] Invoking method:`);
     console.log(`  Path: ${methodPath}`);
     console.log(`  Request type: ${requestType.name}`);
@@ -852,6 +932,7 @@ export class ReflectionClient {
     console.log(`  Params:`, JSON.stringify(params || {}, null, 2));
 
     return new Promise((resolve, reject) => {
+      const grpcCallStartTime = Date.now();
       const client = new grpc.Client(this.options.endpoint,
         this.options.tls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
         {
@@ -865,14 +946,23 @@ export class ReflectionClient {
         const requestMessage = requestType.fromObject(params || {});
         const requestBuffer = Buffer.from(requestType.encode(requestMessage).finish());
 
+        // Log encoded request for debugging
+        console.log(`[ReflectionClient] Encoded request message:`, requestType.toObject(requestMessage, {
+          longs: String,
+          enums: String,
+          bytes: String,
+          defaults: true,
+        }));
         console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
 
-        // Make call
+        // Make call with deadline
+        const deadline = new Date(Date.now() + timeout);
         const call = client.makeUnaryRequest(
           methodPath,
           (buf: Buffer) => buf,
           (buf: Buffer) => buf,
           requestBuffer,
+          { deadline }, // Add deadline option for gRPC client
           (error: grpc.ServiceError | null, response?: Buffer) => {
             client.close();
 
@@ -890,6 +980,9 @@ export class ReflectionClient {
               return;
             }
 
+            const grpcCallTime = Date.now() - grpcCallStartTime;
+            console.log(`[ReflectionClient] ⏱️  gRPC call completed in ${grpcCallTime}ms, response size: ${response.length} bytes`);
+
             try {
               const decoded = responseType.decode(new Uint8Array(response));
               const json = responseType.toObject(decoded, {
@@ -906,29 +999,14 @@ export class ReflectionClient {
               // Check if this is a missing type error
               const errorMsg = decodeErr.message || String(decodeErr);
               if (errorMsg.includes('no such Type or Enum')) {
-                console.warn(`[ReflectionClient] Missing type detected during decode, attempting to load...`);
-                // Try to load the missing type and retry decode
-                this.loadMissingTypes(errorMsg)
-                  .then(() => {
-                    try {
-                      // Retry decode with newly loaded types
-                      const decoded = responseType.decode(new Uint8Array(response));
-                      const json = responseType.toObject(decoded, {
-                        longs: String,
-                        enums: String,
-                        bytes: String,
-                        defaults: true,
-                        arrays: true,
-                        objects: true,
-                        oneofs: true,
-                      });
-                      resolve(json);
-                    } catch (retryErr) {
-                      reject(new Error(`Failed to decode response after loading missing types: ${retryErr}`));
-                    }
+                console.warn(`[ReflectionClient] Missing type detected during decode, attempting recursive dependency loading...`);
+                // Recursively load all missing types with retry limit
+                this.loadAllMissingTypes(responseType, response, 0)
+                  .then((json) => {
+                    resolve(json);
                   })
                   .catch((loadErr) => {
-                    reject(new Error(`Failed to load missing types: ${loadErr.message}. Original error: ${errorMsg}`));
+                    reject(new Error(`Failed to load all missing types: ${loadErr.message}`));
                   });
               } else {
                 reject(new Error(`Failed to decode response: ${decodeErr}`));

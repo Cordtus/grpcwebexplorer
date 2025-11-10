@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
 
 export const runtime = 'nodejs';
+export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
 
 export async function POST(req: Request) {
   const startTime = Date.now();
@@ -47,15 +48,15 @@ export async function POST(req: Request) {
       const client = new ReflectionClient({
         endpoint: endpointWithPort,
         tls: usedTls,
-        timeout: 15000,
+        timeout: 60000, // 60s for very slow Penumbra methods (e.g. ValidatorInfo)
       });
 
       try {
         // Initialize only the specific service we need (fast!)
         await client.initializeForMethod(service);
 
-        // Invoke method
-        result = await client.invokeMethod(service, method, params || {}, 10000);
+        // Invoke method (60s timeout for complex queries like ValidatorInfo)
+        result = await client.invokeMethod(service, method, params || {}, 60000);
 
       } finally {
         client.close();
@@ -74,12 +75,12 @@ export async function POST(req: Request) {
         const retryClient = new ReflectionClient({
           endpoint: endpointWithPort,
           tls: false,
-          timeout: 15000,
+          timeout: 60000, // 60s for very slow Penumbra methods
         });
 
         try {
           await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, 10000);
+          result = await retryClient.invokeMethod(service, method, params || {}, 60000);
           console.log(`[Execute] ✅ Success without TLS`);
         } finally {
           retryClient.close();

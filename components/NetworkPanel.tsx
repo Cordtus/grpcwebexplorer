@@ -209,9 +209,9 @@ const NetworkPanel: React.FC<NetworkPanelProps> = ({
   };
   
   return (
-    <div className="h-full flex flex-col bg-background/50">
+    <div className="h-full flex flex-col bg-black/40 dark:bg-black/60 border-r border-primary/20">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border bg-black/20">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Networks
         </h3>
