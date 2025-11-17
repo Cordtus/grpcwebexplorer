@@ -62,15 +62,15 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
   if (data === undefined) return <span className="text-muted-foreground">undefined</span>;
 
   if (typeof data === 'string') {
-    return <span className="text-green-600 dark:text-green-400 break-all">"{data}"</span>;
+    return <span className="text-green-600 dark:text-green-400 break-words">"{data}"</span>;
   }
 
   if (typeof data === 'number') {
-    return <span className="text-blue-600 dark:text-blue-400 break-all">{data}</span>;
+    return <span className="text-blue-600 dark:text-blue-400">{data}</span>;
   }
 
   if (typeof data === 'boolean') {
-    return <span className="text-purple-600 dark:text-purple-400 break-all">{data.toString()}</span>;
+    return <span className="text-purple-600 dark:text-purple-400">{data.toString()}</span>;
   }
 
   if (Array.isArray(data)) {
@@ -246,9 +246,9 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-black/40 dark:bg-black/60">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-muted/50">
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-black/20">
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-muted/70">
         <h2 className="text-sm font-semibold text-foreground">Execution Results</h2>
         {result && (
           <div className="flex items-center gap-2">
@@ -345,54 +345,21 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
 
             {/* Result Data */}
             {result.error ? (
-              (() => {
-                // Parse gRPC error codes to provide better context
-                const isUnimplemented = result.error.includes('code 12') || result.error.includes('UNIMPLEMENTED');
-                const isNotFound = result.error.includes('code 5') || result.error.includes('NOT_FOUND');
-                const isPermissionDenied = result.error.includes('code 7') || result.error.includes('PERMISSION_DENIED');
-                const isUnavailable = result.error.includes('code 14') || result.error.includes('UNAVAILABLE');
-
-                return (
-                  <div className={cn(
-                    "p-3 rounded-lg",
-                    isUnimplemented ? "bg-yellow-50 dark:bg-yellow-900/20" : "bg-red-50 dark:bg-red-900/20"
-                  )}>
-                    <div className="flex items-start gap-2 mb-2">
-                      <h3 className={cn(
-                        "text-sm font-medium",
-                        isUnimplemented ? "text-yellow-700 dark:text-yellow-400" : "text-red-700 dark:text-red-400"
-                      )}>
-                        {isUnimplemented && "⚠️ Method Not Implemented"}
-                        {isNotFound && "❌ Not Found"}
-                        {isPermissionDenied && "🔒 Permission Denied"}
-                        {isUnavailable && "🔌 Service Unavailable"}
-                        {!isUnimplemented && !isNotFound && !isPermissionDenied && !isUnavailable && "Error"}
-                      </h3>
-                    </div>
-                    {isUnimplemented && (
-                      <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-                        This method exists in the service definition but is not implemented by the server.
-                        This is a server-side limitation, not a client error.
-                      </p>
-                    )}
-                    <pre className={cn(
-                      "text-xs whitespace-pre-wrap font-mono",
-                      isUnimplemented ? "text-yellow-600 dark:text-yellow-300" : "text-red-600 dark:text-red-300"
-                    )}>
-                      {result.error}
-                    </pre>
-                  </div>
-                );
-              })()
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <h3 className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Error</h3>
+                <pre className="text-xs text-red-600 dark:text-red-300 whitespace-pre-wrap font-mono">
+                  {result.error}
+                </pre>
+              </div>
             ) : result.data ? (
-              <div className="border border-primary/20 rounded-lg p-3 max-w-full overflow-hidden">
+              <div className="border border-primary/20 rounded-lg p-3 overflow-auto">
                 <h3 className="text-sm font-medium text-foreground mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
-                  <div className="text-xs font-mono break-all overflow-wrap-anywhere max-w-full">
+                  <div className="text-xs font-mono overflow-x-auto">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
-                  <pre className="text-xs text-foreground whitespace-pre-wrap break-all font-mono bg-black/40 dark:bg-black/60 p-3 rounded max-w-full overflow-hidden">
+                  <pre className="text-xs text-foreground whitespace-pre font-mono bg-muted/50 p-3 rounded overflow-x-auto">
                     {JSON.stringify(result.data, null, 2)}
                   </pre>
                 )}

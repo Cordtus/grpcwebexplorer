@@ -3,46 +3,46 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme - soft, easy on the eyes */
+  /* Light theme - clean and modern with blue accents */
   .light {
-    --background: 0 0% 96%; /* #f5f5f5 - soft off-white */
-    --foreground: 0 0% 20%; /* #333333 - dark gray text */
+    --background: 0 0% 98%; /* #fafafa - clean light background */
+    --foreground: 0 0% 15%; /* #262626 - dark text */
 
-    --card: 0 0% 98%; /* #fafafa - very light gray */
-    --card-foreground: 0 0% 25%;
+    --card: 0 0% 100%; /* #ffffff - pure white cards */
+    --card-foreground: 0 0% 15%;
 
-    --popover: 0 0% 98%;
-    --popover-foreground: 0 0% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 15%;
 
-    --primary: 0 0% 35%; /* #595959 - medium gray for primary elements */
-    --primary-foreground: 0 0% 98%;
+    --primary: 211 100% 50%; /* #0a84ff - blue accent (matches dark theme) */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 90%; /* #e6e6e6 - light gray */
-    --secondary-foreground: 0 0% 25%;
+    --secondary: 210 40% 96%; /* #f1f5f9 - light blue-gray */
+    --secondary-foreground: 0 0% 15%;
 
-    --muted: 0 0% 88%; /* #e0e0e0 - muted gray */
-    --muted-foreground: 0 0% 50%; /* #808080 - medium gray text */
+    --muted: 210 40% 94%; /* #e2e8f0 - soft blue-gray */
+    --muted-foreground: 215 15% 45%; /* #64748b - medium blue-gray text */
 
-    --accent: 0 0% 70%; /* #b3b3b3 - light-medium gray for accents */
-    --accent-foreground: 0 0% 20%;
+    --accent: 211 100% 50%; /* #0a84ff - blue accent */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 45%; /* Muted red */
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%; /* #f87171 - red */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 85%; /* #d9d9d9 - light gray borders */
-    --input: 0 0% 92%; /* #ebebeb - input backgrounds */
-    --ring: 0 0% 60%;
+    --border: 214 32% 91%; /* #cbd5e1 - soft blue-gray borders */
+    --input: 0 0% 100%; /* #ffffff - white input backgrounds */
+    --ring: 211 100% 50%;
 
     --radius: 0.375rem;
 
-    --glass-bg: rgba(250, 250, 250, 0.85);
-    --glass-border: rgba(217, 217, 217, 0.5);
-    --hover-bg: rgba(230, 230, 230, 0.8);
-    --shadow-color: rgba(0, 0, 0, 0.08);
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(203, 213, 225, 0.5);
+    --hover-bg: rgba(241, 245, 249, 0.8);
+    --shadow-color: rgba(0, 0, 0, 0.1);
 
-    --traffic-red: #cc4444;
-    --traffic-yellow: #ccaa44;
-    --traffic-green: #44cc66;
+    --traffic-red: #ef4444;
+    --traffic-yellow: #f59e0b;
+    --traffic-green: #10b981;
   }
 
   /* Dark theme */
