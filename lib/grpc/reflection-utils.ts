@@ -59,20 +59,37 @@ export async function fetchServicesWithCosmosOptimization(
   });
 
   try {
-    // Use standard gRPC reflection to get complete service list
-    console.log('[Reflection] Using standard gRPC reflection to get all services...');
-    await client.initialize();
-    const services = client.getServices();
+    const services: import('./reflection-client').GrpcService[] = [];
 
-    console.log(`[Reflection] Got ${services.length} services via standard reflection`);
+    console.log('[Reflection] Attempting v2alpha1 reflection...');
 
-    // Log services with no methods for visibility
-    const emptyServices = services.filter(s => s.methods.length === 0);
-    if (emptyServices.length > 0) {
-      console.log(`[Reflection] ${emptyServices.length} services have no methods:`, emptyServices.map(s => s.fullName));
+    // Fetch query services via v2alpha1
+    const queryServices = await client.getQueryServicesViaV2Alpha1();
+    if (queryServices.length > 0) {
+      services.push(...queryServices);
+      console.log(`[Reflection] Got ${queryServices.length} query services via v2alpha1`);
     }
 
-    return services;
+    // Fetch tx descriptor via v2alpha1
+    const txService = await client.getTxDescriptorViaV2Alpha1();
+    if (txService) {
+      services.push(txService);
+      console.log(`[Reflection] Got transaction service via v2alpha1`);
+    }
+
+    // If v2alpha1 succeeded, return services immediately
+    if (services.length > 0) {
+      console.log(`[Reflection] v2alpha1 success: ${services.length} total services`);
+      console.log('[Reflection] Field definitions will be loaded on-demand when methods are used');
+      return services;
+    }
+
+    // Fallback to standard reflection if v2alpha1 not available
+    console.log('[Reflection] v2alpha1 not available, using standard reflection...');
+    await client.initialize();
+    const standardServices = client.getServices();
+    console.log(`[Reflection] Got ${standardServices.length} services via standard reflection`);
+    return standardServices;
 
   } finally {
     client.close();
