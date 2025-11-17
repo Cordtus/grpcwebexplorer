@@ -59,46 +59,20 @@ export async function fetchServicesWithCosmosOptimization(
   });
 
   try {
-    const services: import('./reflection-client').GrpcService[] = [];
-
-    // Try v2alpha1 Cosmos reflection first (much faster)
-    console.log('[Reflection] Attempting Cosmos v2alpha1 optimized reflection...');
-
-    // Fetch query services via v2alpha1
-    const queryServices = await client.getQueryServicesViaV2Alpha1();
-    if (queryServices.length > 0) {
-      services.push(...queryServices);
-      console.log(`[Reflection] Got ${queryServices.length} query services via v2alpha1`);
-
-      // Log services with no methods
-      const emptyServices = queryServices.filter(s => s.methods.length === 0);
-      if (emptyServices.length > 0) {
-        console.log(`[Reflection] ${emptyServices.length} services have no methods from v2alpha1:`, emptyServices.map(s => s.fullName));
-      }
-    }
-
-    // Fetch tx descriptor via v2alpha1
-    const txService = await client.getTxDescriptorViaV2Alpha1();
-    if (txService) {
-      services.push(txService);
-      console.log(`[Reflection] Got transaction service via v2alpha1`);
-    }
-
-    // If we got services via v2alpha1, return them immediately
-    // Field definitions will be lazy-loaded when needed
-    if (services.length > 0) {
-      const emptyServiceCount = services.filter(s => s.methods.length === 0).length;
-
-      console.log(`[Reflection] v2alpha1 success: ${services.length} services (${emptyServiceCount} empty)`);
-      console.log('[Reflection] Field definitions will be loaded on-demand');
-
-      return services;
-    }
-
-    // v2alpha1 not available, fall back to standard reflection
-    console.log('[Reflection] v2alpha1 not available, falling back to standard gRPC reflection...');
+    // Use standard gRPC reflection to get complete service list
+    console.log('[Reflection] Using standard gRPC reflection to get all services...');
     await client.initialize();
-    return client.getServices();
+    const services = client.getServices();
+
+    console.log(`[Reflection] Got ${services.length} services via standard reflection`);
+
+    // Log services with no methods for visibility
+    const emptyServices = services.filter(s => s.methods.length === 0);
+    if (emptyServices.length > 0) {
+      console.log(`[Reflection] ${emptyServices.length} services have no methods:`, emptyServices.map(s => s.fullName));
+    }
+
+    return services;
 
   } finally {
     client.close();
