@@ -82,61 +82,13 @@ export async function fetchServicesWithCosmosOptimization(
       console.log(`[Reflection] Got transaction service via v2alpha1`);
     }
 
-    // If we got services via v2alpha1, also try to get any additional services via standard reflection
-    // (some chains may have custom services not covered by v2alpha1)
+    // If we got services via v2alpha1, return them immediately
+    // Field definitions will be lazy-loaded when needed
     if (services.length > 0) {
-      console.log('[Reflection] v2alpha1 successful, also checking for additional services via standard reflection...');
+      const emptyServiceCount = services.filter(s => s.methods.length === 0).length;
 
-      try {
-        await client.initialize();
-        const standardServices = client.getServices();
-
-        console.log(`[Reflection] Standard reflection found ${standardServices.length} services`);
-
-        // Merge with v2alpha1 services
-        // For services that exist in both, merge their methods (v2alpha1 sometimes returns empty methods)
-        const serviceMap = new Map<string, import('./reflection-client').GrpcService>();
-
-        // Add v2alpha1 services to map
-        for (const service of services) {
-          serviceMap.set(service.fullName, service);
-        }
-
-        // Merge or add standard reflection services
-        let mergedMethodCount = 0;
-        for (const stdService of standardServices) {
-          const existing = serviceMap.get(stdService.fullName);
-
-          if (existing) {
-            // Service exists in both - merge methods
-            const existingMethodNames = new Set(existing.methods.map(m => m.name));
-            const newMethods = stdService.methods.filter(m => !existingMethodNames.has(m.name));
-
-            if (newMethods.length > 0) {
-              console.log(`[Reflection] Merging ${newMethods.length} methods into ${stdService.fullName}`);
-              existing.methods.push(...newMethods);
-              mergedMethodCount += newMethods.length;
-            }
-          } else {
-            // New service not in v2alpha1 - add it
-            console.log(`[Reflection] Adding service from standard reflection: ${stdService.fullName} (${stdService.methods.length} methods)`);
-            serviceMap.set(stdService.fullName, stdService);
-          }
-        }
-
-        const allServices = Array.from(serviceMap.values());
-        const emptyServiceCount = allServices.filter(s => s.methods.length === 0).length;
-
-        if (emptyServiceCount > 0) {
-          console.log(`[Reflection] ${emptyServiceCount} services have no methods`);
-        }
-
-        console.log(`[Reflection] Final result: ${allServices.length} services (${allServices.length - emptyServiceCount} with methods, merged ${mergedMethodCount} additional methods)`);
-
-        return allServices;
-      } catch (err) {
-        console.log('[Reflection] Standard reflection check failed, using v2alpha1 services only');
-      }
+      console.log(`[Reflection] v2alpha1 success: ${services.length} services (${emptyServiceCount} empty)`);
+      console.log('[Reflection] Field definitions will be loaded on-demand');
 
       return services;
     }

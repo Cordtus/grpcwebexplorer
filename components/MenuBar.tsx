@@ -41,7 +41,7 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
   }, []);
 
   return (
-    <div className="h-10 bg-secondary/30 border-b border-border flex items-center justify-between px-4">
+    <div className="h-10 bg-secondary/30 border-b border-border flex items-center justify-between px-4 shrink-0 relative z-50">
       {/* Left side - App title */}
       <div className="flex items-center gap-2">
         <h1 className="text-sm font-semibold text-foreground">

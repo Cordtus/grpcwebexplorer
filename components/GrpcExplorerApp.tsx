@@ -697,7 +697,7 @@ export default function GrpcExplorerApp() {
       )}
 
       {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Menu Bar */}
         <MenuBar
           onShowHelp={() => setShowHelp(true)}
