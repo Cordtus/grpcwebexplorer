@@ -85,7 +85,7 @@ function TreeNode({
   const fullPath = path ? `${path}.${name}` : name;
   
   if (node._isService) {
-    const hasM ethods = node.methods && node.methods.length > 0;
+    const hasMethods = node.methods && node.methods.length > 0;
 
     return (
       <div className="mb-1">
