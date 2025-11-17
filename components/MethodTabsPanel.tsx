@@ -32,9 +32,9 @@ const MethodTabsPanel: React.FC<MethodTabsPanelProps> = ({
   const descriptor = activeTab ? methodDescriptors[activeTab.id] : null;
   
   return (
-    <div className="h-full flex flex-col bg-black/40 dark:bg-black/60">
+    <div className="h-full flex flex-col bg-muted/50">
       {/* Tabs Bar */}
-      <div className="flex items-center border-b border-border bg-black/20 overflow-x-auto scrollbar-thin">
+      <div className="flex items-center border-b border-border bg-muted/70 overflow-x-auto scrollbar-thin">
         {tabs.map((tab) => (
           <div
             key={tab.id}

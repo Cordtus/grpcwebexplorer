@@ -246,9 +246,9 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-black/40 dark:bg-black/60">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-muted/50">
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-black/20">
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-muted/70">
         <h2 className="text-sm font-semibold text-foreground">Execution Results</h2>
         {result && (
           <div className="flex items-center gap-2">
@@ -359,7 +359,7 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
-                  <pre className="text-xs text-foreground whitespace-pre font-mono bg-black/40 dark:bg-black/60 p-3 rounded overflow-x-auto">
+                  <pre className="text-xs text-foreground whitespace-pre font-mono bg-muted/50 p-3 rounded overflow-x-auto">
                     {JSON.stringify(result.data, null, 2)}
                   </pre>
                 )}

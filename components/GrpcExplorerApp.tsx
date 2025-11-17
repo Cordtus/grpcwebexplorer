@@ -691,7 +691,7 @@ export default function GrpcExplorerApp() {
       {/* Backdrop for overlay mode */}
       {isOverlayMode && !leftPanelCollapsed && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 dark:bg-black/50 light:bg-black/30 z-40 transition-opacity duration-300"
           onClick={handleLeftPanelToggle}
         />
       )}

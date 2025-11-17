@@ -123,7 +123,7 @@ const MethodBlock = React.memo(function MethodBlock({
           </div>
 
           {/* Request/Response types */}
-          <div className="space-y-2 p-3 bg-black/40 dark:bg-black/60 rounded-lg">
+          <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Request:</span>
               <code className="font-mono text-blue-600 dark:text-blue-400">
