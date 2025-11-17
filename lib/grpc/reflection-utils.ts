@@ -12,6 +12,8 @@ export type {
   ReflectionOptions,
 } from './reflection-client';
 
+import { saveToCache, getFromCache } from '@/lib/utils/client-cache';
+
 /**
  * Fetch all services and their methods using gRPC reflection
  * Drop-in replacement for utils/grpcReflection.ts fetchServicesViaReflection
@@ -98,6 +100,50 @@ export async function fetchServicesWithCosmosOptimization(
     await client.initialize();
     return client.getServices();
 
+  } finally {
+    client.close();
+  }
+}
+
+/**
+ * Lazy-load field definitions for a specific service
+ * Used when user expands a service or executes a method
+ */
+export async function loadServiceDescriptor(
+  options: { endpoint: string; tls: boolean; timeout?: number },
+  serviceName: string
+): Promise<import('./reflection-client').GrpcService | null> {
+  const cacheKey = `descriptor:${options.endpoint}:${options.tls}:${serviceName}`;
+
+  const cached = getFromCache<import('./reflection-client').GrpcService>(cacheKey);
+  if (cached) {
+    console.log(`[Reflection] Using cached descriptor for ${serviceName}`);
+    return cached;
+  }
+
+  console.log(`[Reflection] Loading descriptor for ${serviceName}...`);
+
+  const client = new ReflectionClient({
+    endpoint: options.endpoint,
+    tls: options.tls,
+    timeout: options.timeout || 10000,
+  });
+
+  try {
+    await client.initializeForMethod(serviceName);
+    const services = client.getServices();
+    const service = services.find(s => s.fullName === serviceName);
+
+    if (service) {
+      saveToCache(cacheKey, service);
+      console.log(`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`);
+      return service;
+    }
+
+    return null;
+  } catch (err: any) {
+    console.error(`[Reflection] Failed to load descriptor for ${serviceName}:`, err.message);
+    return null;
   } finally {
     client.close();
   }
