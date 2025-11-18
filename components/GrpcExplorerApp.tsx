@@ -17,6 +17,7 @@ import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/clie
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
 import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
+import { descriptorLoader } from '@/lib/utils/descriptor-loader';
 
 // Color palette for networks
 const NETWORK_COLORS = [
@@ -83,6 +84,27 @@ export default function GrpcExplorerApp() {
       }
     }
   }, [networks]);
+
+  // Listen for background-loaded descriptors and update network state
+  useEffect(() => {
+    const unsubscribe = descriptorLoader.onDescriptorLoaded((result) => {
+      setNetworks((prev) =>
+        prev.map((network) => {
+          if (network.id !== result.networkId) return network;
+
+          const updatedServices = network.services.map((service) => {
+            if (service.fullName !== result.serviceName) return service;
+
+            return result.service;
+          });
+
+          return { ...network, services: updatedServices };
+        })
+      );
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Generate unique ID
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -350,10 +372,48 @@ export default function GrpcExplorerApp() {
     }
   }, [networks, getNextColor, autoCollapseEnabled]);
 
+  // Helper to enqueue descriptor loading jobs for a network
+  const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
+    const servicesNeedingDescriptors = network.services.filter(
+      (service) =>
+        service.methods.length > 0 &&
+        (!service.methods[0].requestTypeDefinition?.fields ||
+          service.methods[0].requestTypeDefinition.fields.length === 0)
+    );
+
+    if (servicesNeedingDescriptors.length === 0) {
+      console.log(`[DescriptorLoader] No services need descriptors for ${network.name}`);
+      return;
+    }
+
+    console.log(`[DescriptorLoader] Enqueuing ${servicesNeedingDescriptors.length} services for ${network.name}`);
+
+    descriptorLoader.enqueueBatch(
+      servicesNeedingDescriptors.map((service) => ({
+        networkId: network.id,
+        endpoint: network.endpoint,
+        tlsEnabled: network.tlsEnabled,
+        serviceName: service.fullName,
+        priority: 'normal' as const,
+        timestamp: Date.now(),
+      }))
+    );
+  }, []);
+
+  // Start background descriptor loading when networks are added or updated
+  useEffect(() => {
+    networks.forEach((network) => {
+      if (!network.loading && network.services.length > 0) {
+        enqueueDescriptorLoading(network);
+      }
+    });
+  }, [networks, enqueueDescriptorLoading]);
+
   // Remove network
   const handleRemoveNetwork = useCallback((networkId: string) => {
     setNetworks(prev => prev.filter(n => n.id !== networkId));
     setMethodInstances(prev => prev.filter(m => m.networkId !== networkId));
+    descriptorLoader.clear(networkId);
   }, []);
 
   // Refresh network (force fetch from server, bypass cache)
@@ -439,6 +499,27 @@ export default function GrpcExplorerApp() {
 
       const isExpanding = !targetNetwork.expanded;
 
+      // Prioritize descriptor loading for expanded network
+      if (isExpanding) {
+        const servicesNeedingDescriptors = targetNetwork.services.filter(
+          (service) =>
+            service.methods.length > 0 &&
+            (!service.methods[0].requestTypeDefinition?.fields ||
+              service.methods[0].requestTypeDefinition.fields.length === 0)
+        );
+
+        servicesNeedingDescriptors.forEach((service) => {
+          descriptorLoader.enqueue({
+            networkId: targetNetwork.id,
+            endpoint: targetNetwork.endpoint,
+            tlsEnabled: targetNetwork.tlsEnabled,
+            serviceName: service.fullName,
+            priority: 'high',
+            timestamp: Date.now(),
+          });
+        });
+      }
+
       // If expanding and auto-collapse is enabled, collapse other networks
       if (isExpanding && autoCollapseEnabled) {
         return prev.map(n =>
@@ -466,33 +547,61 @@ export default function GrpcExplorerApp() {
     let enrichedService = service;
 
     if (needsFieldDefinitions) {
-      console.log(`[UI] Loading field definitions for ${service.fullName}...`);
-      try {
-        const response = await fetch('/api/grpc/descriptor', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: network.endpoint,
-            tlsEnabled: network.tlsEnabled,
-            serviceName: service.fullName
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to load descriptor: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        if (data.service) {
-          const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
-          if (enrichedMethodData) {
-            enrichedMethod = enrichedMethodData;
-            enrichedService = data.service;
-            console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+      // First check if descriptors were already loaded in network state
+      const currentNetwork = networks.find(n => n.id === network.id);
+      if (currentNetwork) {
+        const loadedService = currentNetwork.services.find(s => s.fullName === service.fullName);
+        if (loadedService && loadedService.methods.length > 0) {
+          const loadedMethod = loadedService.methods.find(m => m.name === method.name);
+          if (loadedMethod?.requestTypeDefinition?.fields && loadedMethod.requestTypeDefinition.fields.length > 0) {
+            enrichedMethod = loadedMethod;
+            enrichedService = loadedService;
+            console.log(`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`);
           }
         }
-      } catch (err) {
-        console.error(`[UI] Failed to load field definitions:`, err);
+      }
+
+      // If still not loaded, fetch on-demand and prioritize in queue
+      if (enrichedMethod === method) {
+        console.log(`[UI] Loading field definitions for ${service.fullName}...`);
+
+        // Prioritize this service in the loading queue
+        descriptorLoader.enqueue({
+          networkId: network.id,
+          endpoint: network.endpoint,
+          tlsEnabled: network.tlsEnabled,
+          serviceName: service.fullName,
+          priority: 'high',
+          timestamp: Date.now(),
+        });
+
+        try {
+          const response = await fetch('/api/grpc/descriptor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              endpoint: network.endpoint,
+              tlsEnabled: network.tlsEnabled,
+              serviceName: service.fullName
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to load descriptor: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          if (data.service) {
+            const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
+            if (enrichedMethodData) {
+              enrichedMethod = enrichedMethodData;
+              enrichedService = data.service;
+              console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+            }
+          }
+        } catch (err) {
+          console.error(`[UI] Failed to load field definitions:`, err);
+        }
       }
     }
 
@@ -546,7 +655,7 @@ export default function GrpcExplorerApp() {
 
       setSelectedMethod(newInstance);
     }
-  }, [methodInstances, autoCollapseEnabled]);
+  }, [methodInstances, autoCollapseEnabled, networks]);
 
   // Remove method instance
   const handleRemoveMethodInstance = useCallback((instanceId: string) => {
