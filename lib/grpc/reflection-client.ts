@@ -1083,7 +1083,24 @@ export class ReflectionClient {
         10000
       );
 
-      if (!response || !response.queries || !response.queries.queryServices) {
+      console.log('[ReflectionClient] v2alpha1 response structure:', JSON.stringify(response).substring(0, 500));
+
+      if (!response) {
+        console.log('[ReflectionClient] No response from v2alpha1');
+        return [];
+      }
+
+      // Handle different response structures
+      let queryServices = null;
+      if (response.queries?.queryServices) {
+        queryServices = response.queries.queryServices;
+      } else if (response.queries?.query_services) {
+        queryServices = response.queries.query_services;
+      } else if (Array.isArray(response)) {
+        queryServices = response;
+      }
+
+      if (!queryServices || queryServices.length === 0) {
         console.log('[ReflectionClient] No query services found in v2alpha1 response');
         return [];
       }
@@ -1091,7 +1108,7 @@ export class ReflectionClient {
       const services: GrpcService[] = [];
 
       // Parse query services from response
-      for (const queryService of response.queries.queryServices) {
+      for (const queryService of queryServices) {
         if (!queryService.fullname || !queryService.methods) continue;
 
         const methods: GrpcMethod[] = [];
