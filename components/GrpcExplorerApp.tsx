@@ -45,6 +45,7 @@ export default function GrpcExplorerApp() {
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
+  const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
 
   // Load persisted networks from localStorage on mount
   useEffect(() => {
@@ -122,9 +123,10 @@ export default function GrpcExplorerApp() {
         // Window is narrow, collapse the panel
         setLeftPanelCollapsed(true);
         setIsOverlayMode(false);
-      } else if (width >= collapseThreshold && leftPanelCollapsed && !isOverlayMode) {
+        setUserCollapsedPanel(false);
+      } else if (width >= collapseThreshold && leftPanelCollapsed && !isOverlayMode && !userCollapsedPanel) {
         // Window is wide enough, restore panel if it was auto-collapsed
-        // (but not if user manually collapsed it in overlay mode)
+        // Do NOT restore if user manually collapsed it
         setLeftPanelCollapsed(false);
       }
     };
@@ -132,7 +134,7 @@ export default function GrpcExplorerApp() {
     handleResize(); // Initial check
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [leftPanelCollapsed, isOverlayMode]);
+  }, [leftPanelCollapsed, isOverlayMode, userCollapsedPanel]);
 
   // Calculate responsive left panel width
   const getLeftPanelWidth = () => {
@@ -155,14 +157,18 @@ export default function GrpcExplorerApp() {
       if (leftPanelCollapsed) {
         setLeftPanelCollapsed(false);
         setIsOverlayMode(true);
+        setUserCollapsedPanel(false);
       } else {
         setLeftPanelCollapsed(true);
         setIsOverlayMode(false);
+        setUserCollapsedPanel(true);
       }
     } else {
       // Wide window: normal toggle
-      setLeftPanelCollapsed(!leftPanelCollapsed);
+      const isCollapsing = !leftPanelCollapsed;
+      setLeftPanelCollapsed(isCollapsing);
       setIsOverlayMode(false);
+      setUserCollapsedPanel(isCollapsing);
     }
   };
 
