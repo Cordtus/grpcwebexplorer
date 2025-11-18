@@ -456,19 +456,60 @@ export default function GrpcExplorerApp() {
   }, [autoCollapseEnabled]);
 
   // Add method instance to center panel
-  const handleSelectMethod = useCallback((network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
+  const handleSelectMethod = useCallback(async (network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
+    // Check if field definitions need to be loaded
+    const needsFieldDefinitions =
+      !method.requestTypeDefinition?.fields ||
+      method.requestTypeDefinition.fields.length === 0;
+
+    let enrichedMethod = method;
+    let enrichedService = service;
+
+    if (needsFieldDefinitions) {
+      console.log(`[UI] Loading field definitions for ${service.fullName}...`);
+      try {
+        const { loadServiceDescriptor } = await import('@/lib/grpc/reflection-utils');
+        const descriptorService = await loadServiceDescriptor(
+          {
+            endpoint: network.endpoint,
+            tls: network.tlsEnabled,
+            timeout: 10000
+          },
+          service.fullName
+        );
+
+        if (descriptorService) {
+          const enrichedMethodData = descriptorService.methods.find(m => m.name === method.name);
+          if (enrichedMethodData) {
+            enrichedMethod = enrichedMethodData;
+            enrichedService = descriptorService;
+            console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+          }
+        }
+      } catch (err) {
+        console.error(`[UI] Failed to load field definitions:`, err);
+      }
+    }
+
     // Check if method already exists
     const existingIndex = methodInstances.findIndex(
       m => m.networkId === network.id &&
-           m.method.fullName === method.fullName &&
-           m.service.fullName === service.fullName
+           m.method.fullName === enrichedMethod.fullName &&
+           m.service.fullName === enrichedService.fullName
     );
 
     if (existingIndex >= 0) {
       // Method exists, select it and auto-collapse others if enabled
       const existingInstance = methodInstances[existingIndex];
 
-      if (autoCollapseEnabled && !existingInstance.expanded) {
+      // Update with enriched data if we loaded field definitions
+      if (needsFieldDefinitions) {
+        setMethodInstances(prev => prev.map(m =>
+          m.id === existingInstance.id
+            ? { ...m, method: enrichedMethod, service: enrichedService, expanded: true }
+            : (autoCollapseEnabled && !m.pinned ? { ...m, expanded: false } : m)
+        ));
+      } else if (autoCollapseEnabled && !existingInstance.expanded) {
         // If auto-collapse is enabled and we're expanding this method, collapse unpinned methods
         setMethodInstances(prev => prev.map(m =>
           m.id === existingInstance.id
@@ -477,14 +518,14 @@ export default function GrpcExplorerApp() {
         ));
       }
 
-      setSelectedMethod(existingInstance);
+      setSelectedMethod({ ...existingInstance, method: enrichedMethod, service: enrichedService });
     } else {
       // Add new method expanded
       const newInstance: MethodInstance = {
         id: generateId(),
         networkId: network.id,
-        method,
-        service,
+        method: enrichedMethod,
+        service: enrichedService,
         color: network.color,
         expanded: true,
         params: {}
