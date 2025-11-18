@@ -91,6 +91,10 @@ export async function fetchServicesWithCosmosOptimization(
     console.log(`[Reflection] Got ${standardServices.length} services via standard reflection`);
     return standardServices;
 
+  } catch (err: any) {
+    console.error('[Reflection] Error in fetchServicesWithCosmosOptimization:', err.message);
+    console.error('[Reflection] Stack trace:', err.stack);
+    throw err;
   } finally {
     client.close();
   }
