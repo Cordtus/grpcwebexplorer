@@ -468,21 +468,26 @@ export default function GrpcExplorerApp() {
     if (needsFieldDefinitions) {
       console.log(`[UI] Loading field definitions for ${service.fullName}...`);
       try {
-        const { loadServiceDescriptor } = await import('@/lib/grpc/reflection-utils');
-        const descriptorService = await loadServiceDescriptor(
-          {
+        const response = await fetch('/api/grpc/descriptor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             endpoint: network.endpoint,
-            tls: network.tlsEnabled,
-            timeout: 10000
-          },
-          service.fullName
-        );
+            tlsEnabled: network.tlsEnabled,
+            serviceName: service.fullName
+          })
+        });
 
-        if (descriptorService) {
-          const enrichedMethodData = descriptorService.methods.find(m => m.name === method.name);
+        if (!response.ok) {
+          throw new Error(`Failed to load descriptor: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (data.service) {
+          const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
           if (enrichedMethodData) {
             enrichedMethod = enrichedMethodData;
-            enrichedService = descriptorService;
+            enrichedService = data.service;
             console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
           }
         }
