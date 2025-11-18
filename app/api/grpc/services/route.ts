@@ -87,33 +87,18 @@ export async function POST(req: Request) {
         });
         const responseTime = Date.now() - startTime;
 
-        // Verify we got valid data
+        if (services.length === 0) {
+          throw new Error(`No services found`);
+        }
+
         const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+        const emptyServices = services.length - servicesWithMethods.length;
 
-        if (servicesWithMethods.length === 0) {
-          throw new Error(`No valid services with methods found (got ${services.length} total services)`);
-        }
-
-        // Additional validation: ensure each method has required fields
-        let invalidMethodCount = 0;
-        for (const service of servicesWithMethods) {
-          for (const method of service.methods) {
-            if (!method.name || !method.requestType || !method.responseType) {
-              invalidMethodCount++;
-            }
-          }
-        }
-
-        if (invalidMethodCount > 0) {
-          console.warn(`[Services] Warning: ${invalidMethodCount} methods have incomplete data`);
-        }
-
-        // Success!
         endpointManager.recordSuccess(address, responseTime);
         successfulEndpoint = address;
         tlsUsed = tlsEnabled;
 
-        console.log(`[Services] ✅ Success with ${address} (${responseTime}ms, ${servicesWithMethods.length} services with methods, ${invalidMethodCount} invalid methods)`);
+        console.log(`[Services] Success with ${address} (${responseTime}ms, ${services.length} services total, ${emptyServices} empty)`);
         break; // Exit loop on success
       } catch (err: any) {
         const responseTime = Date.now() - startTime;
@@ -123,7 +108,7 @@ export async function POST(req: Request) {
                           err.message?.includes('EPROTO');
 
         lastError = err;
-        console.error(`[Services] ❌ Failed: ${address} (${responseTime}ms) - ${err.message}`);
+        console.error(`[Services] Failed: ${address} (${responseTime}ms) - ${err.message}`);
 
         // If TLS failed with version mismatch, retry without TLS
         if (tlsEnabled && isTLSError) {
@@ -138,22 +123,21 @@ export async function POST(req: Request) {
             });
             const retryResponseTime = Date.now() - retryStartTime;
 
-            // Verify we got valid data
-            const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
-
-            if (servicesWithMethods.length === 0) {
-              throw new Error(`No valid services with methods found after TLS retry (got ${services.length} total services)`);
+            if (services.length === 0) {
+              throw new Error(`No services found after TLS retry`);
             }
 
-            // Success with non-TLS!
+            const servicesWithMethods = services.filter(s => s.methods && s.methods.length > 0);
+            const emptyServices = services.length - servicesWithMethods.length;
+
             endpointManager.recordSuccess(address, retryResponseTime);
             successfulEndpoint = address;
             tlsUsed = false;
 
-            console.log(`[Services] ✅ Success with ${address} without TLS (${retryResponseTime}ms, ${servicesWithMethods.length} services with methods)`);
+            console.log(`[Services] Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services total, ${emptyServices} empty)`);
             break; // Exit loop on success
           } catch (retryErr: any) {
-            console.error(`[Services] ❌ Retry without TLS also failed: ${retryErr.message}`);
+            console.error(`[Services] Retry without TLS also failed: ${retryErr.message}`);
             endpointManager.recordFailure(address, false);
             lastError = retryErr;
           }
@@ -177,7 +161,6 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
-    // Filter out services with no methods
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
 
     // Auto-detect chain-ID if not already set
@@ -203,7 +186,7 @@ export async function POST(req: Request) {
 
           if (chainDescriptor?.chain?.id) {
             detectedChainId = chainDescriptor.chain.id;
-            console.log(`[Services] ✅ Detected chain-ID via v2alpha1: ${detectedChainId}`);
+            console.log(`[Services] Detected chain-ID via v2alpha1: ${detectedChainId}`);
           }
         } finally {
           chainDescriptorClient.close();
@@ -231,7 +214,7 @@ export async function POST(req: Request) {
 
             if (nodeInfo?.default_node_info?.network) {
               detectedChainId = nodeInfo.default_node_info.network;
-              console.log(`[Services] ✅ Detected chain-ID via v1beta1 fallback: ${detectedChainId}`);
+              console.log(`[Services] Detected chain-ID via v1beta1 fallback: ${detectedChainId}`);
             }
           } finally {
             nodeInfoClient.close();
@@ -271,11 +254,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      services: servicesWithMethods,
+      services: services,
       chainId: detectedChainId,
       status,
       warnings: status.failed > 0
-        ? [`${status.failed} services had no methods or failed to load.`]
+        ? [`${status.failed} services have no methods.`]
         : [],
     });
   } catch (err: any) {

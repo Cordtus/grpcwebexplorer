@@ -14,10 +14,12 @@ const SETTINGS_KEY = 'grpc-explorer:settings';
 // Cache TTL options (in milliseconds)
 export const CACHE_TTL_OPTIONS = {
   NONE: 0,
-  ONE_HOUR: 3600000,      // 1 hour
-  SIX_HOURS: 21600000,    // 6 hours
-  ONE_DAY: 86400000,      // 24 hours
-  THIRTY_SIX_HOURS: 129600000, // 36 hours
+  ONE_HOUR: 3600000,
+  SIX_HOURS: 21600000,
+  ONE_DAY: 86400000,
+  THIRTY_SIX_HOURS: 129600000,
+  SEVENTY_TWO_HOURS: 259200000,
+  MAX: Infinity,
 } as const;
 
 export type CacheTTLOption = keyof typeof CACHE_TTL_OPTIONS;
@@ -28,24 +30,26 @@ export const CACHE_TTL_LABELS: Record<CacheTTLOption, string> = {
   SIX_HOURS: '6 hours',
   ONE_DAY: '24 hours',
   THIRTY_SIX_HOURS: '36 hours',
+  SEVENTY_TWO_HOURS: '72 hours',
+  MAX: 'Never expire',
 };
 
 /**
  * Get user's preferred cache TTL setting
  */
 export function getCacheTTL(): number {
-  if (typeof window === 'undefined') return CACHE_TTL_OPTIONS.ONE_HOUR;
+  if (typeof window === 'undefined') return CACHE_TTL_OPTIONS.MAX;
 
   try {
     const settings = localStorage.getItem(SETTINGS_KEY);
-    if (!settings) return CACHE_TTL_OPTIONS.ONE_HOUR;
+    if (!settings) return CACHE_TTL_OPTIONS.MAX;
 
     const parsed = JSON.parse(settings);
     const ttlOption = parsed.cacheTTL as CacheTTLOption;
 
-    return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.ONE_HOUR;
+    return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.MAX;
   } catch (error) {
-    return CACHE_TTL_OPTIONS.ONE_HOUR;
+    return CACHE_TTL_OPTIONS.MAX;
   }
 }
 
@@ -94,6 +98,11 @@ export function getFromCache<T>(key: string, ttlMs?: number): T | null {
     // If TTL is 0 (NONE), don't use cache
     if (effectiveTTL === 0) {
       return null;
+    }
+
+    // If TTL is Infinity (MAX), never expire
+    if (effectiveTTL === Infinity) {
+      return entry.data;
     }
 
     // Check TTL

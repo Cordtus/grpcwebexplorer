@@ -233,7 +233,7 @@ export class ReflectionClient {
       await this.testReflectionStub();
 
       this.reflectionVersion = 'v1';
-      console.log('[ReflectionClient] ✅ Using grpc.reflection.v1');
+      console.log('[ReflectionClient] Using grpc.reflection.v1');
       return;
     } catch (v1Error: any) {
       console.log(`[ReflectionClient] grpc.reflection.v1 failed: ${v1Error.message}, trying v1alpha...`);
@@ -269,7 +269,7 @@ export class ReflectionClient {
       await this.testReflectionStub();
 
       this.reflectionVersion = 'v1alpha';
-      console.log('[ReflectionClient] ✅ Using grpc.reflection.v1alpha');
+      console.log('[ReflectionClient] Using grpc.reflection.v1alpha');
     } catch (v1alphaError: any) {
       throw new Error(`Failed to initialize reflection stub with both v1 and v1alpha: ${v1alphaError.message}`);
     }
@@ -326,9 +326,9 @@ export class ReflectionClient {
       name => !name.includes('ServerReflection')
     );
 
-    // Load services in parallel with concurrency limit (3 at a time for stability)
+    // Load services in parallel with concurrency limit
     const loadStartTime = Date.now();
-    const concurrencyLimit = 3;
+    const concurrencyLimit = 5;
     const processedServices = new Set<string>();
     const failedServices: string[] = [];
 
@@ -350,13 +350,33 @@ export class ReflectionClient {
       });
     }
 
+    // Retry failed services sequentially
+    if (failedServices.length > 0) {
+      console.log(`[ReflectionClient] Retrying ${failedServices.length} failed services sequentially...`);
+      const retriedServices: string[] = [];
+
+      for (const serviceName of failedServices) {
+        try {
+          await this.loadServiceDescriptor(serviceName);
+          processedServices.add(serviceName);
+          retriedServices.push(serviceName);
+          console.log(`[ReflectionClient] Retry succeeded for ${serviceName}`);
+        } catch (err) {
+          console.error(`[ReflectionClient] Retry failed for ${serviceName}:`, (err as Error).message);
+        }
+      }
+
+      // Update failed services list
+      failedServices.splice(0, failedServices.length, ...failedServices.filter(s => !retriedServices.includes(s)));
+    }
+
     const loadDuration = Date.now() - loadStartTime;
     const totalDuration = Date.now() - initStartTime;
 
     console.log(`[ReflectionClient] Successfully loaded ${processedServices.size}/${servicesToLoad.length} services in ${loadDuration}ms (total: ${totalDuration}ms)`);
 
     if (failedServices.length > 0) {
-      console.log(`[ReflectionClient] Failed services: ${failedServices.join(', ')}`);
+      console.warn(`[ReflectionClient] ${failedServices.length} services permanently failed after retry: ${failedServices.join(', ')}`);
     }
   }
 
@@ -376,10 +396,10 @@ export class ReflectionClient {
       const service = this.root.lookupService(serviceName);
       const methodCount = Object.keys(service.methods || {}).length;
 
-      console.log(`[ReflectionClient] ✅ Loaded ${serviceName} with ${methodCount} methods`);
+      console.log(`[ReflectionClient] Loaded ${serviceName} with ${methodCount} methods`);
 
       if (methodCount === 0) {
-        console.warn(`[ReflectionClient] ⚠️  Warning: Service ${serviceName} has no methods!`);
+        console.warn(`[ReflectionClient] Warning: Service ${serviceName} has no methods!`);
       }
     } catch (err) {
       throw new Error(`Failed to load service ${serviceName}: ${(err as Error).message}`);
@@ -481,7 +501,7 @@ export class ReflectionClient {
 
     try {
       await this.loadServiceDescriptor(missingType);
-      console.log(`[ReflectionClient] ✅ Loaded missing type: ${missingType}`);
+      console.log(`[ReflectionClient] Loaded missing type: ${missingType}`);
     } catch (err) {
       console.warn(`[ReflectionClient] Failed to load missing type ${missingType}:`, err);
       throw err;
@@ -521,7 +541,7 @@ export class ReflectionClient {
       const decodeTime = Date.now() - decodeStart;
 
       const totalTime = Date.now() - startTime;
-      console.log(`[ReflectionClient] ✅ Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
+      console.log(`[ReflectionClient] Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
       return json;
     } catch (decodeErr: any) {
       const errorMsg = decodeErr.message || String(decodeErr);
@@ -1063,7 +1083,24 @@ export class ReflectionClient {
         10000
       );
 
-      if (!response || !response.queries || !response.queries.queryServices) {
+      console.log('[ReflectionClient] v2alpha1 response structure:', JSON.stringify(response).substring(0, 500));
+
+      if (!response) {
+        console.log('[ReflectionClient] No response from v2alpha1');
+        return [];
+      }
+
+      // Handle different response structures
+      let queryServices = null;
+      if (response.queries?.queryServices) {
+        queryServices = response.queries.queryServices;
+      } else if (response.queries?.query_services) {
+        queryServices = response.queries.query_services;
+      } else if (Array.isArray(response)) {
+        queryServices = response;
+      }
+
+      if (!queryServices || queryServices.length === 0) {
         console.log('[ReflectionClient] No query services found in v2alpha1 response');
         return [];
       }
@@ -1071,7 +1108,7 @@ export class ReflectionClient {
       const services: GrpcService[] = [];
 
       // Parse query services from response
-      for (const queryService of response.queries.queryServices) {
+      for (const queryService of queryServices) {
         if (!queryService.fullname || !queryService.methods) continue;
 
         const methods: GrpcMethod[] = [];
@@ -1110,7 +1147,7 @@ export class ReflectionClient {
         });
       }
 
-      console.log(`[ReflectionClient] ✅ Found ${services.length} query services via v2alpha1`);
+      console.log(`[ReflectionClient] Found ${services.length} query services via v2alpha1`);
       return services;
     } catch (err: any) {
       console.log(`[ReflectionClient] v2alpha1 query services not available: ${err.message}`);
@@ -1177,7 +1214,7 @@ export class ReflectionClient {
         return null;
       }
 
-      console.log(`[ReflectionClient] ✅ Found ${methods.length} tx messages via v2alpha1`);
+      console.log(`[ReflectionClient] Found ${methods.length} tx messages via v2alpha1`);
 
       return {
         name: 'Transactions',

@@ -85,32 +85,32 @@ function TreeNode({
   const fullPath = path ? `${path}.${name}` : name;
   
   if (node._isService) {
-    // This is a service with methods
+    const hasMethods = node.methods && node.methods.length > 0;
+
     return (
       <div className="mb-1">
         <div
           className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-secondary/30 transition-colors",
-            "text-xs"
+            "flex items-center gap-1.5 px-2 py-1 rounded transition-colors text-xs",
+            hasMethods && "cursor-pointer hover:bg-secondary/30",
+            !hasMethods && "opacity-50 cursor-not-allowed border-l-2 border-muted"
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
-          onClick={() => setExpanded(!expanded)}
+          onClick={hasMethods ? () => setExpanded(!expanded) : undefined}
         >
-          {node.methods && node.methods.length > 0 ? (
+          {hasMethods ? (
             expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
           ) : (
-            <span className="w-3" />
+            <Circle className="h-2 w-2 text-muted-foreground" />
           )}
-          <FileCode2 className={cn("h-3.5 w-3.5", network.color.text)} />
+          <FileCode2 className={cn("h-3.5 w-3.5", hasMethods ? network.color.text : "text-muted-foreground")} />
           <span className="flex-1 truncate font-medium">{name}</span>
-          {node.methods && (
-            <span className="text-[10px] text-muted-foreground px-1">
-              {node.methods.length}
-            </span>
-          )}
+          <span className="text-[10px] text-muted-foreground px-1">
+            {node.methods ? node.methods.length : 0}
+          </span>
         </div>
-        
-        {expanded && node.methods && (
+
+        {expanded && hasMethods && (
           <div className="mt-0.5">
             {node.methods.map((method: Method) => (
               <div

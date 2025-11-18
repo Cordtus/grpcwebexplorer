@@ -12,6 +12,8 @@ export type {
   ReflectionOptions,
 } from './reflection-client';
 
+import { saveToCache, getFromCache } from '@/lib/utils/client-cache';
+
 /**
  * Fetch all services and their methods using gRPC reflection
  * Drop-in replacement for utils/grpcReflection.ts fetchServicesViaReflection
@@ -59,96 +61,84 @@ export async function fetchServicesWithCosmosOptimization(
   try {
     const services: import('./reflection-client').GrpcService[] = [];
 
-    // Try v2alpha1 Cosmos reflection first (much faster)
-    console.log('[Reflection] Attempting Cosmos v2alpha1 optimized reflection...');
+    console.log('[Reflection] Attempting v2alpha1 reflection...');
 
     // Fetch query services via v2alpha1
     const queryServices = await client.getQueryServicesViaV2Alpha1();
     if (queryServices.length > 0) {
       services.push(...queryServices);
-      console.log(`[Reflection] ✅ Got ${queryServices.length} query services via v2alpha1`);
-
-      // Log services with no methods
-      const emptyServices = queryServices.filter(s => s.methods.length === 0);
-      if (emptyServices.length > 0) {
-        console.log(`[Reflection] ⚠️  ${emptyServices.length} services have no methods from v2alpha1:`, emptyServices.map(s => s.fullName));
-      }
+      console.log(`[Reflection] Got ${queryServices.length} query services via v2alpha1`);
     }
 
     // Fetch tx descriptor via v2alpha1
     const txService = await client.getTxDescriptorViaV2Alpha1();
     if (txService) {
       services.push(txService);
-      console.log(`[Reflection] ✅ Got transaction service via v2alpha1`);
+      console.log(`[Reflection] Got transaction service via v2alpha1`);
     }
 
-    // If we got services via v2alpha1, also try to get any additional services via standard reflection
-    // (some chains may have custom services not covered by v2alpha1)
+    // If v2alpha1 succeeded, return services immediately
     if (services.length > 0) {
-      console.log('[Reflection] v2alpha1 successful, also checking for additional services via standard reflection...');
-
-      try {
-        await client.initialize();
-        const standardServices = client.getServices();
-
-        console.log(`[Reflection] Standard reflection found ${standardServices.length} services`);
-
-        // Merge with v2alpha1 services
-        // For services that exist in both, merge their methods (v2alpha1 sometimes returns empty methods)
-        const serviceMap = new Map<string, import('./reflection-client').GrpcService>();
-
-        // Add v2alpha1 services to map
-        for (const service of services) {
-          serviceMap.set(service.fullName, service);
-        }
-
-        // Merge or add standard reflection services
-        let mergedMethodCount = 0;
-        for (const stdService of standardServices) {
-          const existing = serviceMap.get(stdService.fullName);
-
-          if (existing) {
-            // Service exists in both - merge methods
-            const existingMethodNames = new Set(existing.methods.map(m => m.name));
-            const newMethods = stdService.methods.filter(m => !existingMethodNames.has(m.name));
-
-            if (newMethods.length > 0) {
-              console.log(`[Reflection] 🔀 Merging ${newMethods.length} methods into ${stdService.fullName}`);
-              existing.methods.push(...newMethods);
-              mergedMethodCount += newMethods.length;
-            }
-          } else {
-            // New service not in v2alpha1 - add it
-            console.log(`[Reflection] ➕ Adding service from standard reflection: ${stdService.fullName} (${stdService.methods.length} methods)`);
-            serviceMap.set(stdService.fullName, stdService);
-          }
-        }
-
-        // Convert map back to array and filter out services with no methods
-        const allServices = Array.from(serviceMap.values());
-        const servicesWithMethods = allServices.filter(s => s.methods.length > 0);
-        const emptyServiceCount = allServices.length - servicesWithMethods.length;
-
-        if (emptyServiceCount > 0) {
-          const emptyServiceNames = allServices.filter(s => s.methods.length === 0).map(s => s.fullName);
-          console.log(`[Reflection] ⚠️  Filtered out ${emptyServiceCount} services with no methods:`, emptyServiceNames);
-        }
-
-        console.log(`[Reflection] ✅ Final result: ${servicesWithMethods.length} services with methods (merged ${mergedMethodCount} additional methods)`);
-
-        return servicesWithMethods;
-      } catch (err) {
-        console.log('[Reflection] Standard reflection check failed, using v2alpha1 services only');
-      }
-
+      console.log(`[Reflection] v2alpha1 success: ${services.length} total services`);
+      console.log('[Reflection] Field definitions will be loaded on-demand when methods are used');
       return services;
     }
 
-    // v2alpha1 not available, fall back to standard reflection
-    console.log('[Reflection] v2alpha1 not available, falling back to standard gRPC reflection...');
+    // Fallback to standard reflection if v2alpha1 not available
+    console.log('[Reflection] v2alpha1 not available, using standard reflection...');
     await client.initialize();
-    return client.getServices();
+    const standardServices = client.getServices();
+    console.log(`[Reflection] Got ${standardServices.length} services via standard reflection`);
+    return standardServices;
 
+  } catch (err: any) {
+    console.error('[Reflection] Error in fetchServicesWithCosmosOptimization:', err.message);
+    console.error('[Reflection] Stack trace:', err.stack);
+    throw err;
+  } finally {
+    client.close();
+  }
+}
+
+/**
+ * Lazy-load field definitions for a specific service
+ * Used when user expands a service or executes a method
+ */
+export async function loadServiceDescriptor(
+  options: { endpoint: string; tls: boolean; timeout?: number },
+  serviceName: string
+): Promise<import('./reflection-client').GrpcService | null> {
+  const cacheKey = `descriptor:${options.endpoint}:${options.tls}:${serviceName}`;
+
+  const cached = getFromCache<import('./reflection-client').GrpcService>(cacheKey);
+  if (cached) {
+    console.log(`[Reflection] Using cached descriptor for ${serviceName}`);
+    return cached;
+  }
+
+  console.log(`[Reflection] Loading descriptor for ${serviceName}...`);
+
+  const client = new ReflectionClient({
+    endpoint: options.endpoint,
+    tls: options.tls,
+    timeout: options.timeout || 10000,
+  });
+
+  try {
+    await client.initializeForMethod(serviceName);
+    const services = client.getServices();
+    const service = services.find(s => s.fullName === serviceName);
+
+    if (service) {
+      saveToCache(cacheKey, service);
+      console.log(`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`);
+      return service;
+    }
+
+    return null;
+  } catch (err: any) {
+    console.error(`[Reflection] Failed to load descriptor for ${serviceName}:`, err.message);
+    return null;
   } finally {
     client.close();
   }
