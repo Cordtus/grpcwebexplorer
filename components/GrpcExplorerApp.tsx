@@ -913,7 +913,7 @@ export default function GrpcExplorerApp() {
                     method={selectedMethod.method}
                     service={selectedMethod.service}
                     color={selectedMethod.color}
-                    params={selectedMethod.params}
+                    params={selectedMethod.params || {}}
                     {...(network?.endpoint && { endpoint: network.endpoint })}
                     {...(network?.tlsEnabled !== undefined && { tlsEnabled: network.tlsEnabled })}
                   />
