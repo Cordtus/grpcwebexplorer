@@ -11,9 +11,10 @@ interface MethodDescriptorProps {
   color: string;
   endpoint?: string;
   tlsEnabled?: boolean;
+  params?: Record<string, any>;
 }
 
-export default function MethodDescriptor({ method, service, color, endpoint, tlsEnabled }: MethodDescriptorProps) {
+export default function MethodDescriptor({ method, service, color, endpoint, tlsEnabled, params = {} }: MethodDescriptorProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'curl' | 'javascript'>('curl');
 
@@ -42,10 +43,7 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
 
       // Generate example values for each field
       for (const field of fields) {
-        // Skip optional fields in the example to keep it minimal
-        if (field.rule === 'optional') continue;
-
-        // Generate example value based on type
+        // Generate example value based on type (show all fields, not just required ones)
         if (field.enumValues && field.enumValues.length > 0) {
           exampleFields[field.name] = field.enumValues[0];
         } else if (field.type === 'string') {
@@ -65,12 +63,20 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
         }
       }
 
-      // If no required fields, return empty object
-      if (Object.keys(exampleFields).length === 0) {
+      // Merge with actual user-provided params
+      const mergedFields = { ...exampleFields, ...params };
+
+      // If no fields at all, return empty object
+      if (Object.keys(mergedFields).length === 0) {
         return '{}';
       }
 
-      return JSON.stringify(exampleFields, null, 2);
+      return JSON.stringify(mergedFields, null, 2);
+    }
+
+    // If no field definitions but we have params, use them
+    if (Object.keys(params).length > 0) {
+      return JSON.stringify(params, null, 2);
     }
 
     // Fallback: empty object for unknown types
@@ -83,8 +89,9 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
   const plaintextFlag = tlsEnabled ? '' : '  -plaintext \\\n';
   const exampleEndpoint = endpoint || 'localhost:9090';
 
-  // Only include -d flag if request data is not empty
-  const dataFlag = requestData === '{}' ? '' : `  -d '${requestData}' \\\n`;
+  // Include -d flag if method has fields or if request data is not empty
+  const hasFields = method.requestTypeDefinition && method.requestTypeDefinition.fields.length > 0;
+  const dataFlag = (hasFields || requestData !== '{}') ? `  -d '${requestData}' \\\n` : '';
   const curlExample = `grpcurl \\
 ${plaintextFlag}${dataFlag}  ${exampleEndpoint} \\
   ${service.fullName}/${method.name}`;
@@ -97,12 +104,8 @@ ${plaintextFlag}${dataFlag}  ${exampleEndpoint} \\
     // Extract package name from service
     const packageName = service.fullName.split('.').slice(0, -1).join('.');
 
-    // Example inputs based on common patterns
-    const exampleInput = requestTypeName.includes('Empty') || requestTypeName === 'google.protobuf.Empty'
-      ? '{}'
-      : `{
-  // ${requestTypeName} fields
-}`;
+    // Use the same request data as grpcurl (which includes user params)
+    const exampleInput = requestData;
 
     if (method.responseStreaming) {
       return `import grpc from '@grpc/grpc-js';
