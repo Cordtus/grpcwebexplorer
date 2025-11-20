@@ -34,7 +34,7 @@ const NETWORK_COLORS = [
 export default function GrpcExplorerApp() {
   const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
   const [methodInstances, setMethodInstances] = useState<MethodInstance[]>([]);
-  const [selectedMethod, setSelectedMethod] = useState<MethodInstance | null>(null);
+  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
   const [showAddNetwork, setShowAddNetwork] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -46,6 +46,12 @@ export default function GrpcExplorerApp() {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
+
+  // Derive selectedMethod from methodInstances to ensure it updates with params changes
+  const selectedMethod = useMemo(() => {
+    if (!selectedMethodId) return null;
+    return methodInstances.find(m => m.id === selectedMethodId) || null;
+  }, [selectedMethodId, methodInstances]);
 
   // Load persisted networks from localStorage on mount
   useEffect(() => {
@@ -622,23 +628,14 @@ export default function GrpcExplorerApp() {
       // Method exists, select it and auto-collapse others if enabled
       const existingInstance = methodInstances[existingIndex];
 
-      // Update with enriched data if we loaded field definitions
-      if (needsFieldDefinitions) {
-        setMethodInstances(prev => prev.map(m =>
-          m.id === existingInstance.id
-            ? { ...m, method: enrichedMethod, service: enrichedService, expanded: true }
-            : (autoCollapseEnabled && !m.pinned ? { ...m, expanded: false } : m)
-        ));
-      } else if (autoCollapseEnabled && !existingInstance.expanded) {
-        // If auto-collapse is enabled and we're expanding this method, collapse unpinned methods
-        setMethodInstances(prev => prev.map(m =>
-          m.id === existingInstance.id
-            ? { ...m, expanded: true }
-            : (m.pinned ? m : { ...m, expanded: false })
-        ));
-      }
+      // Always update with enriched data and selection
+      setMethodInstances(prev => prev.map(m =>
+        m.id === existingInstance.id
+          ? { ...m, method: enrichedMethod, service: enrichedService, expanded: true }
+          : (autoCollapseEnabled && !m.pinned ? { ...m, expanded: false } : m)
+      ));
 
-      setSelectedMethod({ ...existingInstance, method: enrichedMethod, service: enrichedService });
+      setSelectedMethodId(existingInstance.id);
     } else {
       // Add new method expanded
       const newInstance: MethodInstance = {
@@ -659,22 +656,22 @@ export default function GrpcExplorerApp() {
         return [...prev, newInstance];
       });
 
-      setSelectedMethod(newInstance);
+      setSelectedMethodId(newInstance.id);
     }
   }, [methodInstances, autoCollapseEnabled, networks]);
 
   // Remove method instance
   const handleRemoveMethodInstance = useCallback((instanceId: string) => {
     setMethodInstances(prev => prev.filter(m => m.id !== instanceId));
-    if (selectedMethod?.id === instanceId) {
-      setSelectedMethod(null);
+    if (selectedMethodId === instanceId) {
+      setSelectedMethodId(null);
     }
-  }, [selectedMethod]);
+  }, [selectedMethodId]);
 
   // Clear all method instances
   const handleClearAllMethods = useCallback(() => {
     setMethodInstances([]);
-    setSelectedMethod(null);
+    setSelectedMethodId(null);
   }, []);
 
   // Toggle method instance expansion
@@ -718,7 +715,7 @@ export default function GrpcExplorerApp() {
   // Execute method
   const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
     setIsExecuting(true);
-    setSelectedMethod(instance);
+    setSelectedMethodId(instance.id);
 
     const startTime = Date.now();
 
@@ -913,6 +910,7 @@ export default function GrpcExplorerApp() {
                     method={selectedMethod.method}
                     service={selectedMethod.service}
                     color={selectedMethod.color}
+                    params={selectedMethod.params || {}}
                     {...(network?.endpoint && { endpoint: network.endpoint })}
                     {...(network?.tlsEnabled !== undefined && { tlsEnabled: network.tlsEnabled })}
                   />
@@ -988,7 +986,7 @@ export default function GrpcExplorerApp() {
                   isSelected={selectedMethod?.id === instance.id}
                   onToggle={() => toggleMethodExpanded(instance.id)}
                   onRemove={() => handleRemoveMethodInstance(instance.id)}
-                  onSelect={() => setSelectedMethod(instance)}
+                  onSelect={() => setSelectedMethodId(instance.id)}
                   onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
                   onExecute={() => handleExecuteMethod(instance)}
                   onTogglePin={() => toggleMethodPin(instance.id)}
