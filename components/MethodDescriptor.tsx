@@ -74,10 +74,15 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
         }
       }
 
-      // Merge with actual user-provided params, converting 64-bit integers to strings
+      // Merge with actual user-provided params, ensuring correct types
       const mergedFields = { ...exampleFields };
       for (const [key, value] of Object.entries(params)) {
-        if (int64Fields.has(key) && value !== undefined && value !== '') {
+        if (value === undefined || value === '') {
+          // Keep the default value for empty inputs
+          continue;
+        }
+
+        if (int64Fields.has(key)) {
           // Convert 64-bit integer values to strings for gRPC JSON encoding
           mergedFields[key] = String(value);
         } else {
