@@ -41,14 +41,25 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
       const fields = method.requestTypeDefinition.fields;
       const exampleFields: Record<string, any> = {};
 
+      // Track which fields are 64-bit integers (need string representation in JSON)
+      const int64Fields = new Set<string>();
+
       // Generate example values for each field
       for (const field of fields) {
+        // Track 64-bit integer fields
+        if (['int64', 'uint64', 'sint64', 'fixed64', 'sfixed64'].includes(field.type)) {
+          int64Fields.add(field.name);
+        }
+
         // Generate example value based on type (show all fields, not just required ones)
         if (field.enumValues && field.enumValues.length > 0) {
           exampleFields[field.name] = field.enumValues[0];
         } else if (field.type === 'string') {
           exampleFields[field.name] = '';
-        } else if (['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64'].includes(field.type)) {
+        } else if (['int64', 'uint64', 'sint64', 'fixed64', 'sfixed64'].includes(field.type)) {
+          // 64-bit integers must be strings in gRPC JSON encoding
+          exampleFields[field.name] = '0';
+        } else if (['int32', 'uint32', 'sint32', 'fixed32', 'sfixed32'].includes(field.type)) {
           exampleFields[field.name] = 0;
         } else if (field.type === 'bool') {
           exampleFields[field.name] = false;
@@ -63,8 +74,16 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
         }
       }
 
-      // Merge with actual user-provided params
-      const mergedFields = { ...exampleFields, ...params };
+      // Merge with actual user-provided params, converting 64-bit integers to strings
+      const mergedFields = { ...exampleFields };
+      for (const [key, value] of Object.entries(params)) {
+        if (int64Fields.has(key) && value !== undefined && value !== '') {
+          // Convert 64-bit integer values to strings for gRPC JSON encoding
+          mergedFields[key] = String(value);
+        } else {
+          mergedFields[key] = value;
+        }
+      }
 
       // If no fields at all, return empty object
       if (Object.keys(mergedFields).length === 0) {
