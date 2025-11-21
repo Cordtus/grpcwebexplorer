@@ -50,9 +50,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Failed to fetch chain data for ${chainName}` }, { status: 500 });
       }
     } else {
-      // Single endpoint - normalize it
+      // Single endpoint - normalize it but respect user's explicit TLS setting
       const normalized = endpointManager.normalizeEndpoint(endpoint);
-      endpoints = [normalized];
+      // Use user's TLS toggle value instead of auto-detected value
+      endpoints = [{ address: normalized.address, tls }];
     }
 
     // Try endpoints sequentially (prioritized) until one succeeds
