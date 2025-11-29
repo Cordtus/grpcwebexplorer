@@ -62,7 +62,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
   if (data === undefined) return <span className="text-muted-foreground">undefined</span>;
 
   if (typeof data === 'string') {
-    return <span className="text-green-600 dark:text-green-400 break-words">"{data}"</span>;
+    return <span className="text-green-600 dark:text-green-400 break-all">"{data}"</span>;
   }
 
   if (typeof data === 'number') {
@@ -83,7 +83,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
     const displayData = hasMore ? data.slice(0, DISPLAY_LIMIT) : data;
 
     return (
-      <div className="w-full">
+      <div className="w-full min-w-0 overflow-hidden">
         <div className="inline-flex items-center gap-1 group">
           <button
             onClick={() => toggleExpand(key)}
@@ -105,11 +105,11 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
           </button>
         </div>
         {isExpanded && (
-          <div className="ml-4 mt-1">
+          <div className="ml-4 mt-1 min-w-0 overflow-hidden">
             {displayData.map((item, index) => (
-              <div key={index} className="flex items-start">
-                <span className="text-muted-foreground mr-2">{index}:</span>
-                <div className="flex-1">
+              <div key={index} className="flex items-start min-w-0 overflow-hidden">
+                <span className="text-muted-foreground mr-2 shrink-0">{index}:</span>
+                <div className="flex-1 min-w-0 overflow-hidden break-all">
                   <JsonViewer data={item} level={level + 1} path={`${path}[${index}]`} />
                 </div>
               </div>
@@ -130,30 +130,30 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
     if (entries.length === 0) return <span>{}</span>;
 
     return (
-      <div>
+      <div className="min-w-0 overflow-hidden">
         {entries.map(([key, value], index) => {
           const itemKey = `${path}.${key}`;
           const isExpanded = level === 0 || expanded.has(itemKey);
           const isObject = typeof value === 'object' && value !== null;
 
           return (
-            <div key={key} className="mb-1 group">
-              <div className="flex items-start">
+            <div key={key} className="mb-1 group min-w-0 overflow-hidden">
+              <div className="flex items-start min-w-0">
                 {isObject && (
                   <button
                     onClick={() => toggleExpand(itemKey)}
-                    className="mr-1 hover:bg-muted rounded p-0.5"
+                    className="mr-1 hover:bg-muted rounded p-0.5 shrink-0"
                   >
                     {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   </button>
                 )}
-                {!isObject && <span className="w-5" />}
-                <span className="text-foreground font-medium">{key}:</span>
-                <div className="ml-2 flex-1 flex items-start gap-1">
+                {!isObject && <span className="w-5 shrink-0" />}
+                <span className="text-foreground font-medium shrink-0">{key}:</span>
+                <div className="ml-2 flex-1 flex items-start gap-1 min-w-0 overflow-hidden">
                   {isObject ? (
                     <>
                       {isExpanded ? (
-                        <div className="ml-4 flex-1">
+                        <div className="ml-4 flex-1 min-w-0 overflow-hidden">
                           <JsonViewer data={value} level={level + 1} path={itemKey} />
                         </div>
                       ) : (
@@ -163,7 +163,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                       )}
                       <button
                         onClick={() => handleCopyValue(value, itemKey)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
                         title={`Copy ${Array.isArray(value) ? 'array' : 'object'}`}
                       >
                         {copiedKeys.has(itemKey) ? (
@@ -175,12 +175,12 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                     </>
                   ) : (
                     <>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0 overflow-hidden break-all">
                         <JsonViewer data={value} level={level + 1} path={itemKey} />
                       </div>
                       <button
                         onClick={() => handleCopyValue(value, itemKey)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
                         title="Copy value"
                       >
                         {copiedKeys.has(itemKey) ? (
@@ -299,8 +299,8 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto min-h-0 min-w-0">
-        <div className="p-4 w-full max-w-full">
+      <div className="flex-1 overflow-auto min-h-0 min-w-0 w-full">
+        <div className="p-4 w-full max-w-full overflow-hidden">
         {isExecuting ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -352,14 +352,14 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 </pre>
               </div>
             ) : result.data ? (
-              <div className="border border-primary/20 rounded-lg p-3 overflow-auto">
+              <div className="border border-primary/20 rounded-lg p-3 overflow-hidden">
                 <h3 className="text-sm font-medium text-foreground mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
-                  <div className="text-xs font-mono overflow-x-auto">
+                  <div className="text-xs font-mono overflow-x-auto min-w-0 w-full">
                     <JsonViewer data={result.data} />
                   </div>
                 ) : (
-                  <pre className="text-xs text-foreground whitespace-pre font-mono bg-muted/50 p-3 rounded overflow-x-auto">
+                  <pre className="text-xs text-foreground whitespace-pre font-mono bg-muted/50 p-3 rounded overflow-x-auto min-w-0">
                     {JSON.stringify(result.data, null, 2)}
                   </pre>
                 )}

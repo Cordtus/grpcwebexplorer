@@ -770,7 +770,7 @@ export default function GrpcExplorerApp() {
   }, [selectedMethod, executionResults]);
 
   return (
-    <div className="h-screen bg-background flex relative">
+    <div className="h-screen w-screen bg-background flex relative overflow-hidden">
       {/* Left Panel - Networks (Full Height) - Collapsible */}
       <div
         className={cn(
@@ -855,7 +855,7 @@ export default function GrpcExplorerApp() {
       )}
 
       {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         {/* Menu Bar */}
         <MenuBar
           onShowHelp={() => setShowHelp(true)}
@@ -947,8 +947,8 @@ export default function GrpcExplorerApp() {
         )}
 
         {/* Center and Right Panels */}
-        <div className="flex-1 min-h-0">
-          <ResizablePanelGroup direction="horizontal" className="h-full">
+        <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             {/* Center Panel - Method Instances */}
             <ResizablePanel defaultSize={33} minSize={25} id="methods-panel" order={1} collapsible={false}>
               <div className="h-full border-r border-border bg-background overflow-y-auto">
@@ -1002,7 +1002,7 @@ export default function GrpcExplorerApp() {
 
             {/* Right Panel - Results */}
             <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="results-panel" order={2} collapsible={false}>
-              <div className="h-full w-full bg-card flex flex-col">
+              <div className="h-full w-full bg-card flex flex-col min-w-0 overflow-hidden">
                 <ResultsPanel
                   result={currentResult || null}
                   isExecuting={isExecuting}
