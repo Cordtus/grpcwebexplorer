@@ -106,41 +106,31 @@ const MethodBlock = React.memo(function MethodBlock({
           {/* Stream indicators */}
           <div className="flex gap-2">
             {instance.method.requestStreaming && (
-              <span className="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                Client streaming
-              </span>
+              <span className="method-type-stream">Client streaming</span>
             )}
             {instance.method.responseStreaming && (
-              <span className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
-                Server streaming
-              </span>
+              <span className="method-type-stream">Server streaming</span>
             )}
             {!instance.method.requestStreaming && !instance.method.responseStreaming && (
-              <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                Unary
-              </span>
+              <span className="badge-muted">Unary</span>
             )}
           </div>
 
           {/* Request/Response types */}
-          <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Request:</span>
-              <code className="font-mono text-blue-600 dark:text-blue-400">
-                {instance.method.requestType}
-              </code>
+          <div className="space-y-2 p-3 bg-muted/50 rounded-lg text-muted-sm">
+            <div className="flex-between">
+              <span>Request:</span>
+              <code className="font-mono text-blue-600 dark:text-blue-400">{instance.method.requestType}</code>
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Response:</span>
-              <code className="font-mono text-green-600 dark:text-green-400">
-                {instance.method.responseType}
-              </code>
+            <div className="flex-between">
+              <span>Response:</span>
+              <code className="font-mono text-green-600 dark:text-green-400">{instance.method.responseType}</code>
             </div>
           </div>
 
           {/* Parameter inputs - using ProtobufFormGenerator */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-foreground">Parameters</h4>
+            <h4 className="section-subheader">Parameters</h4>
             <ProtobufFormGenerator
               messageType={instance.method.requestTypeDefinition}
               value={params}
@@ -156,9 +146,9 @@ const MethodBlock = React.memo(function MethodBlock({
             }}
             disabled={!isValid || isExecuting}
             className={cn(
-              "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
+              "w-full flex-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
               isValid && !isExecuting
-                ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                ? "btn-primary"
                 : "bg-muted text-muted-foreground cursor-not-allowed"
             )}
           >
@@ -176,7 +166,7 @@ const MethodBlock = React.memo(function MethodBlock({
           </button>
 
           {!isValid && hasRequiredFields && (
-            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+            <div className="flex-center-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertCircle className="h-3 w-3" />
               <span>Fill in required fields</span>
             </div>

@@ -154,13 +154,13 @@ const NetworkBlock = React.memo(function NetworkBlock({
       className="shadow-sm"
     >
       {network.loading ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
+        <div className="flex-center justify-center py-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
           <span className="text-sm">Loading services...</span>
         </div>
       ) : network.error ? (
-        <div className="flex items-center text-destructive p-4 bg-destructive/10 rounded-lg">
-          <AlertCircle className="h-4 w-4 mr-2" />
+        <div className="flex-center-2 text-destructive p-4 bg-destructive/10 rounded-lg">
+          <AlertCircle className="h-4 w-4" />
           <span className="text-sm">{network.error}</span>
         </div>
       ) : (
@@ -175,7 +175,7 @@ const NetworkBlock = React.memo(function NetworkBlock({
                   placeholder="Search methods..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-input"
+                  className="form-input pl-9"
                 />
               </div>
             </div>
@@ -194,7 +194,7 @@ const NetworkBlock = React.memo(function NetworkBlock({
                 <div key={group.namespace} className="border border-border rounded-lg overflow-hidden">
                   <button
                     onClick={() => toggleNamespace(group.namespace)}
-                    className="w-full flex items-center gap-2 p-3 hover:bg-muted transition-colors"
+                    className="w-full flex-center-2 p-3 hover:bg-muted transition-colors"
                   >
                     <ChevronRight
                       className={cn(
@@ -219,10 +219,10 @@ const NetworkBlock = React.memo(function NetworkBlock({
                               onClick={() => onSelectMethod(service, method)}
                               className="w-full px-4 py-2 text-left hover:bg-muted transition-colors group"
                             >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <div className="marquee-container flex-1 min-w-0">
+                              <div className="flex-between items-start">
+                                <div className="flex-1-truncate">
+                                  <div className="flex-center-2">
+                                    <div className="marquee-container flex-1-truncate">
                                       <code className="marquee-text text-xs font-mono text-primary" data-long={method.name.length > 25 ? "true" : "false"}>
                                         {method.name}
                                       </code>
@@ -238,7 +238,7 @@ const NetworkBlock = React.memo(function NetworkBlock({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="marquee-container text-[10px] text-muted-foreground mt-0.5">
+                                  <div className="marquee-container text-muted-xs mt-0.5">
                                     <span className="marquee-text" data-long={service.fullName.length > 40 ? "true" : "false"}>
                                       {service.fullName}
                                     </span>

@@ -41,16 +41,14 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
   }, []);
 
   return (
-    <div className="h-10 bg-secondary/30 border-b border-border flex items-center justify-between px-4 shrink-0 relative z-50">
+    <div className="h-10 bg-secondary/30 border-b border-border flex-between px-4 shrink-0 relative z-50">
       {/* Left side - App title */}
-      <div className="flex items-center gap-2">
-        <h1 className="text-sm font-semibold text-foreground">
-          gRPC Explorer
-        </h1>
+      <div className="flex-center-2">
+        <h1 className="section-header">gRPC Explorer</h1>
       </div>
 
       {/* Right side - Actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex-center-1">
         {/* Cache Stats */}
         <div className="relative">
           <button
@@ -58,7 +56,7 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
               updateCacheStats();
               setShowCacheMenu(!showCacheMenu);
             }}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:bg-secondary/50 rounded transition-colors"
+            className="flex-center gap-1.5 px-2 py-1 text-muted-sm hover:bg-secondary/50 rounded transition-colors"
             title="Cache information"
           >
             <Database className="h-3.5 w-3.5" />
@@ -76,19 +74,19 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
                 onClick={() => setShowCacheMenu(false)}
               />
               <div className="absolute right-0 top-full mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1">
-                <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
-                  <div className="flex justify-between mb-1">
+                <div className="px-3 py-2 text-muted-sm border-b border-border">
+                  <div className="flex-between mb-1">
                     <span>Cache entries:</span>
                     <span className="font-medium">{cacheStats.count}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex-between">
                     <span>Size:</span>
                     <span className="font-medium">{cacheStats.sizeKB} KB</span>
                   </div>
                 </div>
                 <button
                   onClick={handleClearCache}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-secondary/50 transition-colors"
+                  className="w-full flex-center-2 px-3 py-2 text-xs text-destructive hover:bg-secondary/50 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Clear all cache
@@ -104,18 +102,14 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
         {/* Help */}
         <button
           onClick={onShowHelp || onShowKeyboardShortcuts}
-          className="p-1.5 text-muted-foreground hover:bg-secondary/50 rounded transition-colors"
+          className="icon-btn text-muted-foreground"
           title={`Help & Guide (${isMac ? 'Cmd' : 'Ctrl'}+Shift+?)`}
         >
           <HelpCircle className="h-4 w-4" />
         </button>
 
-        {/* Settings (placeholder for future) */}
-        <button
-          onClick={onShowSettings}
-          className="p-1.5 text-muted-foreground hover:bg-secondary/50 rounded transition-colors"
-          title="Settings"
-        >
+        {/* Settings */}
+        <button onClick={onShowSettings} className="icon-btn text-muted-foreground" title="Settings">
           <Settings className="h-4 w-4" />
         </button>
       </div>
