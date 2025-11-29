@@ -84,7 +84,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
 
     return (
       <div className="w-full min-w-0 overflow-hidden">
-        <div className="inline-flex items-center gap-1 group">
+        <div className="flex-center-1 group">
           <button
             onClick={() => toggleExpand(key)}
             className="inline-flex items-center hover:bg-muted rounded px-1"
@@ -108,14 +108,14 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
           <div className="ml-4 mt-1 min-w-0 overflow-hidden">
             {displayData.map((item, index) => (
               <div key={index} className="flex items-start min-w-0 overflow-hidden">
-                <span className="text-muted-foreground mr-2 shrink-0">{index}:</span>
-                <div className="flex-1 min-w-0 overflow-hidden break-all">
+                <span className="text-muted-sm mr-2 shrink-0">{index}:</span>
+                <div className="flex-1-truncate break-all">
                   <JsonViewer data={item} level={level + 1} path={`${path}[${index}]`} />
                 </div>
               </div>
             ))}
             {hasMore && (
-              <div className="text-xs text-muted-foreground italic mt-2 p-2 bg-muted rounded">
+              <div className="text-muted-sm italic mt-2 p-2 bg-muted rounded">
                 ... and {data.length - DISPLAY_LIMIT} more items (showing first {DISPLAY_LIMIT} of {data.length})
               </div>
             )}
@@ -153,7 +153,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                   {isObject ? (
                     <>
                       {isExpanded ? (
-                        <div className="ml-4 flex-1 min-w-0 overflow-hidden">
+                        <div className="ml-4 flex-1-truncate">
                           <JsonViewer data={value} level={level + 1} path={itemKey} />
                         </div>
                       ) : (
@@ -175,7 +175,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                     </>
                   ) : (
                     <>
-                      <div className="flex-1 min-w-0 overflow-hidden break-all">
+                      <div className="flex-1-truncate break-all">
                         <JsonViewer data={value} level={level + 1} path={itemKey} />
                       </div>
                       <button
@@ -248,10 +248,10 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden bg-muted/50">
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-muted/70">
-        <h2 className="text-sm font-semibold text-foreground">Execution Results</h2>
+      <div className="shrink-0 flex-between p-4 border-b border-border bg-muted/70">
+        <h2 className="section-header">Execution Results</h2>
         {result && (
-          <div className="flex items-center gap-2">
+          <div className="flex-center-2">
             <div className="flex gap-1">
               <button
                 onClick={() => setViewMode('formatted')}
@@ -276,18 +276,10 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
                 Raw
               </button>
             </div>
-            <button
-              onClick={handleSaveAsJSON}
-              className="p-1.5 hover:bg-muted rounded transition-colors"
-              title="Save as JSON file"
-            >
+            <button onClick={handleSaveAsJSON} className="icon-btn" title="Save as JSON file">
               <Save className="h-4 w-4 text-muted-foreground" />
             </button>
-            <button
-              onClick={handleCopy}
-              className="p-1.5 hover:bg-muted rounded transition-colors"
-              title="Copy entire response"
-            >
+            <button onClick={handleCopy} className="icon-btn" title="Copy entire response">
               {copied ? (
                 <Check className="h-4 w-4 text-green-500" />
               ) : (
@@ -307,21 +299,14 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
               <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Executing method...</p>
               {selectedMethod && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {selectedMethod.method.name}
-                </p>
+                <p className="text-muted-sm mt-1">{selectedMethod.method.name}</p>
               )}
             </div>
           </div>
         ) : result ? (
           <div className="space-y-4">
             {/* Status */}
-            <div className={cn(
-              "flex items-center gap-2 p-3 rounded-lg",
-              result.success 
-                ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
-                : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
-            )}>
+            <div className={result.success ? "status-success" : "status-error"}>
               {result.success ? (
                 <CheckCircle className="h-4 w-4" />
               ) : (
@@ -333,27 +318,23 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
             </div>
 
             {/* Metadata */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-1 text-muted-foreground">
+            <div className="grid grid-cols-2 gap-2 text-muted-sm">
+              <div className="flex-center-1">
                 <Clock className="h-3 w-3" />
                 <span>{formatTimestamp(result.timestamp)}</span>
               </div>
-              <div className="text-right text-muted-foreground">
-                Duration: {formatDuration(result.duration)}
-              </div>
+              <div className="text-right">Duration: {formatDuration(result.duration)}</div>
             </div>
 
             {/* Result Data */}
             {result.error ? (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <h3 className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Error</h3>
-                <pre className="text-xs text-red-600 dark:text-red-300 whitespace-pre-wrap font-mono">
-                  {result.error}
-                </pre>
+              <div className="status-error">
+                <h3 className="section-header mb-2">Error</h3>
+                <pre className="text-xs whitespace-pre-wrap font-mono">{result.error}</pre>
               </div>
             ) : result.data ? (
-              <div className="border border-primary/20 rounded-lg p-3 overflow-hidden">
-                <h3 className="text-sm font-medium text-foreground mb-2">Response Data</h3>
+              <div className="panel-section overflow-hidden">
+                <h3 className="section-header mb-2">Response Data</h3>
                 {viewMode === 'formatted' ? (
                   <div className="text-xs font-mono overflow-x-auto min-w-0 w-full">
                     <JsonViewer data={result.data} />
@@ -373,11 +354,11 @@ export default function ResultsPanel({ result, isExecuting, selectedMethod }: Re
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <div className="h-12 w-12 rounded-full bg-muted flex-center justify-center mx-auto mb-3">
                 <Clock className="h-6 w-6 opacity-50" />
               </div>
               <p className="text-sm">No execution results yet</p>
-              <p className="text-xs mt-1">Execute a method to see results</p>
+              <p className="text-muted-sm mt-1">Execute a method to see results</p>
             </div>
           </div>
         )}
