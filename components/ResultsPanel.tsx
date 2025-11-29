@@ -62,7 +62,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
   if (data === undefined) return <span className="text-muted-foreground">undefined</span>;
 
   if (typeof data === 'string') {
-    return <span className="text-green-600 dark:text-green-400 break-words">"{data}"</span>;
+    return <span className="text-green-600 dark:text-green-400 break-all">"{data}"</span>;
   }
 
   if (typeof data === 'number') {
@@ -105,11 +105,11 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
           </button>
         </div>
         {isExpanded && (
-          <div className="ml-4 mt-1">
+          <div className="ml-4 mt-1 min-w-0 overflow-hidden">
             {displayData.map((item, index) => (
               <div key={index} className="flex items-start min-w-0 overflow-hidden">
                 <span className="text-muted-foreground mr-2 shrink-0">{index}:</span>
-                <div className="flex-1 min-w-0 overflow-hidden">
+                <div className="flex-1 min-w-0 overflow-hidden break-all">
                   <JsonViewer data={item} level={level + 1} path={`${path}[${index}]`} />
                 </div>
               </div>
@@ -175,7 +175,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
                     </>
                   ) : (
                     <>
-                      <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex-1 min-w-0 overflow-hidden break-all">
                         <JsonViewer data={value} level={level + 1} path={itemKey} />
                       </div>
                       <button
