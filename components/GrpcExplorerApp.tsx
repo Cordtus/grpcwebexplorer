@@ -1002,7 +1002,7 @@ export default function GrpcExplorerApp() {
 
             {/* Right Panel - Results */}
             <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="results-panel" order={2} collapsible={false}>
-              <div className="h-full w-full bg-card flex flex-col">
+              <div className="h-full w-full bg-card flex flex-col min-w-0 overflow-hidden">
                 <ResultsPanel
                   result={currentResult || null}
                   isExecuting={isExecuting}
