@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
 	Dialog,
 	DialogContent,
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronRight, Search, Loader2 } from 'lucide-react';
+import { ChevronRight, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { debug } from '@/lib/utils/debug';
 
@@ -40,6 +40,31 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	const [loadingChainData, setLoadingChainData] = useState(false);
 	const [selectedChain, setSelectedChain] = useState<ChainData | null>(null);
 	const [showChainSuggestions, setShowChainSuggestions] = useState(false);
+
+	// Detect potential TLS configuration mismatch
+	const tlsWarning = useMemo(() => {
+		// Skip check for chain: markers (backend handles TLS)
+		if (endpoint.startsWith('chain:')) return null;
+		if (!endpoint.trim()) return null;
+
+		// Extract port from endpoint
+		const portMatch = endpoint.match(/:(\d+)$/);
+		if (!portMatch) return null;
+
+		const port = portMatch[1];
+
+		// Port 443 but TLS OFF - likely misconfigured
+		if (port === '443' && !tlsEnabled) {
+			return 'Port 443 typically requires TLS enabled';
+		}
+
+		// Non-443 port but TLS ON - may be misconfigured
+		if (port !== '443' && tlsEnabled) {
+			return 'Non-443 ports typically use plaintext (TLS off)';
+		}
+
+		return null;
+	}, [endpoint, tlsEnabled]);
 
 	// Fetch chains from registry on mount
 	useEffect(() => {
@@ -462,13 +487,21 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 							</div>
 						)}
 
-						<div className="flex items-center justify-between">
-							<Label htmlFor="tls">Use TLS/SSL</Label>
-							<Switch
-								id="tls"
-								checked={tlsEnabled}
-								onCheckedChange={setTlsEnabled}
-							/>
+						<div className="space-y-1.5">
+							<div className="flex items-center justify-between">
+								<Label htmlFor="tls">Use TLS/SSL</Label>
+								<Switch
+									id="tls"
+									checked={tlsEnabled}
+									onCheckedChange={setTlsEnabled}
+								/>
+							</div>
+							{tlsWarning && (
+								<div className="flex items-center gap-1.5 text-xs text-red-500">
+									<AlertTriangle className="h-3 w-3 shrink-0" />
+									<span>{tlsWarning}</span>
+								</div>
+							)}
 						</div>
 					</div>
 					<DialogFooter>
