@@ -1,6 +1,7 @@
 // Generates REST API paths from gRPC method descriptors
-// Uses google.api.http annotations from proto files when available,
-// falls back to heuristic generation based on Cosmos SDK conventions
+// HTTP annotations (google.api.http) are NOT available via gRPC reflection
+// as they're compile-time extensions for gRPC-gateway. We generate paths
+// heuristically based on Cosmos SDK conventions which are deterministic.
 
 import { MessageTypeDefinition } from '@/components/ProtobufFormGenerator';
 import { HttpRule } from '@/lib/types/grpc';
@@ -213,8 +214,7 @@ function generateHeuristic(
   return {
     url: baseUrl + path + queryString,
     supported: true,
-    method: 'GET',
-    warning: 'Path generated heuristically - verify endpoint exists'
+    method: 'GET'
   };
 }
 

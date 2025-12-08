@@ -755,6 +755,8 @@ export class ReflectionClient {
         service.add(protoMethod);
 
         // Store raw options for later extraction of HTTP annotations
+        // Note: HTTP annotations (google.api.http) are typically NOT available via
+        // gRPC reflection as they are compile-time extensions for gRPC-gateway
         if (method.options) {
           const methodKey = `${serviceFullName}.${method.name}`;
           this.methodOptions.set(methodKey, method.options);
