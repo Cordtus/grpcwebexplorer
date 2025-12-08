@@ -147,6 +147,18 @@ export interface MessageTypeDefinition {
   fields: MessageField[];
 }
 
+// HTTP annotation from google.api.http option
+export interface HttpRule {
+  get?: string;
+  post?: string;
+  put?: string;
+  delete?: string;
+  patch?: string;
+  body?: string;
+  // Additional bindings for alternate paths
+  additionalBindings?: HttpRule[];
+}
+
 export interface GrpcMethod {
   name: string;
   fullName: string;
@@ -156,6 +168,7 @@ export interface GrpcMethod {
   requestStreaming: boolean;
   responseStreaming: boolean;
   description?: string;
+  httpRule?: HttpRule; // REST API mapping from google.api.http annotation
   requestTypeDefinition: MessageTypeDefinition;
   responseTypeDefinition: MessageTypeDefinition;
 }
@@ -654,7 +667,7 @@ export class ReflectionClient {
     if (descriptor.service) {
       for (const svcType of descriptor.service) {
         try {
-          this.addServiceType(namespace, svcType);
+          this.addServiceType(namespace, svcType, pkg);
         } catch (err) {
           // Silently skip duplicates
           if (!(err as Error).message.includes('duplicate')) {
@@ -719,26 +732,84 @@ export class ReflectionClient {
     namespace.add(enumObj);
   }
 
+  // Store raw method options for HTTP annotation extraction
+  private methodOptions: Map<string, any> = new Map();
+
   /**
    * Add service type to namespace
    */
-  private addServiceType(namespace: protobuf.Namespace, svcType: any): void {
+  private addServiceType(namespace: protobuf.Namespace, svcType: any, packagePath: string): void {
     const service = new protobuf.Service(svcType.name);
+    const serviceFullName = packagePath ? `${packagePath}.${svcType.name}` : svcType.name;
 
     if (svcType.method) {
       for (const method of svcType.method) {
-        service.add(new protobuf.Method(
+        const protoMethod = new protobuf.Method(
           method.name,
           'rpc',
           method.inputType.replace(/^\./, ''),
           method.outputType.replace(/^\./, ''),
           method.clientStreaming || false,
           method.serverStreaming || false
-        ));
+        );
+        service.add(protoMethod);
+
+        // Store raw options for later extraction of HTTP annotations
+        if (method.options) {
+          const methodKey = `${serviceFullName}.${method.name}`;
+          this.methodOptions.set(methodKey, method.options);
+        }
       }
     }
 
     namespace.add(service);
+  }
+
+  /**
+   * Extract HTTP rule from method options
+   * The google.api.http extension field number is 72295728
+   */
+  private extractHttpRule(methodKey: string): HttpRule | undefined {
+    const options = this.methodOptions.get(methodKey);
+    if (!options) return undefined;
+
+    // The HTTP annotation is stored in the extension field
+    // Field 72295728 corresponds to google.api.http
+    const httpAnnotation = options['.google.api.http'] ||
+                          options['google.api.http'] ||
+                          options['(google.api.http)'] ||
+                          options[72295728];
+
+    if (!httpAnnotation) return undefined;
+
+    const rule: HttpRule = {};
+
+    // Extract the HTTP method and path
+    if (httpAnnotation.get) rule.get = httpAnnotation.get;
+    if (httpAnnotation.post) rule.post = httpAnnotation.post;
+    if (httpAnnotation.put) rule.put = httpAnnotation.put;
+    if (httpAnnotation.delete) rule.delete = httpAnnotation.delete;
+    if (httpAnnotation.patch) rule.patch = httpAnnotation.patch;
+    if (httpAnnotation.body) rule.body = httpAnnotation.body;
+
+    // Handle additional bindings
+    if (httpAnnotation.additionalBindings && Array.isArray(httpAnnotation.additionalBindings)) {
+      rule.additionalBindings = httpAnnotation.additionalBindings.map((binding: any) => ({
+        get: binding.get,
+        post: binding.post,
+        put: binding.put,
+        delete: binding.delete,
+        patch: binding.patch,
+        body: binding.body,
+      }));
+    }
+
+    // Return undefined if no HTTP method was found
+    if (!rule.get && !rule.post && !rule.put && !rule.delete && !rule.patch) {
+      return undefined;
+    }
+
+    return rule;
   }
 
   /**
@@ -886,7 +957,11 @@ export class ReflectionClient {
               const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
               const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
 
-              methods.push({
+              // Extract HTTP annotation if present
+              const methodKey = `${fullPath}.${methodName}`;
+              const httpRule = this.extractHttpRule(methodKey);
+
+              const methodObj: GrpcMethod = {
                 name: methodName,
                 fullName: `${fullPath}.${methodName}`,
                 serviceName: fullPath,
@@ -896,7 +971,14 @@ export class ReflectionClient {
                 responseStreaming: m.responseStream || false,
                 requestTypeDefinition,
                 responseTypeDefinition,
-              });
+              };
+
+              // Only add httpRule if it was found
+              if (httpRule) {
+                methodObj.httpRule = httpRule;
+              }
+
+              methods.push(methodObj);
             } catch (err) {
               console.warn(`[ReflectionClient] Failed to process method ${methodName} in ${fullPath}:`, err);
             }
