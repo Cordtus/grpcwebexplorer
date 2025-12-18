@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
 	Dialog,
 	DialogContent,
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronRight, ChevronDown, Search, Loader2, History, Database, Globe, Link } from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, Loader2, History, Database, Globe, Link, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { debug } from '@/lib/utils/debug';
 import { listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
@@ -45,6 +45,31 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 	const [selectedChainDetails, setSelectedChainDetails] = useState<ChainData | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const dropdownRef = useRef<HTMLDivElement>(null);
+
+	// Detect potential TLS configuration mismatch
+	const tlsWarning = useMemo(() => {
+		// Skip check for chain: markers (backend handles TLS)
+		if (endpoint.startsWith('chain:')) return null;
+		if (!endpoint.trim()) return null;
+
+		// Extract port from endpoint
+		const portMatch = endpoint.match(/:(\d+)$/);
+		if (!portMatch) return null;
+
+		const port = portMatch[1];
+
+		// Port 443 but TLS OFF - likely misconfigured
+		if (port === '443' && !tlsEnabled) {
+			return 'Port 443 typically requires TLS enabled';
+		}
+
+		// Non-443 port but TLS ON - may be misconfigured
+		if (port !== '443' && tlsEnabled) {
+			return 'Non-443 ports typically use plaintext (TLS off)';
+		}
+
+		return null;
+	}, [endpoint, tlsEnabled]);
 
 	// Load cached chains on mount
 	useEffect(() => {
@@ -512,13 +537,21 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 								</div>
 							</div>
 							{!roundRobinEnabled && (
-								<div className="flex items-center gap-3">
-									<Switch
-										id="tls"
-										checked={tlsEnabled}
-										onCheckedChange={setTlsEnabled}
-									/>
-									<Label htmlFor="tls" className="cursor-pointer text-sm">TLS</Label>
+								<div className="flex flex-col gap-1">
+									<div className="flex items-center gap-3">
+										<Switch
+											id="tls"
+											checked={tlsEnabled}
+											onCheckedChange={setTlsEnabled}
+										/>
+										<Label htmlFor="tls" className="cursor-pointer text-sm">TLS</Label>
+									</div>
+									{tlsWarning && (
+										<div className="flex items-center gap-1.5 text-xs text-amber-500">
+											<AlertTriangle className="h-3 w-3 shrink-0" />
+											<span>{tlsWarning}</span>
+										</div>
+									)}
 								</div>
 							)}
 						</div>

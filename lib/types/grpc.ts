@@ -1,6 +1,17 @@
 // Shared gRPC type definitions
 import { MessageTypeDefinition } from '@/components/ProtobufFormGenerator';
 
+// HTTP annotation from google.api.http option in proto files
+export interface HttpRule {
+	get?: string;
+	post?: string;
+	put?: string;
+	delete?: string;
+	patch?: string;
+	body?: string;
+	additionalBindings?: HttpRule[];
+}
+
 export interface GrpcMethod {
   name: string;
   fullName: string;
@@ -10,6 +21,7 @@ export interface GrpcMethod {
   responseStreaming: boolean;
   options?: any;
   description?: string;
+  httpRule?: HttpRule; // REST API path from google.api.http annotation
   requestTypeDefinition: MessageTypeDefinition;
   responseTypeDefinition: MessageTypeDefinition;
 }
