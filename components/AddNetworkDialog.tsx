@@ -364,7 +364,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 											</div>
 										) : filteredChains.length > 0 ? (
 											<div className="p-1">
-												{filteredChains.slice(0, 30).map((chain) => (
+												{filteredChains.map((chain) => (
 													<button
 														key={chain}
 														type="button"
@@ -386,11 +386,6 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 														)}
 													</button>
 												))}
-												{filteredChains.length > 30 && (
-													<div className="text-xs text-muted-foreground text-center py-2 border-t border-border mt-1">
-														Type to filter {filteredChains.length - 30} more chains...
-													</div>
-												)}
 											</div>
 										) : (
 											<div className="text-sm text-muted-foreground text-center py-4">
