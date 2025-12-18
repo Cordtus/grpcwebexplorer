@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, ChevronLeft, ChevronRight, Pin, PinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExpandableBlock } from './ExpandableBlock';
@@ -43,9 +43,13 @@ export default function GrpcExplorerApp() {
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
+  const [roundRobinEnabled, setRoundRobinEnabled] = useState(false); // Default: disabled
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
+
+  // Round-robin endpoint index tracker per network (for load distribution)
+  const endpointIndexRef = useRef<Map<string, number>>(new Map());
 
   // Derive selectedMethod from methodInstances to ensure it updates with params changes
   const selectedMethod = useMemo(() => {
@@ -53,9 +57,16 @@ export default function GrpcExplorerApp() {
     return methodInstances.find(m => m.id === selectedMethodId) || null;
   }, [selectedMethodId, methodInstances]);
 
-  // Load persisted networks from localStorage on mount
+  // Load persisted networks and settings from localStorage on mount
   useEffect(() => {
     try {
+      // Load round-robin setting
+      const savedRoundRobin = localStorage.getItem('grpc-explorer-round-robin');
+      if (savedRoundRobin !== null) {
+        setRoundRobinEnabled(savedRoundRobin === 'true');
+      }
+
+      // Load networks
       const cached = localStorage.getItem('grpc-explorer-networks');
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -222,8 +233,20 @@ export default function GrpcExplorerApp() {
     return availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length];
   }, [networks]);
 
+  // Handle round-robin setting change
+  const handleRoundRobinChange = useCallback((enabled: boolean) => {
+    setRoundRobinEnabled(enabled);
+    localStorage.setItem('grpc-explorer-round-robin', String(enabled));
+    debug.log(`[Settings] Round-robin ${enabled ? 'enabled' : 'disabled'}`);
+  }, []);
+
   // Add network
-  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean) => {
+  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, roundRobin: boolean) => {
+    // Update global round-robin setting when adding a network
+    if (roundRobin !== roundRobinEnabled) {
+      handleRoundRobinChange(roundRobin);
+    }
+
     // Check client-side cache first to get chain-id for deduplication
     const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
     const cached = getFromCache<any>(cacheKey);
@@ -261,11 +284,15 @@ export default function GrpcExplorerApp() {
       const color = getNextColor();
       const name = actualEndpoint.split('//').pop()?.split(':')[0] || actualEndpoint;
 
+      // Get cached endpoints for round-robin distribution
+      const cachedEndpoints = cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
+      const fallbackEndpoints = cachedEndpoints.filter((ep: string) => ep !== actualEndpoint);
+
       const newNetwork: GrpcNetwork = {
         id,
         name,
         endpoint: actualEndpoint,
-        endpoints: [],
+        endpoints: fallbackEndpoints,
         ...(cachedChainId ? { chainId: cachedChainId } : {}),
         tlsEnabled,
         services: cached.services || [],
@@ -361,12 +388,16 @@ export default function GrpcExplorerApp() {
       }
 
       // Update network with fetched data
+      // Store all available endpoints for round-robin distribution
+      const availableEndpoints = data.availableEndpoints?.map((ep: any) => ep.address) || [];
+
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? {
               ...n,
               services: data.services || [],
               endpoint: actualEndpoint,
+              endpoints: availableEndpoints.filter((ep: string) => ep !== actualEndpoint), // Store others as fallbacks
               ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
               loading: false,
               cached: false,
@@ -382,7 +413,7 @@ export default function GrpcExplorerApp() {
           : n
       ));
     }
-  }, [networks, getNextColor, autoCollapseEnabled]);
+  }, [networks, getNextColor, autoCollapseEnabled, roundRobinEnabled, handleRoundRobinChange]);
 
   // Helper to enqueue descriptor loading jobs for a network
   const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
@@ -712,7 +743,7 @@ export default function GrpcExplorerApp() {
     ));
   }, []);
 
-  // Execute method
+  // Execute method with optional round-robin endpoint distribution
   const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
     setIsExecuting(true);
     setSelectedMethodId(instance.id);
@@ -723,11 +754,26 @@ export default function GrpcExplorerApp() {
       const network = networks.find(n => n.id === instance.networkId);
       if (!network) throw new Error('Network not found');
 
+      let selectedEndpoint: string;
+
+      if (roundRobinEnabled) {
+        // Round-robin enabled: distribute load across all available endpoints
+        const allEndpoints = [network.endpoint, ...(network.endpoints || [])];
+        const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+        selectedEndpoint = allEndpoints[currentIndex % allEndpoints.length];
+        endpointIndexRef.current.set(network.id, (currentIndex + 1) % allEndpoints.length);
+        debug.log(`[RoundRobin] Using endpoint ${currentIndex % allEndpoints.length + 1}/${allEndpoints.length}: ${selectedEndpoint}`);
+      } else {
+        // Round-robin disabled: always use primary endpoint
+        selectedEndpoint = network.endpoint;
+        debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
+      }
+
       const response = await fetch('/api/grpc/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          endpoint: network.endpoint,
+          endpoint: selectedEndpoint,
           tlsEnabled: network.tlsEnabled,
           service: instance.service.fullName,
           method: instance.method.name,
@@ -761,7 +807,7 @@ export default function GrpcExplorerApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [networks]);
+  }, [networks, roundRobinEnabled]);
 
   // Get latest result for selected method
   const currentResult = useMemo(() => {
@@ -1019,6 +1065,7 @@ export default function GrpcExplorerApp() {
         <AddNetworkDialog
           onAdd={handleAddNetwork}
           onClose={() => setShowAddNetwork(false)}
+          defaultRoundRobin={roundRobinEnabled}
         />
       )}
 
@@ -1032,6 +1079,8 @@ export default function GrpcExplorerApp() {
         onClose={() => setShowSettings(false)}
         autoCollapseEnabled={autoCollapseEnabled}
         onAutoCollapseChange={setAutoCollapseEnabled}
+        roundRobinEnabled={roundRobinEnabled}
+        onRoundRobinChange={handleRoundRobinChange}
       />
     </div>
   );

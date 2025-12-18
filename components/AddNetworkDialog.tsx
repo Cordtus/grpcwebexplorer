@@ -18,8 +18,9 @@ import { cn } from '@/lib/utils';
 import { debug } from '@/lib/utils/debug';
 
 interface AddNetworkDialogProps {
-	onAdd: (endpoint: string, tlsEnabled: boolean) => void;
+	onAdd: (endpoint: string, tlsEnabled: boolean, roundRobinEnabled: boolean) => void;
 	onClose: () => void;
+	defaultRoundRobin?: boolean;
 }
 
 interface ChainData {
@@ -29,9 +30,10 @@ interface ChainData {
 	grpc_endpoints: Array<{ address: string; provider?: string }>;
 }
 
-const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) => {
+const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, defaultRoundRobin = false }) => {
 	const [endpoint, setEndpoint] = useState('');
 	const [tlsEnabled, setTlsEnabled] = useState(true);
+	const [roundRobinEnabled, setRoundRobinEnabled] = useState(defaultRoundRobin);
 	const [showChainRegistry, setShowChainRegistry] = useState(false);
 	const [chains, setChains] = useState<string[]>([]);
 	const [filteredChains, setFilteredChains] = useState<string[]>([]);
@@ -140,10 +142,11 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 				debug.log(`Auto-detected chain name, using: ${finalEndpoint}`);
 			}
 
-			onAdd(finalEndpoint, tlsEnabled);
+			onAdd(finalEndpoint, tlsEnabled, roundRobinEnabled);
 			// Reset form
 			setEndpoint('');
 			setTlsEnabled(true);
+			setRoundRobinEnabled(defaultRoundRobin);
 			onClose(); // Close dialog after adding
 		}
 	};
@@ -152,6 +155,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		// Reset form
 		setEndpoint('');
 		setTlsEnabled(true);
+		setRoundRobinEnabled(defaultRoundRobin);
 		setShowChainRegistry(false);
 		setSelectedChain(null);
 		setSearchQuery('');
@@ -490,6 +494,19 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 						<div className="space-y-1.5">
 							<div className="flex items-center justify-between">
 								<Label htmlFor="tls">Use TLS/SSL</Label>
+						<div className="flex items-center gap-6">
+							<div className="flex items-center gap-3 flex-1">
+								<Switch
+									id="roundrobin"
+									checked={roundRobinEnabled}
+									onCheckedChange={setRoundRobinEnabled}
+								/>
+								<div className="flex flex-col">
+									<Label htmlFor="roundrobin" className="cursor-pointer">Round-robin</Label>
+									<span className="text-[10px] text-muted-foreground">Rotate endpoints for calls</span>
+								</div>
+							</div>
+							<div className="flex items-center gap-3">
 								<Switch
 									id="tls"
 									checked={tlsEnabled}
@@ -502,6 +519,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 									<span>{tlsWarning}</span>
 								</div>
 							)}
+								<Label htmlFor="tls" className="cursor-pointer">TLS/SSL</Label>
+							</div>
 						</div>
 					</div>
 					<DialogFooter>
