@@ -94,20 +94,39 @@ const NetworkBlock = React.memo(function NetworkBlock({
     [network.services]
   );
 
-  // Filter methods based on search
+  // Filter methods based on search - matches namespace, service name, or method name
   const filteredGroups = useMemo(() => {
     if (!searchTerm) return namespaceGroups;
 
-    return namespaceGroups.map(group => ({
-      ...group,
-      services: group.services.map(({ service, methods }) => ({
-        service,
-        methods: methods.filter(method =>
-          method?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          method?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      })).filter(s => s.methods.length > 0)
-    })).filter(g => g.services.length > 0);
+    const query = searchTerm.toLowerCase();
+
+    return namespaceGroups.map(group => {
+      // Check if namespace matches - if so, include all services/methods in this namespace
+      const namespaceMatches = group.namespace.toLowerCase().includes(query);
+
+      return {
+        ...group,
+        services: group.services.map(({ service, methods }) => {
+          // Check if service name matches - if so, include all methods
+          const serviceMatches = service.fullName.toLowerCase().includes(query) ||
+                                service.name.toLowerCase().includes(query);
+
+          if (namespaceMatches || serviceMatches) {
+            // If namespace or service matches, include all methods
+            return { service, methods };
+          }
+
+          // Otherwise, filter by method name
+          return {
+            service,
+            methods: methods.filter(method =>
+              method?.name?.toLowerCase().includes(query) ||
+              method?.fullName?.toLowerCase().includes(query)
+            )
+          };
+        }).filter(s => s.methods.length > 0)
+      };
+    }).filter(g => g.services.length > 0);
   }, [namespaceGroups, searchTerm]);
 
   const toggleNamespace = (namespace: string) => {
@@ -164,15 +183,15 @@ const NetworkBlock = React.memo(function NetworkBlock({
           <span className="text-sm">{network.error}</span>
         </div>
       ) : (
-        <>
-          {/* Search */}
+        <div className="flex flex-col h-full max-h-[calc(100vh-200px)]">
+          {/* Search - sticky at top */}
           {network.services.length > 0 && (
-            <div className="mb-4">
+            <div className="sticky top-0 z-10 bg-background pb-3 -mx-4 px-4 pt-1 border-b border-border mb-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Search methods..."
+                  placeholder="Search services and methods..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="form-input pl-9"
@@ -181,8 +200,8 @@ const NetworkBlock = React.memo(function NetworkBlock({
             </div>
           )}
 
-          {/* Namespaces */}
-          <div className="space-y-2">
+          {/* Namespaces - scrollable */}
+          <div className="space-y-2 overflow-y-auto flex-1">
             {filteredGroups.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground">
                 <p className="text-sm">
@@ -256,7 +275,7 @@ const NetworkBlock = React.memo(function NetworkBlock({
               ))
             )}
           </div>
-        </>
+        </div>
       )}
     </ExpandableBlock>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, ChevronLeft, ChevronRight, Pin, PinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExpandableBlock } from './ExpandableBlock';
@@ -46,6 +46,9 @@ export default function GrpcExplorerApp() {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
+
+  // Round-robin endpoint index tracker per network (for load distribution)
+  const endpointIndexRef = useRef<Map<string, number>>(new Map());
 
   // Derive selectedMethod from methodInstances to ensure it updates with params changes
   const selectedMethod = useMemo(() => {
@@ -261,11 +264,15 @@ export default function GrpcExplorerApp() {
       const color = getNextColor();
       const name = actualEndpoint.split('//').pop()?.split(':')[0] || actualEndpoint;
 
+      // Get cached endpoints for round-robin distribution
+      const cachedEndpoints = cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
+      const fallbackEndpoints = cachedEndpoints.filter((ep: string) => ep !== actualEndpoint);
+
       const newNetwork: GrpcNetwork = {
         id,
         name,
         endpoint: actualEndpoint,
-        endpoints: [],
+        endpoints: fallbackEndpoints,
         ...(cachedChainId ? { chainId: cachedChainId } : {}),
         tlsEnabled,
         services: cached.services || [],
@@ -361,12 +368,16 @@ export default function GrpcExplorerApp() {
       }
 
       // Update network with fetched data
+      // Store all available endpoints for round-robin distribution
+      const availableEndpoints = data.availableEndpoints?.map((ep: any) => ep.address) || [];
+
       setNetworks(prev => prev.map(n =>
         n.id === id
           ? {
               ...n,
               services: data.services || [],
               endpoint: actualEndpoint,
+              endpoints: availableEndpoints.filter((ep: string) => ep !== actualEndpoint), // Store others as fallbacks
               ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
               loading: false,
               cached: false,
@@ -712,7 +723,7 @@ export default function GrpcExplorerApp() {
     ));
   }, []);
 
-  // Execute method
+  // Execute method with round-robin endpoint distribution
   const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
     setIsExecuting(true);
     setSelectedMethodId(instance.id);
@@ -723,11 +734,25 @@ export default function GrpcExplorerApp() {
       const network = networks.find(n => n.id === instance.networkId);
       if (!network) throw new Error('Network not found');
 
+      // Build list of all available endpoints for this network
+      const allEndpoints = [network.endpoint, ...(network.endpoints || [])];
+
+      // Get current round-robin index for this network
+      const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+
+      // Select endpoint using round-robin (distribute load across endpoints)
+      const selectedEndpoint = allEndpoints[currentIndex % allEndpoints.length];
+
+      // Update index for next request (round-robin)
+      endpointIndexRef.current.set(network.id, (currentIndex + 1) % allEndpoints.length);
+
+      debug.log(`[RoundRobin] Using endpoint ${currentIndex % allEndpoints.length + 1}/${allEndpoints.length}: ${selectedEndpoint}`);
+
       const response = await fetch('/api/grpc/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          endpoint: network.endpoint,
+          endpoint: selectedEndpoint,
           tlsEnabled: network.tlsEnabled,
           service: instance.service.fullName,
           method: instance.method.name,
