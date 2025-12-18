@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { fetchServicesViaReflection, fetchServicesWithCosmosOptimization, type GrpcService } from '@/lib/grpc/reflection-utils';
 import { endpointManager } from '@/lib/utils/endpoint-manager';
+import { fetchChainApis } from '@/lib/services/chainRegistry';
 
 export const runtime = 'nodejs';
 
@@ -25,25 +26,18 @@ export async function POST(req: Request) {
       chainName = endpoint.replace('chain:', '');
       console.log(`[Services] Chain marker detected: ${chainName} - will use concurrent endpoint fetching`);
 
-      // Fetch endpoints from chain registry
+      // Fetch endpoints from chain registry using the chainRegistry service
       try {
-        const chainResponse = await fetch(`https://raw.githubusercontent.com/cosmos/chain-registry/master/${chainName}/chain.json`);
-        if (chainResponse.ok) {
-          const chainData = await chainResponse.json();
-          const grpcEndpoints = chainData.apis?.grpc || [];
-
+        const chainApis = await fetchChainApis(chainName);
+        if (chainApis && chainApis.grpc && chainApis.grpc.length > 0) {
           // Use endpoint manager to normalize and detect TLS
-          endpoints = grpcEndpoints.map((ep: any) =>
+          endpoints = chainApis.grpc.map((ep) =>
             endpointManager.normalizeEndpoint(ep.address)
           );
 
           console.log(`[Services] Loaded ${endpoints.length} endpoints for ${chainName}`);
-
-          if (endpoints.length === 0) {
-            return NextResponse.json({ error: `No gRPC endpoints found for chain ${chainName}` }, { status: 404 });
-          }
         } else {
-          return NextResponse.json({ error: `Chain ${chainName} not found in registry` }, { status: 404 });
+          return NextResponse.json({ error: `No gRPC endpoints found for chain ${chainName}` }, { status: 404 });
         }
       } catch (error) {
         console.error(`[Services] Error fetching chain data for ${chainName}:`, error);
@@ -254,10 +248,17 @@ export async function POST(req: Request) {
       }
     }
 
+    // For chain markers, return all available endpoints for round-robin distribution
+    const allEndpoints = isChainMarker
+      ? prioritizedEndpoints.map(ep => ({ address: ep.address, tls: ep.tls }))
+      : [];
+
     return NextResponse.json({
       services: services,
       chainId: detectedChainId,
       status,
+      // Include all endpoints for round-robin distribution (only for chain markers)
+      availableEndpoints: allEndpoints,
       warnings: status.failed > 0
         ? [`${status.failed} services have no methods.`]
         : [],

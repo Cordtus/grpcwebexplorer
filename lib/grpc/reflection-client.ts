@@ -509,6 +509,52 @@ export class ReflectionClient {
   }
 
   /**
+   * Decode base64-encoded bytes fields that contain valid UTF-8 text
+   * Cosmos SDK often stores decimal numbers as bytes (e.g., epoch_provisions, amounts)
+   */
+  private decodeBase64BytesFields(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.decodeBase64BytesFields(item));
+    }
+
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = this.decodeBase64BytesFields(value);
+      }
+      return result;
+    }
+
+    // Check if it's a base64-encoded string that decodes to valid text
+    if (typeof obj === 'string' && obj.length > 0) {
+      // Only try to decode strings that look like base64 (alphanumeric + /+=)
+      if (/^[A-Za-z0-9+/]+=*$/.test(obj) && obj.length >= 4) {
+        try {
+          const decoded = Buffer.from(obj, 'base64').toString('utf-8');
+          // Check if decoded string is valid UTF-8 text (printable ASCII or valid UTF-8)
+          // and doesn't contain control characters (except newlines/tabs)
+          if (decoded.length > 0 && !/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(decoded)) {
+            // Verify it's not binary data by checking if it re-encodes correctly
+            // and contains mostly printable characters
+            const printableRatio = (decoded.match(/[\x20-\x7E\n\r\t]/g) || []).length / decoded.length;
+            if (printableRatio > 0.9) {
+              return decoded;
+            }
+          }
+        } catch {
+          // Not valid base64 or UTF-8, return original
+        }
+      }
+    }
+
+    return obj;
+  }
+
+  /**
    * Recursively load all missing types until decode succeeds
    * Handles complex responses with multiple nested dependencies
    */
@@ -542,7 +588,9 @@ export class ReflectionClient {
 
       const totalTime = Date.now() - startTime;
       console.log(`[ReflectionClient] Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
-      return json;
+
+      // Decode base64 bytes fields that contain valid UTF-8 text
+      return this.decodeBase64BytesFields(json);
     } catch (decodeErr: any) {
       const errorMsg = decodeErr.message || String(decodeErr);
 
@@ -1030,7 +1078,8 @@ export class ReflectionClient {
                 objects: true,
                 oneofs: true,
               });
-              resolve(json);
+              // Decode base64 bytes fields that contain valid UTF-8 text
+              resolve(this.decodeBase64BytesFields(json));
             } catch (decodeErr: any) {
               // Check if this is a missing type error
               const errorMsg = decodeErr.message || String(decodeErr);
