@@ -55,25 +55,25 @@ See [deployment/README.md](deployment/README.md) for systemd service configurati
 
 ### Adding Networks
 
-**Direct endpoint**:
+The Add Network dialog features a searchable dropdown of all chains from the Cosmos Chain Registry.
+
+**Select from chain list** (recommended):
 1. Click "Add Network" (or `Cmd/Ctrl+N`)
-2. Enter endpoint: `grpc.example.com:443`
-3. Configure options:
-   - **Round-robin**: Toggle to distribute requests across multiple endpoints (disabled by default)
-   - **TLS**: Enable for secure connections (auto-enabled for port 443)
+2. The dropdown shows all available chains - type to filter
+3. Click a chain name to select it
+4. With **Round-robin ON**: Chain is added immediately with all endpoints
+5. With **Round-robin OFF**: Choose "Use All Endpoints" or pick a specific one
+
+**Direct endpoint** (for custom gRPC servers):
+1. Paste or type a gRPC endpoint (e.g., `grpc.myserver.com:443`)
+2. The label changes to "Direct Endpoint" when you enter an address
+3. Configure TLS toggle as needed
 4. Click "Add Network"
 
-**Chain registry**:
-1. Click "Add Network" → "Browse Chain Registry"
-2. Search or scroll to select chain
-3. Select specific endpoint or "Use All Endpoints" for automatic fallback
-
 **Recently used chains**:
-1. Click "Add Network" → "Recent" button (shows count of cached chains)
-2. Select from list of previously used chains
-3. Each entry shows chain-id, endpoint, service count, and cache age
-
-**Quick entry**: Type chain name directly (e.g., `osmosis`, `dydx`) and press Enter
+1. Click "Recent" button (shows count of cached chains)
+2. Select from chains you've used before
+3. Shows chain-id, service count, and cache age
 
 ### Executing Methods
 

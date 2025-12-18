@@ -100,65 +100,62 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
             <div>
               <h3 className="font-semibold mb-2">Adding Networks</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Four ways to connect to gRPC endpoints:
+                The Add Network dialog provides a searchable dropdown of all chains from the Cosmos Chain Registry.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 1:</span> Direct Endpoint
+                  <span className="text-primary">Quick Add:</span> Select from Chain List
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                   <li>Click "Add Network" button</li>
-                  <li>Enter gRPC endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.cosmos.directory:443</code>)</li>
-                  <li>Configure Round-robin toggle (off by default) and TLS toggle</li>
+                  <li>The dropdown shows all available chains - type to filter</li>
+                  <li>Click a chain name to select it</li>
+                  <li>With <strong>Round-robin ON</strong>: Chain is added immediately with all endpoints</li>
+                  <li>With <strong>Round-robin OFF</strong>: Choose "Use All Endpoints" or pick a specific one</li>
+                </ol>
+              </div>
+
+              <div className="border border-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-primary">Direct Endpoint:</span> Custom gRPC Server
+                </h4>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Click "Add Network" button</li>
+                  <li>Paste or type a gRPC endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.myserver.com:443</code>)</li>
+                  <li>Configure TLS toggle as needed</li>
                   <li>Click "Add Network"</li>
                 </ol>
+                <p className="text-xs text-muted-foreground mt-2">
+                  The label changes to "Direct Endpoint" when you enter an address with a port or domain.
+                </p>
               </div>
 
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 2:</span> Recently Used Chains
+                  <span className="text-primary">Recent:</span> Previously Used Chains
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>Click "Recent" button (shows count of cached chains)</li>
-                  <li>Select from previously used chains with chain-id, endpoint, and cache age</li>
-                </ol>
-              </div>
-
-              <div className="border border-border rounded-lg p-4">
-                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 3:</span> Chain Registry Browser
-                </h4>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>Click "Browse Chain Registry"</li>
-                  <li>Search for a chain (e.g., "Cosmos Hub", "Osmosis")</li>
-                  <li>Select chain to view available gRPC endpoints</li>
-                  <li>Click "Use All Endpoints" or select specific endpoint</li>
-                </ol>
-              </div>
-
-              <div className="border border-border rounded-lg p-4">
-                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 4:</span> Chain Name Shortcut
-                </h4>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>Type just the chain name (e.g., "dydx", "osmosis")</li>
-                  <li>System auto-detects and loads all chain endpoints</li>
+                  <li>Click "Add Network" → "Recent" button</li>
+                  <li>Select from chains you've used before</li>
+                  <li>Shows chain-id, service count, and cache age</li>
                 </ol>
               </div>
 
               <div className="border border-border rounded-lg p-4 bg-secondary/20">
-                <h4 className="text-sm font-semibold mb-2">Round-Robin Setting</h4>
-                <p className="text-sm text-muted-foreground">
-                  When enabled, method execution rotates through all available endpoints.
-                  When disabled (default), uses the primary endpoint only.
-                  Configure in Settings or Add Network dialog.
-                </p>
+                <h4 className="text-sm font-semibold mb-2">Round-Robin Mode</h4>
+                <ul className="text-sm text-muted-foreground space-y-1.5">
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>ON:</strong> Clicking a chain adds it instantly. Method calls rotate through all endpoints.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>OFF (default):</strong> Shows endpoint picker. Uses your selected endpoint for all calls.</span>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
