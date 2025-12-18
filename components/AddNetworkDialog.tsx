@@ -342,6 +342,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 										}}
 										className="pr-8"
 										autoFocus
+										autoComplete="off"
 									/>
 									<button
 										type="button"
