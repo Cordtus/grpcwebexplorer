@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Copy, Check, FileCode, ArrowRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Copy, Check, FileCode, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GrpcMethod, GrpcService } from '@/lib/types/grpc';
+import { generateRestUrl } from '@/lib/utils/rest-path-mapper';
 
 interface MethodDescriptorProps {
   method: GrpcMethod;
@@ -12,11 +13,12 @@ interface MethodDescriptorProps {
   endpoint?: string;
   tlsEnabled?: boolean;
   params?: Record<string, any>;
+  restEndpoint?: string; // REST API endpoint (defaults to port 1317)
 }
 
-export default function MethodDescriptor({ method, service, color, endpoint, tlsEnabled, params = {} }: MethodDescriptorProps) {
+export default function MethodDescriptor({ method, service, color, endpoint, tlsEnabled, params = {}, restEndpoint }: MethodDescriptorProps) {
   const [copied, setCopied] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'curl' | 'javascript'>('curl');
+  const [activeTab, setActiveTab] = useState<'curl' | 'grpcurl'>('curl');
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -27,8 +29,40 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
   // Generate proto definition
   const protoDefinition = `rpc ${method.name}(${method.requestStreaming ? 'stream ' : ''}${method.requestType}) returns (${method.responseStreaming ? 'stream ' : ''}${method.responseType});`;
 
-  // Generate realistic request data for grpcurl based on actual fields
-  const generateRequestData = () => {
+  // Derive REST endpoint from gRPC endpoint (port 9090 -> 1317)
+  const restBaseUrl = useMemo(() => {
+    if (restEndpoint) return restEndpoint;
+    if (!endpoint) return 'https://api.example.com';
+    // Replace gRPC port with REST port
+    const url = endpoint.replace(/:9090$/, ':1317').replace(/:443$/, '');
+    // Add https if no protocol
+    if (!url.startsWith('http')) {
+      return tlsEnabled !== false ? `https://${url}` : `http://${url}`;
+    }
+    return url;
+  }, [endpoint, tlsEnabled, restEndpoint]);
+
+  // Generate REST curl example using method descriptor and HTTP annotation
+  const restResult = useMemo(() => {
+    return generateRestUrl(
+      service.fullName,
+      method.name,
+      params,
+      restBaseUrl,
+      method.requestTypeDefinition,
+      method.httpRule
+    );
+  }, [service.fullName, method.name, params, restBaseUrl, method.requestTypeDefinition, method.httpRule]);
+
+  const curlExample = useMemo(() => {
+    if (!restResult.supported) {
+      return `# No known REST mapping for this method\n# Use grpcurl tab instead`;
+    }
+    return `curl '${restResult.url}'`;
+  }, [restResult]);
+
+  // Generate grpcurl request data based on actual fields
+  const generateGrpcRequestData = () => {
     const requestTypeName = method.requestType.split('.').pop() || method.requestType;
 
     // Check if request type is Empty
@@ -107,96 +141,19 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
     return '{}';
   };
 
-  const requestData = generateRequestData();
+  const grpcRequestData = generateGrpcRequestData();
 
-  // Generate curl example
-  const plaintextFlag = tlsEnabled ? '' : '  -plaintext \\\n';
-  const exampleEndpoint = endpoint || 'localhost:9090';
+  // Generate grpcurl example
+  const grpcurlExample = useMemo(() => {
+    const plaintextFlag = tlsEnabled ? '' : '  -plaintext \\\n';
+    const grpcEndpoint = endpoint || 'localhost:9090';
+    const hasFields = method.requestTypeDefinition && method.requestTypeDefinition.fields.length > 0;
+    const dataFlag = (hasFields || grpcRequestData !== '{}') ? `  -d '${grpcRequestData}' \\\n` : '';
 
-  // Include -d flag if method has fields or if request data is not empty
-  const hasFields = method.requestTypeDefinition && method.requestTypeDefinition.fields.length > 0;
-  const dataFlag = (hasFields || requestData !== '{}') ? `  -d '${requestData}' \\\n` : '';
-  const curlExample = `grpcurl \\
-${plaintextFlag}${dataFlag}  ${exampleEndpoint} \\
+    return `grpcurl \\
+${plaintextFlag}${dataFlag}  ${grpcEndpoint} \\
   ${service.fullName}/${method.name}`;
-
-  // Generate code example with realistic inputs
-  const generateCodeExample = () => {
-    const requestTypeName = method.requestType.split('.').pop() || method.requestType;
-    const responseTypeName = method.responseType.split('.').pop() || method.responseType;
-
-    // Extract package name from service
-    const packageName = service.fullName.split('.').slice(0, -1).join('.');
-
-    // Use the same request data as grpcurl (which includes user params)
-    const exampleInput = requestData;
-
-    if (method.responseStreaming) {
-      return `import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
-
-const packageDefinition = protoLoader.loadSync('path/to/proto.proto', {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true
-});
-
-const proto = grpc.loadPackageDefinition(packageDefinition);
-
-const client = new proto.${packageName}.${service.name}(
-  'localhost:9090',
-  grpc.credentials.createInsecure()
-);
-
-const request = ${exampleInput};
-
-const stream = client.${method.name}(request);
-
-stream.on('data', (response) => {
-  console.log(response);
-});
-
-stream.on('end', () => {
-  console.log('Stream ended');
-});
-
-stream.on('error', (err) => {
-  console.error('Error:', err);
-});`;
-    } else {
-      return `import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
-import { promisify } from 'util';
-
-const packageDefinition = protoLoader.loadSync('path/to/proto.proto', {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true
-});
-
-const proto = grpc.loadPackageDefinition(packageDefinition);
-
-const client = new proto.${packageName}.${service.name}(
-  'localhost:9090',
-  grpc.credentials.createInsecure()
-);
-
-const ${method.name.toLowerCase()} = promisify(
-  client.${method.name}.bind(client)
-);
-
-const request = ${exampleInput};
-
-const response = await ${method.name.toLowerCase()}(request);
-console.log(response);`;
-    }
-  };
-
-  const codeExample = generateCodeExample();
+  }, [tlsEnabled, endpoint, method, service.fullName, grpcRequestData]);
 
   return (
     <div className="h-full flex flex-col p-4 bg-background">
@@ -300,41 +257,53 @@ console.log(response);`;
                     : "text-foreground hover:bg-muted"
                 )}
               >
-                cURL
+                curl (REST)
               </button>
               <button
-                onClick={() => setActiveTab('javascript')}
+                onClick={() => setActiveTab('grpcurl')}
                 className={cn(
                   "px-2.5 py-1 text-xs font-semibold rounded transition-colors",
-                  activeTab === 'javascript'
+                  activeTab === 'grpcurl'
                     ? "bg-primary text-primary-foreground"
                     : "text-foreground hover:bg-muted"
                 )}
               >
-                JavaScript
+                grpcurl
               </button>
             </div>
             <button
-              onClick={() => handleCopy(activeTab === 'curl' ? curlExample : codeExample, activeTab)}
+              onClick={() => handleCopy(activeTab === 'curl' ? curlExample : grpcurlExample, activeTab)}
               className="p-1 hover:bg-muted rounded transition-colors"
+              disabled={activeTab === 'curl' && !restResult.supported}
             >
               {copied === activeTab ? (
                 <Check className="h-3.5 w-3.5 text-green-500" />
               ) : (
-                <Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                <Copy className={cn(
+                  "h-3.5 w-3.5 transition-colors",
+                  activeTab === 'curl' && !restResult.supported
+                    ? "text-muted-foreground/50"
+                    : "text-muted-foreground hover:text-foreground"
+                )} />
               )}
             </button>
           </div>
           <div className="flex-1 overflow-auto min-h-0 code-snippet-scroll">
             <div className="p-4 bg-muted/50 rounded-lg border border-primary/20 shadow-lg">
-              <pre className="text-xs text-blue-100 dark:text-blue-50 font-mono whitespace-pre leading-relaxed">
-                {activeTab === 'curl' ? curlExample : codeExample}
+              <pre className={cn(
+                "text-xs font-mono whitespace-pre leading-relaxed",
+                activeTab === 'curl' && !restResult.supported
+                  ? "text-muted-foreground"
+                  : "text-blue-100 dark:text-blue-50"
+              )}>
+                {activeTab === 'curl' ? curlExample : grpcurlExample}
               </pre>
             </div>
           </div>
-          {activeTab === 'javascript' && (
-            <div className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
-              Proto files: <a href="https://buf.build" target="_blank" rel="noopener" className="underline hover:text-primary transition-colors">buf.build</a> or project repository (usually under <code className="text-[10px] px-1 py-0.5 rounded bg-muted font-medium">/proto</code>)
+          {activeTab === 'curl' && (restResult.warning || !restResult.supported) && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-500">
+              <AlertTriangle className="h-3 w-3" />
+              <span>{restResult.warning || 'No REST endpoint for this method'}</span>
             </div>
           )}
         </div>

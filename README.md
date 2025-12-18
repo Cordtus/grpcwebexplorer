@@ -6,8 +6,12 @@ Web interface for exploring and interacting with gRPC services via server reflec
 
 - **Multi-Network**: Concurrent connections to multiple gRPC endpoints with color-coded interface (8 colors)
 - **Chain Registry Integration**: Direct access to 100+ Cosmos chain endpoints with automatic fallback
+- **Round-Robin Endpoints**: Optional load distribution across all available chain endpoints (configurable)
+- **Recently Used Chains**: Quick re-selection of previously cached chains from the Add Network dialog
 - **Auto-Generated Forms**: Type-specific input fields generated from protobuf definitions
-- **Client-Side Caching**: Configurable TTL (5min/15min/30min/1hr/6hr/24hr), localStorage-backed
+- **Smart Search**: Filter services/methods by namespace, service name, or method name with sticky search bar
+- **Client-Side Caching**: Configurable TTL (None/1hr/6hr/24hr/36hr/72hr/Never), localStorage-backed
+- **Base64 Decoding**: Automatic decoding of bytes fields in gRPC responses to human-readable strings
 - **Resizable Layout**: 3-panel interface with adjustable widths and collapsible sections
 - **Responsive Design**: Overlay mode for screens <1024px, adaptive panel sizing 1024px-1600px
 - **Method Pinning**: Pin method panels to prevent auto-collapse
@@ -51,18 +55,25 @@ See [deployment/README.md](deployment/README.md) for systemd service configurati
 
 ### Adding Networks
 
-**Direct endpoint**:
+The Add Network dialog features a searchable dropdown of all chains from the Cosmos Chain Registry.
+
+**Select from chain list** (recommended):
 1. Click "Add Network" (or `Cmd/Ctrl+N`)
-2. Enter endpoint: `grpc.example.com:443`
-3. Toggle TLS (enabled by default for port 443)
+2. The dropdown shows all available chains - type to filter
+3. Click a chain name to select it
+4. With **Round-robin ON**: Chain is added immediately with all endpoints
+5. With **Round-robin OFF**: Choose "Use All Endpoints" or pick a specific one
+
+**Direct endpoint** (for custom gRPC servers):
+1. Paste or type a gRPC endpoint (e.g., `grpc.myserver.com:443`)
+2. The label changes to "Direct Endpoint" when you enter an address
+3. Configure TLS toggle as needed
 4. Click "Add Network"
 
-**Chain registry**:
-1. Click "Add Network" → "Browse Chain Registry"
-2. Search or scroll to select chain
-3. Select specific endpoint or "Use All Endpoints" for automatic fallback
-
-**Quick entry**: Type chain name directly (e.g., `osmosis`, `dydx`) and press Enter
+**Recently used chains**:
+1. Click "Recent" button (shows count of cached chains)
+2. Select from chains you've used before
+3. Shows chain-id, service count, and cache age
 
 ### Executing Methods
 
@@ -76,9 +87,12 @@ See [deployment/README.md](deployment/README.md) for systemd service configurati
 Access via menu bar (top-right gear icon):
 
 - **Theme**: System, Light, Dark, or 8-bit Retro
-- **Cache Duration**: 5min/15min/30min/1hr/6hr/24hr
-- **Auto-Collapse**: Enable/disable automatic panel collapse on selection
 - **Request Timeout**: Default gRPC request timeout (1s-60s)
+- **Auto-Collapse Panels**: Enable/disable automatic panel collapse on selection
+- **Round-Robin Endpoints**: Toggle load distribution across available endpoints
+  - Disabled (default): Uses primary endpoint for all method calls
+  - Enabled: Rotates through all available endpoints per request
+- **Cache Duration**: None/1hr/6hr/24hr/36hr/72hr/Never (default: Never)
 - **Cache Management**: View statistics and clear cache
 
 ### Keyboard Shortcuts
@@ -148,8 +162,9 @@ Standard gRPC servers use HTTP/2 with protocol-specific framing that browsers ca
 
 ### Caching Strategy
 
-- **Service Discovery**: Client-side localStorage with user-configurable TTL
-- **Network State**: Persisted to localStorage, restored on page load
+- **Service Discovery**: Client-side localStorage with user-configurable TTL (None to Never)
+- **Network State**: Persisted to localStorage with same TTL as service cache
+- **Recently Used Chains**: All cached chains can be quickly re-added via "Recent" button
 - **Chain Registry**: Server-side in-memory cache (1 hour TTL)
 - **Automatic Invalidation**: Cache respects TTL, manual clear available in settings
 
@@ -209,12 +224,12 @@ yarn test:grpc    # gRPC reflection integration tests
 
 ### Key Components
 
-- **GrpcExplorerApp**: Root component managing networks, methods, and execution state
-- **NetworkBlock**: Collapsible network panel with service tree
+- **GrpcExplorerApp**: Root component managing networks, methods, execution state, and round-robin distribution
+- **NetworkBlock**: Collapsible network panel with service tree and smart search (namespace/service/method filtering)
 - **MethodBlock**: Method instance with form and execution controls
 - **ProtobufFormGenerator**: Recursive form generator for protobuf message types
-- **AddNetworkDialog**: Network configuration dialog with chain registry browser
-- **SettingsDialog**: Application settings (theme, cache, behavior)
+- **AddNetworkDialog**: Network configuration with chain registry browser and recently used chains
+- **SettingsDialog**: Application settings (theme, cache, behavior, round-robin)
 - **ThemeProvider**: Theme management with localStorage persistence
 
 ### Adding New Features

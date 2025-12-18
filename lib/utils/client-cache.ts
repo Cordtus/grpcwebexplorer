@@ -214,3 +214,91 @@ export function getServicesCacheKey(endpoint: string, tlsEnabled: boolean): stri
 export function getEndpointCacheKey(endpoint: string): string {
   return `endpoint:${endpoint}`;
 }
+
+/**
+ * Cached chain info for display purposes
+ */
+export interface CachedChainInfo {
+  endpoint: string;
+  chainId?: string;
+  tlsEnabled: boolean;
+  serviceCount: number;
+  cachedAt: number;
+  age: string;
+}
+
+/**
+ * List all cached chains (from services cache)
+ * Returns information about each cached chain for display in UI
+ */
+export function listCachedChains(): CachedChainInfo[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const keys = Object.keys(localStorage);
+    const servicesCacheKeys = keys.filter(key =>
+      key.startsWith(`${CACHE_PREFIX}services:`)
+    );
+
+    const cachedChains: CachedChainInfo[] = [];
+    const now = Date.now();
+
+    for (const key of servicesCacheKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+
+        const entry: CacheEntry<any> = JSON.parse(raw);
+
+        // Check version
+        if (entry.version !== CACHE_VERSION) continue;
+
+        // Parse the key to get endpoint and TLS info
+        // Key format: grpc-explorer:services:{endpoint}:{tls}
+        const keyParts = key.replace(`${CACHE_PREFIX}services:`, '').split(':');
+        const tlsEnabled = keyParts.pop() === 'true';
+        const endpoint = keyParts.join(':'); // Handle ports in endpoint
+
+        const data = entry.data;
+        const chainId = data?.chainId || data?.status?.chainId;
+        const serviceCount = data?.services?.length || 0;
+        const cachedAt = entry.timestamp;
+
+        // Calculate human-readable age
+        const ageMs = now - cachedAt;
+        const ageMinutes = Math.floor(ageMs / 60000);
+        const ageHours = Math.floor(ageMs / 3600000);
+        const ageDays = Math.floor(ageMs / 86400000);
+
+        let age: string;
+        if (ageDays > 0) {
+          age = `${ageDays}d ago`;
+        } else if (ageHours > 0) {
+          age = `${ageHours}h ago`;
+        } else if (ageMinutes > 0) {
+          age = `${ageMinutes}m ago`;
+        } else {
+          age = 'just now';
+        }
+
+        cachedChains.push({
+          endpoint,
+          chainId,
+          tlsEnabled,
+          serviceCount,
+          cachedAt,
+          age,
+        });
+      } catch (e) {
+        // Skip invalid entries
+        continue;
+      }
+    }
+
+    // Sort by most recently cached
+    return cachedChains.sort((a, b) => b.cachedAt - a.cachedAt);
+  } catch (error) {
+    console.warn('Failed to list cached chains:', error);
+    return [];
+  }
+}

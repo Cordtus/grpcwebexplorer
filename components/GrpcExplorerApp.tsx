@@ -13,7 +13,7 @@ import MenuBar from './MenuBar';
 import HelpDialog from './HelpDialog';
 import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { getFromCache, saveToCache, getServicesCacheKey } from '@/lib/utils/client-cache';
+import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
 import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
@@ -70,16 +70,17 @@ export default function GrpcExplorerApp() {
       const cached = localStorage.getItem('grpc-explorer-networks');
       if (cached) {
         const parsed = JSON.parse(cached);
-        // Check if cache is still valid (use same TTL as services)
-        const ttl = parseInt(localStorage.getItem('grpc-cache-ttl') || '3600000'); // Default 1 hour
+        // Check if cache is still valid (use same TTL as services cache setting)
+        const ttl = getCacheTTL();
+        const age = Date.now() - (parsed.timestamp || 0);
         const isValid = parsed.networks && Array.isArray(parsed.networks) &&
-                       parsed.timestamp && (Date.now() - parsed.timestamp < ttl);
+                       parsed.timestamp && (ttl === Infinity || age < ttl);
 
         if (isValid) {
-          console.log(`[NetworkCache] Restored ${parsed.networks.length} networks from cache`);
+          console.log(`[NetworkCache] Restored ${parsed.networks.length} networks from cache (${Math.round(age / 60000)}min old, TTL: ${ttl === Infinity ? 'never' : Math.round(ttl / 60000) + 'min'})`);
           setNetworks(parsed.networks);
         } else {
-          console.log('[NetworkCache] Cache expired or invalid, starting fresh');
+          console.log(`[NetworkCache] Cache expired (${Math.round(age / 60000)}min old, TTL: ${ttl === Infinity ? 'never' : Math.round(ttl / 60000) + 'min'}), starting fresh`);
           localStorage.removeItem('grpc-explorer-networks');
         }
       }
