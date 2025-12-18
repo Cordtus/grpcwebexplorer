@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronRight, Search, Loader2 } from 'lucide-react';
+import { ChevronRight, Search, Loader2, History, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { debug } from '@/lib/utils/debug';
+import { listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 
 interface AddNetworkDialogProps {
 	onAdd: (endpoint: string, tlsEnabled: boolean, roundRobinEnabled: boolean) => void;
@@ -35,6 +36,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 	const [tlsEnabled, setTlsEnabled] = useState(true);
 	const [roundRobinEnabled, setRoundRobinEnabled] = useState(defaultRoundRobin);
 	const [showChainRegistry, setShowChainRegistry] = useState(false);
+	const [showCachedChains, setShowCachedChains] = useState(false);
+	const [cachedChains, setCachedChains] = useState<CachedChainInfo[]>([]);
 	const [chains, setChains] = useState<string[]>([]);
 	const [filteredChains, setFilteredChains] = useState<string[]>([]);
 	const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +45,12 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 	const [loadingChainData, setLoadingChainData] = useState(false);
 	const [selectedChain, setSelectedChain] = useState<ChainData | null>(null);
 	const [showChainSuggestions, setShowChainSuggestions] = useState(false);
+
+	// Load cached chains on mount
+	useEffect(() => {
+		const cached = listCachedChains();
+		setCachedChains(cached);
+	}, []);
 
 	// Fetch chains from registry on mount
 	useEffect(() => {
@@ -132,9 +141,18 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		setTlsEnabled(true);
 		setRoundRobinEnabled(defaultRoundRobin);
 		setShowChainRegistry(false);
+		setShowCachedChains(false);
 		setSelectedChain(null);
 		setSearchQuery('');
 		onClose();
+	};
+
+	// Select a cached chain directly
+	const selectCachedChain = (cached: CachedChainInfo) => {
+		setEndpoint(cached.endpoint);
+		setTlsEnabled(cached.tlsEnabled);
+		setShowCachedChains(false);
+		debug.log(`Selected cached chain: ${cached.chainId || cached.endpoint}`);
 	};
 
 	const selectChain = async (chainName: string) => {
@@ -291,13 +309,34 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 						<div className="grid gap-2">
 							<div className="flex items-center justify-between">
 								<Label htmlFor="endpoint">Endpoint URL</Label>
-								<button
-									type="button"
-									onClick={() => setShowChainRegistry(!showChainRegistry)}
-									className="text-xs text-primary hover:underline"
-								>
-									{showChainRegistry ? 'Hide' : 'Browse'} Chain Registry
-								</button>
+								<div className="flex items-center gap-3">
+									{cachedChains.length > 0 && (
+										<button
+											type="button"
+											onClick={() => {
+												setShowCachedChains(!showCachedChains);
+												setShowChainRegistry(false);
+											}}
+											className={cn(
+												"text-xs hover:underline flex items-center gap-1",
+												showCachedChains ? "text-primary" : "text-muted-foreground hover:text-primary"
+											)}
+										>
+											<History className="h-3 w-3" />
+											Recent ({cachedChains.length})
+										</button>
+									)}
+									<button
+										type="button"
+										onClick={() => {
+											setShowChainRegistry(!showChainRegistry);
+											setShowCachedChains(false);
+										}}
+										className="text-xs text-primary hover:underline"
+									>
+										{showChainRegistry ? 'Hide' : 'Browse'} Chain Registry
+									</button>
+								</div>
 							</div>
 							<div className="relative">
 								<Input
@@ -354,6 +393,44 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 								Enter a gRPC endpoint (e.g., server.com:443) or chain name (e.g., dydx)
 							</p>
 						</div>
+
+						{showCachedChains && cachedChains.length > 0 && (
+							<div className="border border-border rounded-lg p-3 max-h-[250px] overflow-y-auto">
+								<div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+									<Database className="h-4 w-4 text-muted-foreground" />
+									<span className="text-sm font-medium">Previously Used Chains</span>
+								</div>
+								<div className="space-y-1">
+									{cachedChains.map((cached, idx) => (
+										<button
+											key={`${cached.endpoint}-${idx}`}
+											type="button"
+											onClick={() => selectCachedChain(cached)}
+											className={cn(
+												"w-full text-left px-3 py-2 rounded hover:bg-secondary/50",
+												"transition-colors group"
+											)}
+										>
+											<div className="flex items-center justify-between">
+												<div className="flex-1 min-w-0">
+													<div className="text-sm font-medium truncate">
+														{cached.chainId || cached.endpoint}
+													</div>
+													<div className="flex items-center gap-2 text-xs text-muted-foreground">
+														<span className="truncate">{cached.endpoint}</span>
+														<span>-</span>
+														<span className="shrink-0">{cached.serviceCount} services</span>
+														<span>-</span>
+														<span className="shrink-0">{cached.age}</span>
+													</div>
+												</div>
+												<ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+											</div>
+										</button>
+									))}
+								</div>
+							</div>
+						)}
 
 						{showChainRegistry && (
 							<div className="border border-border rounded-lg p-3 max-h-[300px] overflow-y-auto">
