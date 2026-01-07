@@ -13,205 +13,119 @@ export interface RestPathResult {
 	warning?: string;
 }
 
-/**
- * Replace path parameters in HTTP path template with actual values
- * e.g., "/cosmos/bank/v1beta1/balances/{address}" with {address: "cosmos1..."}
- *    -> "/cosmos/bank/v1beta1/balances/cosmos1..."
- */
+// Replace path parameters in HTTP path template with actual values
+// e.g., "/cosmos/bank/v1beta1/balances/{address}" with {address: "cosmos1..."}
+//    -> "/cosmos/bank/v1beta1/balances/cosmos1..."
 function substitutePathParams(
 	pathTemplate: string,
-	params: Record<string, any>
-): { path: string; unusedParams: Record<string, any> } {
+	params: Record<string, any>,
+	fields: MessageTypeDefinition['fields']
+): { path: string; usedParams: Set<string> } {
+	const usedParams = new Set<string>();
 	let path = pathTemplate;
-	const unusedParams: Record<string, any> = { ...params };
 
-	// Find all {param} placeholders and substitute
-	const paramRegex = /\{([^}]+)\}/g;
+	// Find all {param} or {param=**} patterns in the path
+	const paramPattern = /\{([^}=]+)(=[^}]*)?\}/g;
 	let match;
 
-	while ((match = paramRegex.exec(pathTemplate)) !== null) {
+	while ((match = paramPattern.exec(pathTemplate)) !== null) {
 		const paramName = match[1];
-		// Handle nested paths like {pagination.key}
-		const paramParts = paramName.split('.');
+		const fullMatch = match[0];
 
-		let value: any = params;
-		let found = true;
-		for (const part of paramParts) {
-			if (value && typeof value === 'object' && part in value) {
-				value = value[part];
-			} else {
-				found = false;
-				break;
-			}
+		// Try to find value - check both exact name and snake_case variants
+		let value = params[paramName];
+		if (value === undefined) {
+			// Try camelCase to snake_case conversion
+			const snakeName = paramName.replace(/([A-Z])/g, '_$1').toLowerCase();
+			value = params[snakeName];
+		}
+		if (value === undefined) {
+			// Try snake_case to camelCase conversion
+			const camelName = paramName.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+			value = params[camelName];
 		}
 
-		if (found && value !== undefined && value !== null && String(value) !== '') {
-			path = path.replace(`{${paramName}}`, encodeURIComponent(String(value)));
-			// Remove used param from unused list
-			if (paramParts.length === 1) {
-				delete unusedParams[paramName];
-			}
+		if (value !== undefined && value !== '') {
+			usedParams.add(paramName);
+			// URL encode the value (important for IBC denoms, factory tokens)
+			const encodedValue = encodeURIComponent(String(value));
+			path = path.replace(fullMatch, encodedValue);
 		}
+		// Leave placeholder if no value provided - shows user what's needed
 	}
 
-	return { path, unusedParams };
+	return { path, usedParams };
 }
 
-/**
- * Build query string from unused parameters
- */
-function buildQueryString(params: Record<string, any>, prefix = ''): string {
+// Build query string from remaining parameters not used in path
+function buildQueryString(
+	params: Record<string, any>,
+	usedParams: Set<string>,
+	fields: MessageTypeDefinition['fields']
+): string {
 	const parts: string[] = [];
 
 	for (const [key, value] of Object.entries(params)) {
-		if (value === undefined || value === null || value === '') continue;
+		// Skip params already used in path
+		if (usedParams.has(key)) continue;
 
-		const fullKey = prefix ? `${prefix}.${key}` : key;
-
-		if (typeof value === 'object' && !Array.isArray(value)) {
-			// Recurse for nested objects
-			const nested = buildQueryString(value, fullKey);
-			if (nested) parts.push(nested);
-		} else if (Array.isArray(value)) {
-			// Handle arrays
-			for (const item of value) {
-				if (item !== undefined && item !== null && item !== '') {
-					parts.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(String(item))}`);
+		// Handle pagination object specially
+		if (key === 'pagination' && typeof value === 'object' && value !== null) {
+			for (const [pKey, pVal] of Object.entries(value)) {
+				if (pVal !== undefined && pVal !== '' && pVal !== null) {
+					parts.push(`pagination.${pKey}=${encodeURIComponent(String(pVal))}`);
 				}
 			}
-		} else {
-			parts.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(String(value))}`);
+			continue;
 		}
-	}
 
-	return parts.join('&');
-}
+		// Skip undefined/empty values
+		if (value === undefined || value === '' || value === null) continue;
 
-/**
- * Generate REST path from Cosmos SDK service/method naming conventions
- * Cosmos SDK follows predictable patterns:
- *   cosmos.bank.v1beta1.Query/Balance -> /cosmos/bank/v1beta1/balance
- *   cosmos.staking.v1beta1.Query/Validators -> /cosmos/staking/v1beta1/validators
- */
-function generateCosmosRestPath(
-	serviceName: string,
-	methodName: string,
-	params: Record<string, any>,
-	requestTypeDefinition?: MessageTypeDefinition
-): RestPathResult {
-	// Parse service name: cosmos.bank.v1beta1.Query
-	const parts = serviceName.split('.');
-
-	// Check if this looks like a Cosmos SDK service
-	if (parts.length < 3) {
-		return {
-			url: '',
-			supported: false,
-			method: 'GET',
-			warning: 'Service name format not recognized for REST mapping',
-		};
-	}
-
-	// Extract module path and service type (Query/Msg)
-	const serviceType = parts[parts.length - 1]; // Query, Msg, Service, etc.
-	const modulePath = parts.slice(0, -1).join('/'); // cosmos/bank/v1beta1
-
-	// Only Query services have GET endpoints; Msg services require POST
-	if (serviceType === 'Msg') {
-		return {
-			url: '',
-			supported: false,
-			method: 'POST',
-			warning: 'Msg services require transaction signing (not available via REST GET)',
-		};
-	}
-
-	// Convert method name to path segment (camelCase -> snake_case)
-	// e.g., Balance -> balance, DelegatorDelegations -> delegator_delegations
-	const methodPath = methodName
-		.replace(/([A-Z])/g, '_$1')
-		.toLowerCase()
-		.replace(/^_/, '');
-
-	// Build base path
-	let basePath = `/${modulePath}/${methodPath}`;
-
-	// Handle common Cosmos SDK patterns for path parameters
-	const pathParams: string[] = [];
-
-	if (requestTypeDefinition && requestTypeDefinition.fields.length > 0) {
-		// Common path parameter patterns in Cosmos SDK
-		const commonPathParams = [
-			'address',
-			'validator_addr',
-			'delegator_addr',
-			'proposal_id',
-			'denom',
-			'granter',
-			'grantee',
-			'class_id',
-			'id',
-			'channel_id',
-			'port_id',
-			'connection_id',
-			'client_id',
-		];
-
-		for (const field of requestTypeDefinition.fields) {
-			if (commonPathParams.includes(field.name)) {
-				pathParams.push(field.name);
+		// Handle arrays (repeated fields)
+		if (Array.isArray(value)) {
+			for (const v of value) {
+				if (v !== undefined && v !== '') {
+					parts.push(`${key}=${encodeURIComponent(String(v))}`);
+				}
 			}
+			continue;
 		}
+
+		// Handle nested objects
+		if (typeof value === 'object') continue;
+
+		parts.push(`${key}=${encodeURIComponent(String(value))}`);
 	}
 
-	// Add path parameters to URL
-	for (const param of pathParams) {
-		if (params[param]) {
-			basePath += `/${encodeURIComponent(String(params[param]))}`;
-		}
-	}
-
-	// Build query string from remaining parameters
-	const remainingParams = { ...params };
-	for (const param of pathParams) {
-		delete remainingParams[param];
-	}
-
-	const queryString = buildQueryString(remainingParams);
-	const fullUrl = queryString ? `${basePath}?${queryString}` : basePath;
-
-	return {
-		url: fullUrl,
-		supported: true,
-		method: 'GET',
-	};
+	return parts.length > 0 ? '?' + parts.join('&') : '';
 }
 
-/**
- * Generate REST URL from HTTP annotation if available
- */
+// Generate REST URL using HTTP annotation from proto
 function generateFromHttpRule(
 	httpRule: HttpRule,
 	params: Record<string, any>,
-	baseUrl: string
+	baseUrl: string,
+	fields: MessageTypeDefinition['fields']
 ): RestPathResult {
-	let method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' = 'GET';
+	// Determine HTTP method and path from the rule
+	let httpMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' = 'GET';
 	let pathTemplate = '';
 
 	if (httpRule.get) {
-		method = 'GET';
+		httpMethod = 'GET';
 		pathTemplate = httpRule.get;
 	} else if (httpRule.post) {
-		method = 'POST';
+		httpMethod = 'POST';
 		pathTemplate = httpRule.post;
 	} else if (httpRule.put) {
-		method = 'PUT';
+		httpMethod = 'PUT';
 		pathTemplate = httpRule.put;
 	} else if (httpRule.delete) {
-		method = 'DELETE';
+		httpMethod = 'DELETE';
 		pathTemplate = httpRule.delete;
 	} else if (httpRule.patch) {
-		method = 'PATCH';
+		httpMethod = 'PATCH';
 		pathTemplate = httpRule.patch;
 	}
 
@@ -220,60 +134,114 @@ function generateFromHttpRule(
 			url: '',
 			supported: false,
 			method: 'GET',
-			warning: 'No HTTP path found in annotation',
+			warning: 'HTTP annotation has no path defined'
 		};
 	}
 
-	const { path, unusedParams } = substitutePathParams(pathTemplate, params);
+	// Substitute path parameters
+	const { path, usedParams } = substitutePathParams(pathTemplate, params, fields);
 
-	// For GET requests, add unused params as query string
-	let fullPath = path;
-	if (method === 'GET') {
-		const queryString = buildQueryString(unusedParams);
-		if (queryString) {
-			fullPath += `?${queryString}`;
-		}
-	}
+	// Build query string from remaining params (for GET requests)
+	const queryString = httpMethod === 'GET' ? buildQueryString(params, usedParams, fields) : '';
 
 	return {
-		url: `${baseUrl}${fullPath}`,
+		url: baseUrl + path + queryString,
 		supported: true,
-		method,
+		method: httpMethod
 	};
 }
 
-/**
- * Generate REST API URL for a gRPC method
- * Tries HTTP annotation first, falls back to heuristic generation
- */
+// Fallback: Generate path heuristically based on Cosmos SDK conventions
+function generateHeuristic(
+	serviceFullName: string,
+	methodName: string,
+	params: Record<string, any>,
+	baseUrl: string,
+	fields: MessageTypeDefinition['fields']
+): RestPathResult {
+	// Msg services (transactions) typically don't have REST GET endpoints
+	if (serviceFullName.endsWith('.Msg')) {
+		return {
+			url: '',
+			supported: false,
+			method: 'POST',
+			warning: 'Transaction messages use POST and require signing'
+		};
+	}
+
+	// Convert service name to base path
+	// e.g., "cosmos.bank.v1beta1.Query" -> "/cosmos/bank/v1beta1"
+	const parts = serviceFullName.split('.');
+	const lastPart = parts[parts.length - 1];
+	if (lastPart === 'Query' || lastPart === 'Service' || lastPart === 'Msg') {
+		parts.pop();
+	}
+	const basePath = '/' + parts.join('/').toLowerCase();
+
+	// Convert method name to path segment
+	// e.g., "AllBalances" -> "balances"
+	let methodSegment = methodName
+		.replace(/^(Get|Query|List|All)/, '')
+		.replace(/^By/, '');
+	if (!methodSegment) methodSegment = methodName;
+	methodSegment = methodSegment
+		.replace(/([A-Z])/g, '_$1')
+		.toLowerCase()
+		.replace(/^_/, '');
+
+	// Build path with common parameter patterns
+	let path = basePath + '/' + methodSegment;
+	const usedParams = new Set<string>();
+
+	// Common path parameter patterns
+	const pathParamOrder = [
+		'address', 'validator_addr', 'validator_address', 'delegator_addr', 'delegator_address',
+		'proposal_id', 'client_id', 'connection_id', 'channel_id', 'port_id',
+		'denom', 'hash', 'height', 'name', 'id', 'code_id', 'granter', 'grantee'
+	];
+
+	for (const param of pathParamOrder) {
+		const value = params[param];
+		if (value !== undefined && value !== '') {
+			path += '/' + encodeURIComponent(String(value));
+			usedParams.add(param);
+		}
+	}
+
+	// Build query string
+	const queryString = buildQueryString(params, usedParams, fields);
+
+	return {
+		url: baseUrl + path + queryString,
+		supported: true,
+		method: 'GET'
+	};
+}
+
+// Main function to generate REST URL from gRPC method info
 export function generateRestUrl(
-	serviceName: string,
+	serviceFullName: string,
 	methodName: string,
 	params: Record<string, any>,
 	baseUrl: string,
 	requestTypeDefinition?: MessageTypeDefinition,
 	httpRule?: HttpRule
 ): RestPathResult {
-	// If we have an HTTP annotation, use it
+	const fields = requestTypeDefinition?.fields || [];
+
+	// If we have an HTTP annotation from the proto, use it
 	if (httpRule) {
-		return generateFromHttpRule(httpRule, params, baseUrl);
+		return generateFromHttpRule(httpRule, params, baseUrl, fields);
 	}
 
-	// Fall back to heuristic generation based on Cosmos SDK conventions
-	const heuristicResult = generateCosmosRestPath(
-		serviceName,
-		methodName,
-		params,
-		requestTypeDefinition
-	);
+	// Fall back to heuristic generation
+	return generateHeuristic(serviceFullName, methodName, params, baseUrl, fields);
+}
 
-	if (heuristicResult.supported) {
-		return {
-			...heuristicResult,
-			url: `${baseUrl}${heuristicResult.url}`,
-			warning: 'REST path generated heuristically (may not match actual API)',
-		};
-	}
-
-	return heuristicResult;
+// Check if a method likely has REST support
+export function hasRestMapping(serviceFullName: string, _methodName: string): boolean {
+	// Query and Service endpoints typically have REST mappings
+	// Msg endpoints don't (they're POST/transactions)
+	return serviceFullName.endsWith('.Query') ||
+		serviceFullName.endsWith('.Service');
 }

@@ -74,24 +74,18 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
     if (method.requestTypeDefinition && method.requestTypeDefinition.fields.length > 0) {
       const fields = method.requestTypeDefinition.fields;
       const exampleFields: Record<string, any> = {};
-
-      // Track which fields are 64-bit integers (need string representation in JSON)
       const int64Fields = new Set<string>();
 
-      // Generate example values for each field
       for (const field of fields) {
-        // Track 64-bit integer fields
         if (['int64', 'uint64', 'sint64', 'fixed64', 'sfixed64'].includes(field.type)) {
           int64Fields.add(field.name);
         }
 
-        // Generate example value based on type (show all fields, not just required ones)
         if (field.enumValues && field.enumValues.length > 0) {
           exampleFields[field.name] = field.enumValues[0];
         } else if (field.type === 'string') {
           exampleFields[field.name] = '';
         } else if (['int64', 'uint64', 'sint64', 'fixed64', 'sfixed64'].includes(field.type)) {
-          // 64-bit integers must be strings in gRPC JSON encoding
           exampleFields[field.name] = '0';
         } else if (['int32', 'uint32', 'sint32', 'fixed32', 'sfixed32'].includes(field.type)) {
           exampleFields[field.name] = 0;
@@ -108,36 +102,24 @@ export default function MethodDescriptor({ method, service, color, endpoint, tls
         }
       }
 
-      // Merge with actual user-provided params, ensuring correct types
       const mergedFields = { ...exampleFields };
       for (const [key, value] of Object.entries(params)) {
-        if (value === undefined || value === '') {
-          // Keep the default value for empty inputs
-          continue;
-        }
-
+        if (value === undefined || value === '') continue;
         if (int64Fields.has(key)) {
-          // Convert 64-bit integer values to strings for gRPC JSON encoding
           mergedFields[key] = String(value);
         } else {
           mergedFields[key] = value;
         }
       }
 
-      // If no fields at all, return empty object
-      if (Object.keys(mergedFields).length === 0) {
-        return '{}';
-      }
-
+      if (Object.keys(mergedFields).length === 0) return '{}';
       return JSON.stringify(mergedFields, null, 2);
     }
 
-    // If no field definitions but we have params, use them
     if (Object.keys(params).length > 0) {
       return JSON.stringify(params, null, 2);
     }
 
-    // Fallback: empty object for unknown types
     return '{}';
   };
 
