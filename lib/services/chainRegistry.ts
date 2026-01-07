@@ -26,21 +26,32 @@ export interface ChainApis {
 
 const CHAIN_REGISTRY_BASE = 'https://raw.githubusercontent.com/cosmos/chain-registry/master';
 const GITHUB_API_BASE = 'https://api.github.com/repos/cosmos/chain-registry/contents';
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+// Cache revalidation time in seconds (1 hour)
+// This is used by Next.js fetch caching at the CDN level
+const CACHE_REVALIDATE_SECONDS = 3600;
+
+// In-memory cache as fallback for same-instance requests
 let chainListCache: { data: string[]; timestamp: number } | null = null;
+const MEMORY_CACHE_TTL = 60 * 60 * 1000; // 1 hour in ms
 
 /**
- * Fetch list of all chains from the registry using GitHub API
+ * Fetch list of all chains from the registry
+ * Uses Next.js fetch caching (CDN-level on Vercel) + in-memory fallback
  */
 export async function fetchChainList(): Promise<string[]> {
-  // Check cache
-  if (chainListCache && Date.now() - chainListCache.timestamp < CACHE_TTL) {
+  // Check in-memory cache first (same serverless instance)
+  if (chainListCache && Date.now() - chainListCache.timestamp < MEMORY_CACHE_TTL) {
     return chainListCache.data;
   }
 
   try {
-    const response = await fetch(GITHUB_API_BASE);
+    // Use Next.js fetch with revalidation for CDN-level caching on Vercel
+    // This persists across serverless function invocations
+    const response = await fetch(GITHUB_API_BASE, {
+      next: { revalidate: CACHE_REVALIDATE_SECONDS }
+    });
+
     if (!response.ok) {
       throw new Error(`Failed to fetch chain list: ${response.statusText}`);
     }
@@ -60,7 +71,7 @@ export async function fetchChainList(): Promise<string[]> {
       .map((item: any) => item.name)
       .sort();
 
-    // Cache the result
+    // Update in-memory cache
     chainListCache = {
       data: chains,
       timestamp: Date.now()
@@ -69,7 +80,11 @@ export async function fetchChainList(): Promise<string[]> {
     return chains;
   } catch (error) {
     console.error('Error fetching chain list:', error);
-    // Return empty array on error
+    // Return cached data if available, even if stale
+    if (chainListCache) {
+      console.log('Returning stale cache due to fetch error');
+      return chainListCache.data;
+    }
     return [];
   }
 }

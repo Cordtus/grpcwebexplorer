@@ -100,45 +100,62 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
             <div>
               <h3 className="font-semibold mb-2">Adding Networks</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Three ways to connect to gRPC endpoints:
+                The Add Network dialog provides a searchable dropdown of all chains from the Cosmos Chain Registry.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 1:</span> Direct Endpoint
+                  <span className="text-primary">Quick Add:</span> Select from Chain List
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
                   <li>Click "Add Network" button</li>
-                  <li>Enter gRPC endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.cosmos.directory:443</code>)</li>
-                  <li>Enable TLS toggle for port 443 endpoints</li>
+                  <li>The dropdown shows all available chains - type to filter</li>
+                  <li>Click a chain name to select it</li>
+                  <li>With <strong>Round-robin ON</strong>: Chain is added immediately with all endpoints</li>
+                  <li>With <strong>Round-robin OFF</strong>: Choose "Use All Endpoints" or pick a specific one</li>
+                </ol>
+              </div>
+
+              <div className="border border-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-primary">Direct Endpoint:</span> Custom gRPC Server
+                </h4>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Click "Add Network" button</li>
+                  <li>Paste or type a gRPC endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.myserver.com:443</code>)</li>
+                  <li>Configure TLS toggle as needed</li>
                   <li>Click "Add Network"</li>
                 </ol>
+                <p className="text-xs text-muted-foreground mt-2">
+                  The label changes to "Direct Endpoint" when you enter an address with a port or domain.
+                </p>
               </div>
 
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 2:</span> Chain Registry Browser
+                  <span className="text-primary">Recent:</span> Previously Used Chains
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>Click "Browse Chain Registry"</li>
-                  <li>Search for a chain (e.g., "Cosmos Hub", "Osmosis")</li>
-                  <li>Select chain to view available gRPC endpoints</li>
-                  <li>Click "Use All Endpoints (Round-Robin)" or select specific endpoint</li>
+                  <li>Click "Add Network" → "Recent" button</li>
+                  <li>Select from chains you've used before</li>
+                  <li>Shows chain-id, service count, and cache age</li>
                 </ol>
               </div>
 
-              <div className="border border-border rounded-lg p-4">
-                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Method 3:</span> Chain Name Shortcut
-                </h4>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>Type just the chain name (e.g., "dydx", "osmosis")</li>
-                  <li>System auto-detects and uses round-robin across all chain endpoints</li>
-                </ol>
+              <div className="border border-border rounded-lg p-4 bg-secondary/20">
+                <h4 className="text-sm font-semibold mb-2">Round-Robin Mode</h4>
+                <ul className="text-sm text-muted-foreground space-y-1.5">
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>ON:</strong> Clicking a chain adds it instantly. Method calls rotate through all endpoints.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>OFF (default):</strong> Shows endpoint picker. Uses your selected endpoint for all calls.</span>
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -258,7 +275,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>1-hour Time-To-Live (TTL) for each endpoint</span>
+                    <span>Configurable TTL: None, 1hr, 6hr, 24hr, 36hr, 72hr, or Never (default: Never)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -266,7 +283,25 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Subsequent requests use cache until TTL expires</span>
+                    <span>Network state persists with same TTL as service cache</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="border border-border rounded-lg p-4">
+                <h4 className="text-sm font-semibold mb-2">Recently Used Chains</h4>
+                <ul className="text-sm text-muted-foreground space-y-1.5">
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>All cached chains appear in Add Network → "Recent" button</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>Shows chain-id, endpoint, service count, and cache age</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>Click to quickly re-add previously used chains</span>
                   </li>
                 </ul>
               </div>
@@ -276,19 +311,19 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                 <ul className="text-sm text-muted-foreground space-y-1.5">
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Click cache indicator in menu bar to view statistics</span>
+                    <span>Configure TTL in Settings → Cache → Cache Duration</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>See total cached entries and storage size in KB</span>
+                    <span>View cache statistics (entries and storage size)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Click "Clear all cache" to force refresh from servers</span>
+                    <span>Click "Clear Cache" in Settings to force refresh</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Refresh network to bypass cache for single endpoint</span>
+                    <span>Refresh icon on network to bypass cache for single endpoint</span>
                   </li>
                 </ul>
               </div>
