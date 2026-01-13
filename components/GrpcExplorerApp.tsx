@@ -16,8 +16,9 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
-import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
+import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig } from '@/lib/types/grpc';
 import { descriptorLoader } from '@/lib/utils/descriptor-loader';
+import { toast } from 'sonner';
 
 // Color palette for networks
 const NETWORK_COLORS = [
@@ -43,7 +44,6 @@ export default function GrpcExplorerApp() {
   const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
-  const [roundRobinEnabled, setRoundRobinEnabled] = useState(false); // Default: disabled
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
@@ -57,15 +57,9 @@ export default function GrpcExplorerApp() {
     return methodInstances.find(m => m.id === selectedMethodId) || null;
   }, [selectedMethodId, methodInstances]);
 
-  // Load persisted networks and settings from localStorage on mount
+  // Load persisted networks from localStorage on mount
   useEffect(() => {
     try {
-      // Load round-robin setting
-      const savedRoundRobin = localStorage.getItem('grpc-explorer-round-robin');
-      if (savedRoundRobin !== null) {
-        setRoundRobinEnabled(savedRoundRobin === 'true');
-      }
-
       // Load networks
       const cached = localStorage.getItem('grpc-explorer-networks');
       if (cached) {
@@ -234,20 +228,8 @@ export default function GrpcExplorerApp() {
     return availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length];
   }, [networks]);
 
-  // Handle round-robin setting change
-  const handleRoundRobinChange = useCallback((enabled: boolean) => {
-    setRoundRobinEnabled(enabled);
-    localStorage.setItem('grpc-explorer-round-robin', String(enabled));
-    debug.log(`[Settings] Round-robin ${enabled ? 'enabled' : 'disabled'}`);
-  }, []);
-
   // Add network
-  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, roundRobin: boolean) => {
-    // Update global round-robin setting when adding a network
-    if (roundRobin !== roundRobinEnabled) {
-      handleRoundRobinChange(roundRobin);
-    }
-
+  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, endpointConfigs?: EndpointConfig[]) => {
     // Check client-side cache first to get chain-id for deduplication
     const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
     const cached = getFromCache<any>(cacheKey);
@@ -294,6 +276,7 @@ export default function GrpcExplorerApp() {
         name,
         endpoint: actualEndpoint,
         endpoints: fallbackEndpoints,
+        ...(endpointConfigs ? { endpointConfigs } : {}),
         ...(cachedChainId ? { chainId: cachedChainId } : {}),
         tlsEnabled,
         services: cached.services || [],
@@ -325,6 +308,7 @@ export default function GrpcExplorerApp() {
       name,
       endpoint,
       endpoints: [],
+      ...(endpointConfigs ? { endpointConfigs } : {}),
       tlsEnabled,
       services: [],
       color,
@@ -414,7 +398,7 @@ export default function GrpcExplorerApp() {
           : n
       ));
     }
-  }, [networks, getNextColor, autoCollapseEnabled, roundRobinEnabled, handleRoundRobinChange]);
+  }, [networks, getNextColor, autoCollapseEnabled]);
 
   // Helper to enqueue descriptor loading jobs for a network
   const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
@@ -751,22 +735,35 @@ export default function GrpcExplorerApp() {
 
     const startTime = Date.now();
 
+    let selectedEndpoint: string = '';
+    let selectedTls: boolean = true;
+
     try {
       const network = networks.find(n => n.id === instance.networkId);
       if (!network) throw new Error('Network not found');
 
-      let selectedEndpoint: string;
+      // Check if network has endpoint configs with selected endpoints
+      const selectedConfigs = network.endpointConfigs?.filter(ep => ep.selected) || [];
 
-      if (roundRobinEnabled) {
-        // Round-robin enabled: distribute load across all available endpoints
-        const allEndpoints = [network.endpoint, ...(network.endpoints || [])];
+      if (selectedConfigs.length > 1) {
+        // Multiple endpoints selected: use round-robin load balancing
         const currentIndex = endpointIndexRef.current.get(network.id) || 0;
-        selectedEndpoint = allEndpoints[currentIndex % allEndpoints.length];
-        endpointIndexRef.current.set(network.id, (currentIndex + 1) % allEndpoints.length);
-        debug.log(`[RoundRobin] Using endpoint ${currentIndex % allEndpoints.length + 1}/${allEndpoints.length}: ${selectedEndpoint}`);
+        const config = selectedConfigs[currentIndex % selectedConfigs.length];
+        selectedEndpoint = config.address;
+        selectedTls = config.tlsEnabled;
+        endpointIndexRef.current.set(network.id, (currentIndex + 1) % selectedConfigs.length);
+
+        debug.log(`[RoundRobin] Using endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
+        console.log(`[RoundRobin] Request to ${selectedEndpoint} (TLS: ${selectedTls})`);
+      } else if (selectedConfigs.length === 1) {
+        // Single endpoint selected: use it directly
+        selectedEndpoint = selectedConfigs[0].address;
+        selectedTls = selectedConfigs[0].tlsEnabled;
+        debug.log(`[Endpoint] Using selected endpoint: ${selectedEndpoint}`);
       } else {
-        // Round-robin disabled: always use primary endpoint
+        // No endpoint configs or none selected: use primary endpoint
         selectedEndpoint = network.endpoint;
+        selectedTls = network.tlsEnabled;
         debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
       }
 
@@ -775,7 +772,7 @@ export default function GrpcExplorerApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           endpoint: selectedEndpoint,
-          tlsEnabled: network.tlsEnabled,
+          tlsEnabled: selectedTls,
           service: instance.service.fullName,
           method: instance.method.name,
           params: instance.params
@@ -791,24 +788,47 @@ export default function GrpcExplorerApp() {
         data: data.result || data,
         error: data.error,
         timestamp: Date.now(),
-        duration
+        duration,
+        endpoint: selectedEndpoint
       };
+
+      // Show toast for errors when using multiple endpoints (helps identify which one failed)
+      if (!response.ok && selectedConfigs.length > 1) {
+        const errorMsg = data.error || 'Request failed';
+        toast.error(`Request failed on ${selectedEndpoint}`, {
+          description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg,
+          duration: 5000
+        });
+        console.error(`[RoundRobin] Error from ${selectedEndpoint}: ${errorMsg}`);
+      }
 
       setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
       const result: ExecutionResult = {
         methodId: instance.id,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         timestamp: Date.now(),
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
+        ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {})
       };
+
+      // Show toast for errors when endpoint is identified
+      if (selectedEndpoint) {
+        toast.error(`Request failed on ${selectedEndpoint}`, {
+          description: errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage,
+          duration: 5000
+        });
+        console.error(`[Endpoint] Error from ${selectedEndpoint}: ${errorMessage}`);
+      }
 
       setExecutionResults(prev => [result, ...prev].slice(0, 50));
     } finally {
       setIsExecuting(false);
     }
-  }, [networks, roundRobinEnabled]);
+  }, [networks]);
 
   // Get latest result for selected method
   const currentResult = useMemo(() => {
@@ -1066,7 +1086,6 @@ export default function GrpcExplorerApp() {
         <AddNetworkDialog
           onAdd={handleAddNetwork}
           onClose={() => setShowAddNetwork(false)}
-          defaultRoundRobin={roundRobinEnabled}
         />
       )}
 
@@ -1080,8 +1099,6 @@ export default function GrpcExplorerApp() {
         onClose={() => setShowSettings(false)}
         autoCollapseEnabled={autoCollapseEnabled}
         onAutoCollapseChange={setAutoCollapseEnabled}
-        roundRobinEnabled={roundRobinEnabled}
-        onRoundRobinChange={handleRoundRobinChange}
       />
     </div>
   );

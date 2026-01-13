@@ -32,11 +32,25 @@ export interface GrpcService {
   methods: GrpcMethod[];
 }
 
+/**
+ * Per-endpoint configuration for round-robin mode
+ * Allows individual TLS settings and selection state for each endpoint
+ */
+export interface EndpointConfig {
+  address: string;
+  tlsEnabled: boolean;
+  selected: boolean;
+  provider?: string;
+  reachable?: boolean; // DNS validation result (undefined = not checked yet)
+  validationError?: string; // Error message if validation failed
+}
+
 export interface GrpcNetwork {
   id: string;
   name: string;
   endpoint: string;
-  endpoints?: string[]; // Additional fallback endpoints for this chain
+  endpoints?: string[]; // Additional fallback endpoints for this chain (legacy)
+  endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
   chainId?: string;
   tlsEnabled: boolean;
   services: GrpcService[];
@@ -66,4 +80,5 @@ export interface ExecutionResult {
   error?: string;
   timestamp: number;
   duration?: number;
+  endpoint?: string; // The endpoint used for this execution (for round-robin error reporting)
 }
