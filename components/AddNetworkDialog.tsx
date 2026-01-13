@@ -238,7 +238,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		}
 	};
 
-	// Select chain from dropdown - load endpoint details for selection
+	// Select chain from dropdown - always load endpoint details with validation
 	const selectChainFromDropdown = async (chainName: string) => {
 		setShowDropdown(false);
 		const chainMarker = `chain:${chainName}`;
@@ -268,73 +268,22 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 
 			setSelectedChainDetails(chainDetails);
 
-			// For round-robin mode, create endpoint configs with intelligent TLS detection
-			if (roundRobinEnabled) {
-				const configs = createEndpointConfigs(chainDetails.grpc_endpoints);
-				setEndpointConfigs(configs);
-				debug.log(`Round-robin: Loaded ${configs.length} endpoints for ${chainName} with per-endpoint TLS`);
+			// Always create endpoint configs with intelligent TLS detection
+			const configs = createEndpointConfigs(chainDetails.grpc_endpoints);
+			setEndpointConfigs(configs);
+			debug.log(`Loaded ${configs.length} endpoints for ${chainName} with per-endpoint TLS`);
 
-				// Validate endpoints in background and update state
-				setLoadingChainData(false);
-				const validatedConfigs = await validateEndpoints(configs);
-				setEndpointConfigs(validatedConfigs);
-			} else {
-				debug.log(`Loaded ${grpcEndpoints.length} endpoints for ${chainName}`);
-				setLoadingChainData(false);
-			}
+			// Validate endpoints in background and update state
+			setLoadingChainData(false);
+			const validatedConfigs = await validateEndpoints(configs);
+			setEndpointConfigs(validatedConfigs);
 		} catch (error) {
 			console.error('Error fetching chain data:', error);
 			setLoadingChainData(false);
 		}
 	};
 
-	const selectEndpointFromChain = (address: string) => {
-		let normalizedAddress = address.trim();
-		let hasTls = false;
-		let hadHttpsPrefix = false;
-
-		if (normalizedAddress.startsWith('https://')) {
-			normalizedAddress = normalizedAddress.replace('https://', '');
-			hasTls = true;
-			hadHttpsPrefix = true;
-		} else if (normalizedAddress.startsWith('http://')) {
-			normalizedAddress = normalizedAddress.replace('http://', '');
-			hasTls = false;
-		} else if (normalizedAddress.startsWith('grpc://')) {
-			normalizedAddress = normalizedAddress.replace('grpc://', '');
-			hasTls = false;
-		} else if (normalizedAddress.startsWith('grpcs://')) {
-			normalizedAddress = normalizedAddress.replace('grpcs://', '');
-			hasTls = true;
-			hadHttpsPrefix = true;
-		}
-
-		if (!normalizedAddress.includes(':')) {
-			if (hadHttpsPrefix) {
-				normalizedAddress = `${normalizedAddress}:443`;
-				hasTls = true;
-			} else {
-				normalizedAddress = `${normalizedAddress}:9090`;
-			}
-		} else {
-			const port = normalizedAddress.split(':')[1];
-			if (port === '443' || port === '9091') {
-				hasTls = true;
-			}
-		}
-
-		setEndpoint(normalizedAddress);
-		setTlsEnabled(hasTls);
-		setSelectedChainDetails(null);
-	};
-
-	const useAllEndpoints = (chain: ChainData) => {
-		const chainMarker = `chain:${chain.chain_name}`;
-		addNetwork(chainMarker, true);
-		debug.log(`Using all ${chain.grpc_endpoints.length} endpoints for ${chain.pretty_name}`);
-	};
-
-	// Add chain with selected endpoints (round-robin mode)
+	// Add chain with selected endpoints
 	const addWithSelectedEndpoints = () => {
 		if (!selectedChainDetails || endpointConfigs.length === 0) return;
 
@@ -356,10 +305,6 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		[endpointConfigs]
 	);
 
-	// Check if current input is a valid chain name
-	const isValidChainName = endpoint.trim() && !isEndpointFormat(endpoint) &&
-		chains.includes(endpoint.trim().toLowerCase());
-
 	return (
 		<Dialog open={true} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent className="sm:max-w-[525px]">
@@ -367,10 +312,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 					<DialogHeader>
 						<DialogTitle>Add Network</DialogTitle>
 						<DialogDescription>
-							{roundRobinEnabled
-								? "Select a chain to add with automatic endpoint rotation"
-								: "Select a chain or enter a specific gRPC endpoint"
-							}
+							Select a chain or enter a gRPC endpoint directly
 						</DialogDescription>
 					</DialogHeader>
 					<div className="grid gap-4 py-4">
@@ -459,13 +401,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 														<span className="text-sm font-medium capitalize">
 															{chain.replace(/-/g, ' ')}
 														</span>
-														{roundRobinEnabled ? (
-															<span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
-																click to add
-															</span>
-														) : (
-															<ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-														)}
+														<ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
 													</button>
 												))}
 											</div>
@@ -479,11 +415,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 							</div>
 
 							<p className="text-xs text-muted-foreground">
-								{roundRobinEnabled ? (
-									<>Select a chain from the list to add it instantly with all available endpoints</>
-								) : (
-									<>Type to search chains, or enter a direct endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.osmosis.zone:443</code>)</>
-								)}
+								Type to search chains, or enter a direct endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.osmosis.zone:443</code>)
 							</p>
 						</div>
 
@@ -524,76 +456,9 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 							</div>
 						)}
 
-						{/* Chain details panel (when round-robin disabled and chain selected) */}
-						{selectedChainDetails && !roundRobinEnabled && (
-							<div className="border border-border rounded-lg p-3 max-h-[250px] overflow-y-auto">
-								<div className="mb-3">
-									<button
-										type="button"
-										onClick={() => {
-											setSelectedChainDetails(null);
-											setEndpoint('');
-											setShowDropdown(true);
-										}}
-										className="text-xs text-primary hover:underline mb-2"
-									>
-										← Back to chains
-									</button>
-									<div className="font-semibold">{selectedChainDetails.pretty_name}</div>
-									<div className="text-xs text-muted-foreground">{selectedChainDetails.chain_id}</div>
-								</div>
-								{loadingChainData ? (
-									<div className="flex items-center justify-center py-6">
-										<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-									</div>
-								) : selectedChainDetails.grpc_endpoints.length > 0 ? (
-									<>
-										<Button
-											type="button"
-											onClick={() => useAllEndpoints(selectedChainDetails)}
-											className="w-full mb-3"
-											variant="default"
-										>
-											Use All {selectedChainDetails.grpc_endpoints.length} Endpoints
-										</Button>
-										<div className="text-xs text-muted-foreground mb-2 text-center">
-											Or select a specific endpoint:
-										</div>
-										<div className="space-y-1">
-											{selectedChainDetails.grpc_endpoints.map((ep, idx) => (
-												<button
-													key={idx}
-													type="button"
-													onClick={() => selectEndpointFromChain(ep.address)}
-													className={cn(
-														"w-full text-left px-3 py-2 rounded hover:bg-secondary/50",
-														"transition-colors group"
-													)}
-												>
-													<div className="flex items-center justify-between">
-														<div>
-															<div className="text-sm font-medium">{ep.address}</div>
-															{ep.provider && (
-																<div className="text-xs text-muted-foreground">{ep.provider}</div>
-															)}
-														</div>
-														<ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-													</div>
-												</button>
-											))}
-										</div>
-									</>
-								) : (
-									<div className="text-sm text-muted-foreground text-center py-4">
-										No gRPC endpoints available
-									</div>
-								)}
-							</div>
-						)}
-
-						{/* Round-robin endpoint selector panel */}
-						{selectedChainDetails && roundRobinEnabled && (
-							<div className="border border-border rounded-lg p-3 max-h-[300px] overflow-y-auto">
+						{/* Endpoint selector panel (shown when chain selected) */}
+						{selectedChainDetails && (
+							<div className="border border-border rounded-lg p-3 max-h-[350px] overflow-y-auto">
 								<div className="mb-3">
 									<button
 										type="button"
@@ -615,28 +480,11 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 										<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
 									</div>
 								) : endpointConfigs.length > 0 ? (
-									<>
-										<div className="text-xs text-muted-foreground mb-3">
-											Select endpoints to use for round-robin and configure TLS per endpoint:
-										</div>
-										<EndpointSelector
-											endpoints={endpointConfigs}
-											onChange={setEndpointConfigs}
-											validating={validatingEndpoints}
-										/>
-										<Button
-											type="button"
-											onClick={addWithSelectedEndpoints}
-											className="w-full mt-4"
-											variant="default"
-											disabled={selectedEndpointCount === 0 || validatingEndpoints}
-										>
-											{validatingEndpoints
-												? 'Validating endpoints...'
-												: `Add with ${selectedEndpointCount} Endpoint${selectedEndpointCount !== 1 ? 's' : ''}`
-											}
-										</Button>
-									</>
+									<EndpointSelector
+										endpoints={endpointConfigs}
+										onChange={setEndpointConfigs}
+										validating={validatingEndpoints}
+									/>
 								) : (
 									<div className="text-sm text-muted-foreground text-center py-4">
 										No gRPC endpoints available
@@ -651,25 +499,17 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 								<Switch
 									id="roundrobin"
 									checked={roundRobinEnabled}
-									onCheckedChange={(checked) => {
-										setRoundRobinEnabled(checked);
-										// Reset state when toggling
-										setSelectedChainDetails(null);
-										setEndpointConfigs([]);
-										setValidatingEndpoints(false);
-										if (!isEndpointFormat(endpoint)) {
-											setShowDropdown(true);
-										}
-									}}
+									onCheckedChange={setRoundRobinEnabled}
 								/>
 								<div className="flex flex-col">
 									<Label htmlFor="roundrobin" className="cursor-pointer text-sm">Round-robin</Label>
 									<span className="text-[10px] text-muted-foreground">
-										{roundRobinEnabled ? "Using all endpoints" : "Pick specific endpoint"}
+										{roundRobinEnabled ? "Rotate through selected endpoints" : "Use first selected endpoint"}
 									</span>
 								</div>
 							</div>
-							{!roundRobinEnabled && (
+							{/* TLS toggle only shown for direct endpoint entry */}
+							{!selectedChainDetails && isEndpointFormat(endpoint) && (
 								<div className="flex flex-col gap-1">
 									<div className="flex items-center gap-3">
 										<Switch
@@ -693,12 +533,29 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 						<Button type="button" variant="outline" onClick={handleCancel}>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							disabled={!endpoint.trim() || (roundRobinEnabled && !isValidChainName && !isEndpointFormat(endpoint))}
-						>
-							{roundRobinEnabled && isValidChainName ? 'Add Chain' : 'Add Network'}
-						</Button>
+						{selectedChainDetails && endpointConfigs.length > 0 ? (
+							<Button
+								type="button"
+								onClick={addWithSelectedEndpoints}
+								disabled={selectedEndpointCount === 0 || validatingEndpoints}
+							>
+								{validatingEndpoints ? (
+									<>
+										<Loader2 className="h-4 w-4 animate-spin mr-2" />
+										Validating...
+									</>
+								) : (
+									`Add with ${selectedEndpointCount} Endpoint${selectedEndpointCount !== 1 ? 's' : ''}`
+								)}
+							</Button>
+						) : (
+							<Button
+								type="submit"
+								disabled={!endpoint.trim()}
+							>
+								Add Network
+							</Button>
+						)}
 					</DialogFooter>
 				</form>
 			</DialogContent>

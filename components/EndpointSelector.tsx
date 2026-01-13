@@ -180,7 +180,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 			</div>
 
 			{/* Endpoint List */}
-			<div className="space-y-1 max-h-[200px] overflow-y-auto">
+			<div className="space-y-1">
 				{endpoints.map((ep, index) => (
 					<div
 						key={`${ep.address}-${index}`}
