@@ -16,8 +16,9 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
-import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult } from '@/lib/types/grpc';
+import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig } from '@/lib/types/grpc';
 import { descriptorLoader } from '@/lib/utils/descriptor-loader';
+import { toast } from 'sonner';
 
 // Color palette for networks
 const NETWORK_COLORS = [
@@ -242,7 +243,7 @@ export default function GrpcExplorerApp() {
   }, []);
 
   // Add network
-  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, roundRobin: boolean) => {
+  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, roundRobin: boolean, endpointConfigs?: EndpointConfig[]) => {
     // Update global round-robin setting when adding a network
     if (roundRobin !== roundRobinEnabled) {
       handleRoundRobinChange(roundRobin);
@@ -294,6 +295,7 @@ export default function GrpcExplorerApp() {
         name,
         endpoint: actualEndpoint,
         endpoints: fallbackEndpoints,
+        ...(endpointConfigs ? { endpointConfigs } : {}),
         ...(cachedChainId ? { chainId: cachedChainId } : {}),
         tlsEnabled,
         services: cached.services || [],
@@ -325,6 +327,7 @@ export default function GrpcExplorerApp() {
       name,
       endpoint,
       endpoints: [],
+      ...(endpointConfigs ? { endpointConfigs } : {}),
       tlsEnabled,
       services: [],
       color,
@@ -751,22 +754,45 @@ export default function GrpcExplorerApp() {
 
     const startTime = Date.now();
 
+    let selectedEndpoint: string = '';
+    let selectedTls: boolean = true;
+
     try {
       const network = networks.find(n => n.id === instance.networkId);
       if (!network) throw new Error('Network not found');
 
-      let selectedEndpoint: string;
-
       if (roundRobinEnabled) {
-        // Round-robin enabled: distribute load across all available endpoints
-        const allEndpoints = [network.endpoint, ...(network.endpoints || [])];
-        const currentIndex = endpointIndexRef.current.get(network.id) || 0;
-        selectedEndpoint = allEndpoints[currentIndex % allEndpoints.length];
-        endpointIndexRef.current.set(network.id, (currentIndex + 1) % allEndpoints.length);
-        debug.log(`[RoundRobin] Using endpoint ${currentIndex % allEndpoints.length + 1}/${allEndpoints.length}: ${selectedEndpoint}`);
+        // Round-robin enabled: use endpointConfigs if available, otherwise fallback to legacy
+        if (network.endpointConfigs && network.endpointConfigs.length > 0) {
+          // Use new per-endpoint TLS configuration
+          const selectedConfigs = network.endpointConfigs.filter(ep => ep.selected);
+          if (selectedConfigs.length === 0) {
+            throw new Error('No endpoints selected for round-robin. Edit the network to select endpoints.');
+          }
+
+          const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+          const config = selectedConfigs[currentIndex % selectedConfigs.length];
+          selectedEndpoint = config.address;
+          selectedTls = config.tlsEnabled;
+          endpointIndexRef.current.set(network.id, (currentIndex + 1) % selectedConfigs.length);
+
+          debug.log(`[RoundRobin] Using endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
+          console.log(`[RoundRobin] Request to ${selectedEndpoint} (TLS: ${selectedTls})`);
+        } else {
+          // Legacy fallback: use endpoints array with network-level TLS
+          const allEndpoints = [network.endpoint, ...(network.endpoints || [])];
+          const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+          selectedEndpoint = allEndpoints[currentIndex % allEndpoints.length];
+          selectedTls = network.tlsEnabled;
+          endpointIndexRef.current.set(network.id, (currentIndex + 1) % allEndpoints.length);
+
+          debug.log(`[RoundRobin] Using endpoint ${currentIndex % allEndpoints.length + 1}/${allEndpoints.length}: ${selectedEndpoint} (legacy TLS: ${selectedTls})`);
+          console.log(`[RoundRobin] Request to ${selectedEndpoint} (TLS: ${selectedTls})`);
+        }
       } else {
         // Round-robin disabled: always use primary endpoint
         selectedEndpoint = network.endpoint;
+        selectedTls = network.tlsEnabled;
         debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
       }
 
@@ -775,7 +801,7 @@ export default function GrpcExplorerApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           endpoint: selectedEndpoint,
-          tlsEnabled: network.tlsEnabled,
+          tlsEnabled: selectedTls,
           service: instance.service.fullName,
           method: instance.method.name,
           params: instance.params
@@ -791,18 +817,41 @@ export default function GrpcExplorerApp() {
         data: data.result || data,
         error: data.error,
         timestamp: Date.now(),
-        duration
+        duration,
+        endpoint: selectedEndpoint
       };
+
+      // Show toast for errors when round-robin is enabled
+      if (!response.ok && roundRobinEnabled) {
+        const errorMsg = data.error || 'Request failed';
+        toast.error(`Request failed on ${selectedEndpoint}`, {
+          description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg,
+          duration: 5000
+        });
+        console.error(`[RoundRobin] Error from ${selectedEndpoint}: ${errorMsg}`);
+      }
 
       setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
       const result: ExecutionResult = {
         methodId: instance.id,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         timestamp: Date.now(),
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
+        ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {})
       };
+
+      // Show toast for errors when round-robin is enabled
+      if (roundRobinEnabled && selectedEndpoint) {
+        toast.error(`Request failed on ${selectedEndpoint}`, {
+          description: errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage,
+          duration: 5000
+        });
+        console.error(`[RoundRobin] Error from ${selectedEndpoint}: ${errorMessage}`);
+      }
 
       setExecutionResults(prev => [result, ...prev].slice(0, 50));
     } finally {
