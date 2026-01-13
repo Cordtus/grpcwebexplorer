@@ -98,15 +98,15 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 	const allSelected = selectedCount === endpoints.length && endpoints.length > 0;
 	const someSelected = selectedCount > 0 && selectedCount < endpoints.length;
 
-	// Select all reachable endpoints (or all if none validated yet)
+	// Toggle all endpoints: if any selected → deselect all, if none → select all reachable
 	const handleSelectAll = useCallback(() => {
-		const newSelected = !allSelected;
+		const anySelected = selectedCount > 0;
 		onChange(endpoints.map(ep => ({
 			...ep,
-			// When selecting all, only select reachable endpoints (or all if not validated)
-			selected: newSelected ? (ep.reachable !== false) : false
+			// Deselect all if any selected, otherwise select all reachable
+			selected: anySelected ? false : (ep.reachable !== false)
 		})));
-	}, [endpoints, allSelected, onChange]);
+	}, [endpoints, selectedCount, onChange]);
 
 	// Select only reachable endpoints
 	const handleSelectReachable = useCallback(() => {
