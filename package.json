@@ -31,11 +31,12 @@
     "clsx": "^2.1.1",
     "lru-cache": "^11.1.0",
     "lucide-react": "^0.511.0",
-    "protobufjs": "^7.2.5",
     "next": "^14.1.0",
+    "protobufjs": "^7.2.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-resizable-panels": "^3.0.2",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.3.3"
