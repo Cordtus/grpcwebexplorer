@@ -21,9 +21,8 @@ import EndpointSelector, { createEndpointConfigs } from './EndpointSelector';
 import { EndpointConfig } from '@/lib/types/grpc';
 
 interface AddNetworkDialogProps {
-	onAdd: (endpoint: string, tlsEnabled: boolean, roundRobinEnabled: boolean, endpointConfigs?: EndpointConfig[]) => void;
+	onAdd: (endpoint: string, tlsEnabled: boolean, endpointConfigs?: EndpointConfig[]) => void;
 	onClose: () => void;
-	defaultRoundRobin?: boolean;
 }
 
 interface ChainData {
@@ -33,10 +32,9 @@ interface ChainData {
 	grpc_endpoints: Array<{ address: string; provider?: string }>;
 }
 
-const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, defaultRoundRobin = false }) => {
+const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) => {
 	const [endpoint, setEndpoint] = useState('');
 	const [tlsEnabled, setTlsEnabled] = useState(true);
-	const [roundRobinEnabled, setRoundRobinEnabled] = useState(defaultRoundRobin);
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [showCachedChains, setShowCachedChains] = useState(false);
 	const [cachedChains, setCachedChains] = useState<CachedChainInfo[]>([]);
@@ -145,10 +143,9 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 
 	// Add network with the current settings
 	const addNetwork = (finalEndpoint: string, tls: boolean, configs?: EndpointConfig[]) => {
-		onAdd(finalEndpoint, tls, roundRobinEnabled, configs);
+		onAdd(finalEndpoint, tls, configs);
 		setEndpoint('');
 		setTlsEnabled(true);
-		setRoundRobinEnabled(defaultRoundRobin);
 		setShowDropdown(false);
 		setShowCachedChains(false);
 		setSelectedChainDetails(null);
@@ -175,7 +172,6 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 	const handleCancel = () => {
 		setEndpoint('');
 		setTlsEnabled(true);
-		setRoundRobinEnabled(defaultRoundRobin);
 		setShowDropdown(false);
 		setShowCachedChains(false);
 		setSelectedChainDetails(null);
@@ -493,23 +489,9 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 							</div>
 						)}
 
-						{/* Settings row */}
-						<div className="flex items-center gap-6 pt-2 border-t border-border">
-							<div className="flex items-center gap-3 flex-1">
-								<Switch
-									id="roundrobin"
-									checked={roundRobinEnabled}
-									onCheckedChange={setRoundRobinEnabled}
-								/>
-								<div className="flex flex-col">
-									<Label htmlFor="roundrobin" className="cursor-pointer text-sm">Round-robin</Label>
-									<span className="text-[10px] text-muted-foreground">
-										{roundRobinEnabled ? "Rotate through selected endpoints" : "Use first selected endpoint"}
-									</span>
-								</div>
-							</div>
-							{/* TLS toggle only shown for direct endpoint entry */}
-							{!selectedChainDetails && isEndpointFormat(endpoint) && (
+						{/* TLS toggle only shown for direct endpoint entry */}
+						{!selectedChainDetails && isEndpointFormat(endpoint) && (
+							<div className="flex items-center gap-6 pt-2 border-t border-border">
 								<div className="flex flex-col gap-1">
 									<div className="flex items-center gap-3">
 										<Switch
@@ -526,8 +508,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 										</div>
 									)}
 								</div>
-							)}
-						</div>
+							</div>
+						)}
 					</div>
 					<DialogFooter>
 						<Button type="button" variant="outline" onClick={handleCancel}>

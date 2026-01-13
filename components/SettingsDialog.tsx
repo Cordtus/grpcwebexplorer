@@ -27,24 +27,19 @@ interface SettingsDialogProps {
   onClose: () => void;
   autoCollapseEnabled?: boolean;
   onAutoCollapseChange?: (enabled: boolean) => void;
-  roundRobinEnabled?: boolean;
-  onRoundRobinChange?: (enabled: boolean) => void;
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
   open,
   onClose,
   autoCollapseEnabled = true,
-  onAutoCollapseChange,
-  roundRobinEnabled = false,
-  onRoundRobinChange
+  onAutoCollapseChange
 }) => {
   const { theme, setTheme } = useTheme();
   const [defaultTimeout, setDefaultTimeout] = useState(10000);
   const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
   const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
   const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
-  const [localRoundRobin, setLocalRoundRobin] = useState(roundRobinEnabled);
 
   // Load current settings when dialog opens
   useEffect(() => {
@@ -60,11 +55,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
       // Load auto-collapse setting
       setLocalAutoCollapse(autoCollapseEnabled);
-
-      // Load round-robin setting
-      setLocalRoundRobin(roundRobinEnabled);
     }
-  }, [open, autoCollapseEnabled, roundRobinEnabled]);
+  }, [open, autoCollapseEnabled]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -149,25 +141,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Network Behavior</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-sm font-medium">Round-robin endpoints</label>
-                  <p className="text-xs text-muted-foreground">
-                    Rotate through available endpoints when executing methods.
-                    When disabled, uses the primary endpoint only.
-                  </p>
-                </div>
-                <Switch
-                  checked={localRoundRobin}
-                  onCheckedChange={setLocalRoundRobin}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
             <h3 className="text-sm font-semibold text-muted-foreground mb-3">Cache</h3>
             <div className="space-y-4">
               <div>
@@ -233,11 +206,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
               // Save auto-collapse setting
               if (onAutoCollapseChange) {
                 onAutoCollapseChange(localAutoCollapse);
-              }
-
-              // Save round-robin setting
-              if (onRoundRobinChange) {
-                onRoundRobinChange(localRoundRobin);
               }
 
               onClose();
