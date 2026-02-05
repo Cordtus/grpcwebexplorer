@@ -589,19 +589,12 @@ export default function GrpcExplorerApp() {
         }
       }
 
-      // If still not loaded, fetch on-demand and prioritize in queue
+      // If still not loaded, fetch on-demand with priority over background loading
       if (enrichedMethod === method) {
         console.log(`[UI] Loading field definitions for ${service.fullName}...`);
 
-        // Prioritize this service in the loading queue
-        descriptorLoader.enqueue({
-          networkId: network.id,
-          endpoint: network.endpoint,
-          tlsEnabled: network.tlsEnabled,
-          serviceName: service.fullName,
-          priority: 'high',
-          timestamp: Date.now(),
-        });
+        // Pause background loading to prioritize user-initiated fetch
+        descriptorLoader.pause();
 
         try {
           const response = await fetch('/api/grpc/descriptor', {
@@ -625,10 +618,15 @@ export default function GrpcExplorerApp() {
               enrichedMethod = enrichedMethodData;
               enrichedService = data.service;
               console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+              // Mark as loaded so background queue doesn't duplicate the work
+              descriptorLoader.markLoaded(network.id, service.fullName);
             }
           }
         } catch (err) {
           console.error(`[UI] Failed to load field definitions:`, err);
+        } finally {
+          // Resume background loading
+          descriptorLoader.resume();
         }
       }
     }
