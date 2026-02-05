@@ -22,12 +22,13 @@ import { saveToCache, getFromCache } from '@/lib/utils/client-cache';
  * @returns Array of services with full type definitions
  */
 export async function fetchServicesViaReflection(
-  options: { endpoint: string; tls: boolean; timeout?: number }
+  options: { endpoint: string; tls: boolean; timeout?: number; additionalEndpoints?: Array<{ address: string; tls: boolean }> }
 ): Promise<import('./reflection-client').GrpcService[]> {
   const client = new ReflectionClient({
     endpoint: options.endpoint,
     tls: options.tls,
     timeout: options.timeout || 10000,
+    additionalEndpoints: options.additionalEndpoints || [],
   });
 
   try {
@@ -53,12 +54,13 @@ export async function fetchServicesViaReflection(
  * @returns Array of services with full type definitions
  */
 export async function fetchServicesWithCosmosOptimization(
-  options: { endpoint: string; tls: boolean; timeout?: number }
+  options: { endpoint: string; tls: boolean; timeout?: number; additionalEndpoints?: Array<{ address: string; tls: boolean }> }
 ): Promise<import('./reflection-client').GrpcService[]> {
   const client = new ReflectionClient({
     endpoint: options.endpoint,
     tls: options.tls,
     timeout: options.timeout || 10000,
+    additionalEndpoints: options.additionalEndpoints || [],
   });
 
   try {
@@ -90,29 +92,36 @@ export async function fetchServicesWithCosmosOptimization(
       await client.initialize();
       const enrichedServices = client.getServices();
 
-      // Create a map for quick lookup
-      const enrichedMap = new Map<string, import('./reflection-client').GrpcService>();
-      for (const service of enrichedServices) {
-        enrichedMap.set(service.fullName, service);
-      }
-
       // Merge: prefer enriched services (with full field definitions), keep v2alpha1-only services
       const finalServices: import('./reflection-client').GrpcService[] = [];
       const seenServices = new Set<string>();
 
-      // First add all enriched services
       for (const service of enrichedServices) {
         finalServices.push(service);
         seenServices.add(service.fullName);
       }
 
-      // Then add any v2alpha1-only services that weren't in standard reflection
-      // (like the Transactions service from GetTxDescriptor)
+      // Add any v2alpha1-only services not in standard reflection
+      // (e.g. the Transactions service from GetTxDescriptor)
       for (const v2Service of v2alpha1Services) {
         if (!seenServices.has(v2Service.fullName)) {
           finalServices.push(v2Service);
           seenServices.add(v2Service.fullName);
         }
+      }
+
+      // Count services that still have methods with empty field definitions
+      // These may need on-demand loading if rate limiting prevented full enrichment
+      let emptyFieldCount = 0;
+      for (const service of finalServices) {
+        for (const method of service.methods) {
+          if (method.requestTypeDefinition && method.requestTypeDefinition.fields.length === 0) {
+            emptyFieldCount++;
+          }
+        }
+      }
+      if (emptyFieldCount > 0) {
+        console.warn(`[Reflection] ${emptyFieldCount} methods still have empty field definitions (may need on-demand loading)`);
       }
 
       console.log(`[Reflection] Final enriched services: ${finalServices.length}`);
@@ -166,36 +175,49 @@ export async function loadServiceDescriptor(
 
   console.log(`[Reflection] Loading descriptor for ${serviceName} from ${options.endpoint}...`);
 
-  const client = new ReflectionClient({
-    endpoint: options.endpoint,
-    tls: options.tls,
-    timeout: options.timeout || 10000,
-  });
+  // Retry with backoff for rate-limiting resilience
+  const maxAttempts = 3;
+  const retryDelays = [0, 1000, 2000];
+  let lastError: Error | null = null;
 
-  try {
-    await client.initializeForMethod(serviceName);
-    const services = client.getServices();
-    const service = services.find(s => s.fullName === serviceName);
-
-    if (service) {
-      try {
-        saveToCache(cacheKey, service);
-      } catch (cacheErr) {
-        // Cache write failed, continue without caching
-        console.warn(`[Reflection] Cache write failed for ${serviceName}:`, cacheErr);
-      }
-      console.log(`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`);
-      return service;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      console.log(`[Reflection] Retry attempt ${attempt + 1}/${maxAttempts} for ${serviceName} after ${retryDelays[attempt]}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
     }
 
-    console.warn(`[Reflection] Service ${serviceName} not found after initialization. Available services:`,
-      services.map(s => s.fullName).join(', '));
-    return null;
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`[Reflection] Failed to load descriptor for ${serviceName}:`, errorMessage);
-    throw new Error(`Failed to load descriptor for ${serviceName}: ${errorMessage}`);
-  } finally {
-    client.close();
+    const client = new ReflectionClient({
+      endpoint: options.endpoint,
+      tls: options.tls,
+      timeout: options.timeout || 10000,
+    });
+
+    try {
+      await client.initializeForMethod(serviceName);
+      const services = client.getServices();
+      const service = services.find(s => s.fullName === serviceName);
+
+      if (service) {
+        try {
+          saveToCache(cacheKey, service);
+        } catch (cacheErr) {
+          console.warn(`[Reflection] Cache write failed for ${serviceName}:`, cacheErr);
+        }
+        console.log(`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`);
+        return service;
+      }
+
+      console.warn(`[Reflection] Service ${serviceName} not found after initialization. Available services:`,
+        services.map(s => s.fullName).join(', '));
+      return null;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[Reflection] Attempt ${attempt + 1} failed for ${serviceName}: ${lastError.message}`);
+    } finally {
+      client.close();
+    }
   }
+
+  console.error(`[Reflection] All ${maxAttempts} attempts failed for ${serviceName}`);
+  throw new Error(`Failed to load descriptor for ${serviceName} after ${maxAttempts} attempts: ${lastError?.message}`)
 }
