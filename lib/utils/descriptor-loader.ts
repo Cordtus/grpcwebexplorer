@@ -21,6 +21,8 @@ class DescriptorLoaderQueue {
   private listeners: ((result: DescriptorResult) => void)[] = [];
   private maxConcurrent = 1;
   private delayBetweenJobs = 500;
+  private paused = false;
+  private abortController: AbortController | null = null;
 
   private getJobKey(job: DescriptorJob): string {
     return `${job.networkId}:${job.serviceName}`;
@@ -77,14 +79,49 @@ class DescriptorLoaderQueue {
     });
   }
 
+  /**
+   * Pause background loading - use when user initiates a direct load
+   */
+  pause() {
+    this.paused = true;
+    // Abort any in-flight background request
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+    console.log('[DescriptorLoader] Paused background loading');
+  }
+
+  /**
+   * Resume background loading
+   */
+  resume() {
+    this.paused = false;
+    console.log('[DescriptorLoader] Resumed background loading');
+    this.processQueue();
+  }
+
+  /**
+   * Mark a service as already loaded (to skip queue processing)
+   */
+  markLoaded(networkId: string, serviceName: string) {
+    const jobKey = `${networkId}:${serviceName}`;
+    this.loaded.add(jobKey);
+    // Remove from queue if present
+    this.queue = this.queue.filter(j => this.getJobKey(j) !== jobKey);
+  }
+
   private async processQueue() {
-    if (this.currentJob || this.queue.length === 0) {
+    if (this.paused || this.currentJob || this.queue.length === 0) {
       return;
     }
 
     this.currentJob = this.queue.shift()!;
     const jobKey = this.getJobKey(this.currentJob);
     this.loading.add(jobKey);
+
+    // Create abort controller for this request
+    this.abortController = new AbortController();
 
     try {
       console.log(`[DescriptorLoader] Loading ${this.currentJob.serviceName} (${this.currentJob.priority} priority, ${this.queue.length} remaining)`);
@@ -97,6 +134,7 @@ class DescriptorLoaderQueue {
           tlsEnabled: this.currentJob.tlsEnabled,
           serviceName: this.currentJob.serviceName,
         }),
+        signal: this.abortController.signal,
       });
 
       if (response.ok) {
@@ -113,15 +151,26 @@ class DescriptorLoaderQueue {
       } else {
         console.error(`[DescriptorLoader] Failed to load ${this.currentJob.serviceName}: ${response.statusText}`);
       }
-    } catch (err) {
-      console.error(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}:`, err);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log(`[DescriptorLoader] Aborted loading ${this.currentJob.serviceName}`);
+        // Re-add to queue if aborted (will be processed when resumed)
+        if (!this.loaded.has(jobKey)) {
+          this.queue.unshift(this.currentJob);
+        }
+      } else {
+        console.error(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}:`, err);
+      }
     } finally {
       this.loading.delete(jobKey);
       this.currentJob = null;
+      this.abortController = null;
 
-      await new Promise((resolve) => setTimeout(resolve, this.delayBetweenJobs));
-
-      this.processQueue();
+      // Skip delay if paused
+      if (!this.paused) {
+        await new Promise((resolve) => setTimeout(resolve, this.delayBetweenJobs));
+        this.processQueue();
+      }
     }
   }
 
