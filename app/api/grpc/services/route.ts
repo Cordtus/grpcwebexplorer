@@ -158,6 +158,19 @@ export async function POST(req: Request) {
 
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
 
+    // Count methods that still have empty field definitions (need on-demand loading)
+    let methodsNeedingDescriptors = 0;
+    for (const service of services) {
+      for (const method of service.methods) {
+        if (method.requestTypeDefinition && method.requestTypeDefinition.fields.length === 0) {
+          methodsNeedingDescriptors++;
+        }
+      }
+    }
+    if (methodsNeedingDescriptors > 0) {
+      console.warn(`[Services] ${methodsNeedingDescriptors} methods have empty field definitions (will need on-demand loading)`);
+    }
+
     // Auto-detect chain-ID if not already set
     // Try GetChainDescriptor first (v2alpha1), fallback to GetNodeInfo (v1beta1)
     let detectedChainId = chainName;
@@ -259,9 +272,11 @@ export async function POST(req: Request) {
       status,
       // Include all endpoints for round-robin distribution (only for chain markers)
       availableEndpoints: allEndpoints,
-      warnings: status.failed > 0
-        ? [`${status.failed} services have no methods.`]
-        : [],
+      methodsNeedingDescriptors,
+      warnings: [
+        ...(status.failed > 0 ? [`${status.failed} services have no methods.`] : []),
+        ...(methodsNeedingDescriptors > 0 ? [`${methodsNeedingDescriptors} methods need on-demand field definition loading.`] : []),
+      ],
     });
   } catch (err: any) {
     console.error('[Services] Error in services route:', err);

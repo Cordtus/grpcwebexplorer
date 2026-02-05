@@ -5,6 +5,7 @@ type DescriptorJob = {
   serviceName: string;
   priority: 'high' | 'normal';
   timestamp: number;
+  retryCount?: number;
 };
 
 type DescriptorResult = {
@@ -21,6 +22,7 @@ class DescriptorLoaderQueue {
   private listeners: ((result: DescriptorResult) => void)[] = [];
   private maxConcurrent = 1;
   private delayBetweenJobs = 500;
+  private maxRetries = 3;
   private paused = false;
   private abortController: AbortController | null = null;
 
@@ -149,7 +151,14 @@ class DescriptorLoaderQueue {
           console.log(`[DescriptorLoader] Loaded ${this.currentJob.serviceName}`);
         }
       } else {
-        console.error(`[DescriptorLoader] Failed to load ${this.currentJob.serviceName}: ${response.statusText}`);
+        // Re-queue with retry on failure (rate limiting, server errors)
+        const retryCount = (this.currentJob.retryCount || 0) + 1;
+        if (retryCount <= this.maxRetries) {
+          console.warn(`[DescriptorLoader] Failed to load ${this.currentJob.serviceName}: ${response.statusText} (retry ${retryCount}/${this.maxRetries})`);
+          this.queue.push({ ...this.currentJob, retryCount, priority: 'normal' });
+        } else {
+          console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);
+        }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -159,7 +168,14 @@ class DescriptorLoaderQueue {
           this.queue.unshift(this.currentJob);
         }
       } else {
-        console.error(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}:`, err);
+        // Re-queue with retry on error (network issues, rate limiting)
+        const retryCount = (this.currentJob.retryCount || 0) + 1;
+        if (retryCount <= this.maxRetries) {
+          console.warn(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}: ${err.message} (retry ${retryCount}/${this.maxRetries})`);
+          this.queue.push({ ...this.currentJob, retryCount, priority: 'normal' });
+        } else {
+          console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);
+        }
       }
     } finally {
       this.loading.delete(jobKey);
@@ -168,7 +184,10 @@ class DescriptorLoaderQueue {
 
       // Skip delay if paused
       if (!this.paused) {
-        await new Promise((resolve) => setTimeout(resolve, this.delayBetweenJobs));
+        // Use longer delay for retry jobs to avoid hammering rate-limited endpoints
+        const nextJob = this.queue[0];
+        const retryDelay = nextJob?.retryCount ? this.delayBetweenJobs * (nextJob.retryCount + 1) : this.delayBetweenJobs;
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
         this.processQueue();
       }
     }

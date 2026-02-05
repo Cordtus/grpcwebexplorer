@@ -596,36 +596,65 @@ export default function GrpcExplorerApp() {
         // Pause background loading to prioritize user-initiated fetch
         descriptorLoader.pause();
 
+        // Retry with backoff for rate-limiting resilience
+        const maxAttempts = 3;
+        const retryDelays = [0, 1500, 3000];
+
         try {
-          const response = await fetch('/api/grpc/descriptor', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              endpoint: network.endpoint,
-              tlsEnabled: network.tlsEnabled,
-              serviceName: service.fullName
-            })
-          });
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if (attempt > 0) {
+              console.log(`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`);
+              await new Promise(r => setTimeout(r, retryDelays[attempt]));
+            }
 
-          if (!response.ok) {
-            throw new Error(`Failed to load descriptor: ${response.statusText}`);
-          }
+            try {
+              const response = await fetch('/api/grpc/descriptor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  endpoint: network.endpoint,
+                  tlsEnabled: network.tlsEnabled,
+                  serviceName: service.fullName
+                })
+              });
 
-          const data = await response.json();
-          if (data.service) {
-            const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
-            if (enrichedMethodData) {
-              enrichedMethod = enrichedMethodData;
-              enrichedService = data.service;
-              console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
-              // Mark as loaded so background queue doesn't duplicate the work
-              descriptorLoader.markLoaded(network.id, service.fullName);
+              if (!response.ok) {
+                if (attempt < maxAttempts - 1) {
+                  console.warn(`[UI] Descriptor fetch failed (${response.status}), will retry...`);
+                  continue;
+                }
+                throw new Error(`Failed to load descriptor: ${response.statusText}`);
+              }
+
+              const data = await response.json();
+              if (data.service) {
+                const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
+                if (enrichedMethodData) {
+                  enrichedMethod = enrichedMethodData;
+                  enrichedService = data.service;
+                  console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+                  descriptorLoader.markLoaded(network.id, service.fullName);
+
+                  // Update the network state so other methods from this service also get enriched data
+                  setNetworks(prev => prev.map(n => {
+                    if (n.id !== network.id) return n;
+                    return {
+                      ...n,
+                      services: n.services.map(s =>
+                        s.fullName === data.service.fullName ? data.service : s
+                      )
+                    };
+                  }));
+                }
+              }
+              break; // Success - exit retry loop
+            } catch (err) {
+              if (attempt === maxAttempts - 1) throw err;
             }
           }
         } catch (err) {
-          console.error(`[UI] Failed to load field definitions:`, err);
+          console.error(`[UI] Failed to load field definitions after ${maxAttempts} attempts:`, err);
         } finally {
-          // Resume background loading
           descriptorLoader.resume();
         }
       }

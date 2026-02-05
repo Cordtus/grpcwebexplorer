@@ -322,7 +322,8 @@ export class ReflectionClient {
 
   /**
    * Initialize and load all service descriptors
-   * OPTIMIZED: Loads services in parallel with configurable concurrency
+   * Rate-limit resilient: uses conservative concurrency, delays between batches,
+   * and multiple retry rounds with exponential backoff
    */
   async initialize(): Promise<void> {
     const initStartTime = Date.now();
@@ -341,11 +342,12 @@ export class ReflectionClient {
       name => !name.includes('ServerReflection')
     );
 
-    // Load services in parallel with concurrency limit
+    // Load services in parallel with conservative concurrency and delays
     const loadStartTime = Date.now();
-    const concurrencyLimit = 5;
+    const concurrencyLimit = 3;
+    const batchDelayMs = 150;
     const processedServices = new Set<string>();
-    const failedServices: string[] = [];
+    let failedServices: string[] = [];
 
     for (let i = 0; i < servicesToLoad.length; i += concurrencyLimit) {
       const batch = servicesToLoad.slice(i, i + concurrencyLimit);
@@ -363,26 +365,48 @@ export class ReflectionClient {
           console.warn(`[ReflectionClient] Failed to load ${serviceName}:`, result.reason?.message);
         }
       });
+
+      // Delay between batches to avoid rate limiting
+      if (i + concurrencyLimit < servicesToLoad.length) {
+        await new Promise(resolve => setTimeout(resolve, batchDelayMs));
+      }
     }
 
-    // Retry failed services sequentially
-    if (failedServices.length > 0) {
-      console.log(`[ReflectionClient] Retrying ${failedServices.length} failed services sequentially...`);
-      const retriedServices: string[] = [];
+    // Multiple retry rounds with exponential backoff
+    const maxRetryRounds = 3;
+    const retryDelays = [500, 1500, 3000];
 
-      for (const serviceName of failedServices) {
-        try {
-          await this.loadServiceDescriptor(serviceName);
-          processedServices.add(serviceName);
-          retriedServices.push(serviceName);
-          console.log(`[ReflectionClient] Retry succeeded for ${serviceName}`);
-        } catch (err) {
-          console.error(`[ReflectionClient] Retry failed for ${serviceName}:`, (err as Error).message);
+    for (let round = 0; round < maxRetryRounds && failedServices.length > 0; round++) {
+      const delayMs = retryDelays[round];
+      console.log(`[ReflectionClient] Retry round ${round + 1}/${maxRetryRounds}: ${failedServices.length} services, waiting ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+
+      const stillFailed: string[] = [];
+
+      // Retry in small batches of 2 with delays
+      for (let i = 0; i < failedServices.length; i += 2) {
+        const batch = failedServices.slice(i, i + 2);
+        const results = await Promise.allSettled(
+          batch.map(serviceName => this.loadServiceDescriptor(serviceName))
+        );
+
+        results.forEach((result, index) => {
+          const serviceName = batch[index];
+          if (result.status === 'fulfilled') {
+            processedServices.add(serviceName);
+            console.log(`[ReflectionClient] Retry round ${round + 1} succeeded for ${serviceName}`);
+          } else {
+            stillFailed.push(serviceName);
+          }
+        });
+
+        // Delay between retry batches
+        if (i + 2 < failedServices.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 
-      // Update failed services list
-      failedServices.splice(0, failedServices.length, ...failedServices.filter(s => !retriedServices.includes(s)));
+      failedServices = stillFailed;
     }
 
     const loadDuration = Date.now() - loadStartTime;
@@ -391,7 +415,7 @@ export class ReflectionClient {
     console.log(`[ReflectionClient] Successfully loaded ${processedServices.size}/${servicesToLoad.length} services in ${loadDuration}ms (total: ${totalDuration}ms)`);
 
     if (failedServices.length > 0) {
-      console.warn(`[ReflectionClient] ${failedServices.length} services permanently failed after retry: ${failedServices.join(', ')}`);
+      console.warn(`[ReflectionClient] ${failedServices.length} services failed after ${maxRetryRounds} retry rounds: ${failedServices.join(', ')}`);
     }
   }
 
