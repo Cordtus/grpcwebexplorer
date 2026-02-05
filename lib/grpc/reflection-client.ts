@@ -481,8 +481,8 @@ export class ReflectionClient {
     const aliveCount = this.stubPool.filter(s => s.alive).length;
     const usePool = aliveCount > 1;
     const loadStartTime = Date.now();
-    const concurrencyLimit = usePool ? Math.min(aliveCount * 2, 10) : 3;
-    const batchDelayMs = usePool ? Math.max(50, Math.round(150 / aliveCount)) : 150;
+    const concurrencyLimit = usePool ? Math.min(aliveCount + 2, 8) : 3;
+    const batchDelayMs = usePool ? Math.max(75, Math.round(150 / aliveCount)) : 150;
     const processedServices = new Set<string>();
     let failedServices: string[] = [];
 
@@ -627,41 +627,45 @@ export class ReflectionClient {
    * Core descriptor loading logic parameterized by stub.
    * All file descriptors merge into the shared protobuf Root.
    */
-  private async loadServiceDescriptorViaStub(stub: any, symbol: string): Promise<void> {
+  private async loadServiceDescriptorViaStub(stub: any, symbol: string, timeoutMs?: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const call = stub.ServerReflectionInfo();
       let resolved = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+
+      const settle = (fn: () => void) => {
+        if (resolved) return;
+        resolved = true;
+        if (timer) clearTimeout(timer);
+        fn();
+      };
+
+      if (timeoutMs && timeoutMs > 0) {
+        timer = setTimeout(() => {
+          settle(() => {
+            try { call.cancel(); } catch { /* ignore */ }
+            reject(new Error(`Timeout after ${timeoutMs}ms`));
+          });
+        }, timeoutMs);
+      }
 
       call.on('data', (response: any) => {
         if (response.fileDescriptorResponse) {
           try {
-            // Process file descriptors
             for (const fdBytes of response.fileDescriptorResponse.fileDescriptorProto) {
               this.processFileDescriptor(Buffer.from(fdBytes));
             }
-            if (!resolved) {
-              resolved = true;
-              resolve();
-            }
+            settle(() => resolve());
           } catch (err) {
-            if (!resolved) {
-              resolved = true;
-              reject(err);
-            }
+            settle(() => reject(err));
           }
         } else if (response.errorResponse) {
-          if (!resolved) {
-            resolved = true;
-            reject(new Error(response.errorResponse.errorMessage));
-          }
+          settle(() => reject(new Error(response.errorResponse.errorMessage)));
         }
       });
 
       call.on('error', (err: Error) => {
-        if (!resolved) {
-          resolved = true;
-          reject(err);
-        }
+        settle(() => reject(err));
       });
 
       call.write({ fileContainingSymbol: symbol });
@@ -676,20 +680,22 @@ export class ReflectionClient {
   private async loadServiceDescriptorFromPool(symbol: string): Promise<void> {
     const aliveCount = this.stubPool.filter(s => s.alive).length;
     const maxAttempts = Math.min(aliveCount, 3);
+    // Aggressive timeout for pool stubs - fail fast, let primary handle fallback
+    const poolTimeoutMs = 5000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const next = this.getNextStub();
       if (!next) break;
 
       try {
-        return await this.loadServiceDescriptorViaStub(next.stub, symbol);
+        return await this.loadServiceDescriptorViaStub(next.stub, symbol, poolTimeoutMs);
       } catch (err: any) {
         console.warn(`[ReflectionClient] Pool stub ${this.stubPool[next.index].endpoint} failed for ${symbol}: ${err.message}`);
         this.removeStubFromPool(next.index);
       }
     }
 
-    // Final fallback: always try primary
+    // Final fallback: always try primary (no timeout - let it take as long as needed)
     return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol);
   }
 
