@@ -271,6 +271,10 @@ export default function GrpcExplorerApp() {
       const cachedEndpoints = cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
       const fallbackEndpoints = cachedEndpoints.filter((ep: string) => ep !== actualEndpoint);
 
+      // Use the actual TLS setting from the cached response (services route may have
+      // retried without TLS on a TLS error, so the resolved value can differ from the input)
+      const resolvedTls = typeof cached.status?.tls === 'boolean' ? cached.status.tls : tlsEnabled;
+
       const newNetwork: GrpcNetwork = {
         id,
         name,
@@ -278,7 +282,7 @@ export default function GrpcExplorerApp() {
         endpoints: fallbackEndpoints,
         ...(endpointConfigs ? { endpointConfigs } : {}),
         ...(cachedChainId ? { chainId: cachedChainId } : {}),
-        tlsEnabled,
+        tlsEnabled: resolvedTls,
         services: cached.services || [],
         color,
         loading: false,
@@ -375,6 +379,8 @@ export default function GrpcExplorerApp() {
       // Update network with fetched data
       // Store all available endpoints for round-robin distribution
       const availableEndpoints = data.availableEndpoints?.map((ep: any) => ep.address) || [];
+      // Use the actual TLS setting from the server response (may differ from input after TLS retry)
+      const resolvedTls = typeof data.status?.tls === 'boolean' ? data.status.tls : tlsEnabled;
 
       setNetworks(prev => prev.map(n =>
         n.id === id
@@ -382,6 +388,7 @@ export default function GrpcExplorerApp() {
               ...n,
               services: data.services || [],
               endpoint: actualEndpoint,
+              tlsEnabled: resolvedTls,
               endpoints: availableEndpoints.filter((ep: string) => ep !== actualEndpoint), // Store others as fallbacks
               ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
               loading: false,
