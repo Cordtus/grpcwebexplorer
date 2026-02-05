@@ -177,6 +177,8 @@ export interface ReflectionOptions {
   endpoint: string;
   tls: boolean;
   timeout?: number;
+  /** Additional endpoints to distribute descriptor loading across */
+  additionalEndpoints?: Array<{ address: string; tls: boolean }>;
 }
 
 /**
@@ -192,6 +194,10 @@ export class ReflectionClient {
   private reflectionVersion: 'v1' | 'v1alpha' | null = null;
   // Store raw method options for HTTP annotation extraction
   private methodOptions: Map<string, any> = new Map();
+  // Stub pool for distributing descriptor loads across multiple endpoints
+  private stubPool: Array<{ stub: any; endpoint: string; tls: boolean; alive: boolean }> = [];
+  private stubPoolIndex = 0;
+  private reflectionProtoRoot: protobuf.Root | null = null;
 
   constructor(private options: ReflectionOptions) {
     const credentials = options.tls
@@ -248,6 +254,7 @@ export class ReflectionClient {
       await this.testReflectionStub();
 
       this.reflectionVersion = 'v1';
+      this.reflectionProtoRoot = reflectionRootV1;
       console.log('[ReflectionClient] Using grpc.reflection.v1');
       return;
     } catch (v1Error: any) {
@@ -284,9 +291,134 @@ export class ReflectionClient {
       await this.testReflectionStub();
 
       this.reflectionVersion = 'v1alpha';
+      this.reflectionProtoRoot = reflectionRootV1Alpha;
       console.log('[ReflectionClient] Using grpc.reflection.v1alpha');
     } catch (v1alphaError: any) {
       throw new Error(`Failed to initialize reflection stub with both v1 and v1alpha: ${v1alphaError.message}`);
+    }
+  }
+
+  /**
+   * Creates a reflection stub for a specific endpoint using the already-detected
+   * reflection version and cached proto root. No probing - lazy validation on first use.
+   */
+  private createStubForEndpoint(address: string, tls: boolean): any {
+    if (!this.reflectionVersion || !this.reflectionProtoRoot) {
+      throw new Error('Cannot create stub before primary reflection stub is initialized');
+    }
+
+    const credentials = tls
+      ? grpc.credentials.createSsl()
+      : grpc.credentials.createInsecure();
+
+    const versionPrefix = this.reflectionVersion === 'v1'
+      ? 'grpc.reflection.v1'
+      : 'grpc.reflection.v1alpha';
+
+    const protoRoot = this.reflectionProtoRoot;
+
+    const ReflectionClientConstructor = grpc.makeGenericClientConstructor({
+      ServerReflectionInfo: {
+        path: `/${versionPrefix}.ServerReflection/ServerReflectionInfo`,
+        requestStream: true,
+        responseStream: true,
+        requestSerialize: (value: any) => Buffer.from(
+          protoRoot.lookupType(`${versionPrefix}.ServerReflectionRequest`).encode(value).finish()
+        ),
+        requestDeserialize: (buffer: Buffer) =>
+          protoRoot.lookupType(`${versionPrefix}.ServerReflectionRequest`).decode(buffer),
+        responseSerialize: (value: any) => Buffer.from(
+          protoRoot.lookupType(`${versionPrefix}.ServerReflectionResponse`).encode(value).finish()
+        ),
+        responseDeserialize: (buffer: Buffer) =>
+          protoRoot.lookupType(`${versionPrefix}.ServerReflectionResponse`).decode(buffer),
+      },
+    }, 'ServerReflection', {});
+
+    return new ReflectionClientConstructor(address, credentials);
+  }
+
+  /**
+   * Initializes the stub pool with the primary stub and additional endpoints.
+   * Called after initializeReflectionStub() succeeds.
+   */
+  private initializeStubPool(): void {
+    // Primary stub is always first and always alive
+    this.stubPool = [{
+      stub: this.reflectionStub,
+      endpoint: this.options.endpoint,
+      tls: this.options.tls,
+      alive: true,
+    }];
+
+    const additionalEndpoints = this.options.additionalEndpoints || [];
+    if (additionalEndpoints.length === 0) return;
+
+    // Max 4 additional stubs (5 total including primary)
+    const maxAdditional = 4;
+    let added = 0;
+
+    for (const ep of additionalEndpoints) {
+      if (added >= maxAdditional) break;
+      // Skip duplicates of primary endpoint
+      if (ep.address === this.options.endpoint) continue;
+
+      try {
+        const stub = this.createStubForEndpoint(ep.address, ep.tls);
+        this.stubPool.push({
+          stub,
+          endpoint: ep.address,
+          tls: ep.tls,
+          alive: true,
+        });
+        added++;
+      } catch (err: any) {
+        console.warn(`[ReflectionClient] Failed to create stub for ${ep.address}: ${err.message}`);
+      }
+    }
+
+    if (this.stubPool.length > 1) {
+      console.log(`[ReflectionClient] Stub pool initialized with ${this.stubPool.length} endpoints`);
+    }
+  }
+
+  /**
+   * Returns the next alive stub from the pool via round-robin.
+   * Returns null if no alive stubs remain (should not happen since primary is never removed).
+   */
+  private getNextStub(): { stub: any; index: number } | null {
+    const aliveCount = this.stubPool.filter(s => s.alive).length;
+    if (aliveCount === 0) return null;
+
+    // Round-robin through the pool, skipping dead stubs
+    for (let attempts = 0; attempts < this.stubPool.length; attempts++) {
+      this.stubPoolIndex = (this.stubPoolIndex + 1) % this.stubPool.length;
+      if (this.stubPool[this.stubPoolIndex].alive) {
+        return { stub: this.stubPool[this.stubPoolIndex].stub, index: this.stubPoolIndex };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Marks a stub as dead and closes its connection.
+   * Never removes primary (index 0).
+   */
+  private removeStubFromPool(index: number): void {
+    if (index === 0) return; // Never remove primary
+    if (index < 0 || index >= this.stubPool.length) return;
+
+    const entry = this.stubPool[index];
+    if (!entry.alive) return;
+
+    entry.alive = false;
+    console.warn(`[ReflectionClient] Removed ${entry.endpoint} from stub pool`);
+
+    try {
+      entry.stub.close();
+    } catch {
+      // Ignore close errors
     }
   }
 
@@ -331,6 +463,9 @@ export class ReflectionClient {
 
     await this.initializeReflectionStub();
 
+    // Initialize stub pool for distributed descriptor loading
+    this.initializeStubPool();
+
     // List all services
     const listStartTime = Date.now();
     const serviceNames = await this.listServices();
@@ -342,18 +477,29 @@ export class ReflectionClient {
       name => !name.includes('ServerReflection')
     );
 
-    // Load services in parallel with conservative concurrency and delays
+    // Scale concurrency and delay based on pool size
+    const aliveCount = this.stubPool.filter(s => s.alive).length;
+    const usePool = aliveCount > 1;
     const loadStartTime = Date.now();
-    const concurrencyLimit = 3;
-    const batchDelayMs = 150;
+    const concurrencyLimit = usePool ? Math.min(aliveCount * 2, 10) : 3;
+    const batchDelayMs = usePool ? Math.max(50, Math.round(150 / aliveCount)) : 150;
     const processedServices = new Set<string>();
     let failedServices: string[] = [];
+
+    if (usePool) {
+      console.log(`[ReflectionClient] Using stub pool (${aliveCount} endpoints, concurrency: ${concurrencyLimit}, delay: ${batchDelayMs}ms)`);
+    }
+
+    // Choose loading function based on pool availability
+    const loadFn = usePool
+      ? (symbol: string) => this.loadServiceDescriptorFromPool(symbol)
+      : (symbol: string) => this.loadServiceDescriptor(symbol);
 
     for (let i = 0; i < servicesToLoad.length; i += concurrencyLimit) {
       const batch = servicesToLoad.slice(i, i + concurrencyLimit);
 
       const results = await Promise.allSettled(
-        batch.map(serviceName => this.loadServiceDescriptor(serviceName))
+        batch.map(serviceName => loadFn(serviceName))
       );
 
       results.forEach((result, index) => {
@@ -383,11 +529,12 @@ export class ReflectionClient {
 
       const stillFailed: string[] = [];
 
-      // Retry in small batches of 2 with delays
-      for (let i = 0; i < failedServices.length; i += 2) {
-        const batch = failedServices.slice(i, i + 2);
+      // Retry in small batches with the pool if available
+      const retryBatchSize = usePool ? Math.min(aliveCount, 4) : 2;
+      for (let i = 0; i < failedServices.length; i += retryBatchSize) {
+        const batch = failedServices.slice(i, i + retryBatchSize);
         const results = await Promise.allSettled(
-          batch.map(serviceName => this.loadServiceDescriptor(serviceName))
+          batch.map(serviceName => loadFn(serviceName))
         );
 
         results.forEach((result, index) => {
@@ -401,7 +548,7 @@ export class ReflectionClient {
         });
 
         // Delay between retry batches
-        if (i + 2 < failedServices.length) {
+        if (i + retryBatchSize < failedServices.length) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
@@ -473,8 +620,16 @@ export class ReflectionClient {
    * Load service descriptor by symbol name
    */
   private async loadServiceDescriptor(symbol: string): Promise<void> {
+    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol);
+  }
+
+  /**
+   * Core descriptor loading logic parameterized by stub.
+   * All file descriptors merge into the shared protobuf Root.
+   */
+  private async loadServiceDescriptorViaStub(stub: any, symbol: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const call = this.reflectionStub.ServerReflectionInfo();
+      const call = stub.ServerReflectionInfo();
       let resolved = false;
 
       call.on('data', (response: any) => {
@@ -512,6 +667,30 @@ export class ReflectionClient {
       call.write({ fileContainingSymbol: symbol });
       call.end();
     });
+  }
+
+  /**
+   * Loads a service descriptor using the stub pool for distribution.
+   * Round-robins across alive stubs, falls back to primary on failure.
+   */
+  private async loadServiceDescriptorFromPool(symbol: string): Promise<void> {
+    const aliveCount = this.stubPool.filter(s => s.alive).length;
+    const maxAttempts = Math.min(aliveCount, 3);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const next = this.getNextStub();
+      if (!next) break;
+
+      try {
+        return await this.loadServiceDescriptorViaStub(next.stub, symbol);
+      } catch (err: any) {
+        console.warn(`[ReflectionClient] Pool stub ${this.stubPool[next.index].endpoint} failed for ${symbol}: ${err.message}`);
+        this.removeStubFromPool(next.index);
+      }
+    }
+
+    // Final fallback: always try primary
+    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol);
   }
 
   /**
@@ -1387,6 +1566,18 @@ export class ReflectionClient {
    * Close connection
    */
   close(): void {
+    // Close pool stubs (skip index 0 - it's the primary, handled below)
+    for (let i = 1; i < this.stubPool.length; i++) {
+      if (this.stubPool[i].alive) {
+        try {
+          this.stubPool[i].stub.close();
+        } catch {
+          // Ignore
+        }
+      }
+    }
+    this.stubPool = [];
+
     if (this.reflectionStub) {
       try {
         this.reflectionStub.close();

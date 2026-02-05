@@ -22,12 +22,13 @@ import { saveToCache, getFromCache } from '@/lib/utils/client-cache';
  * @returns Array of services with full type definitions
  */
 export async function fetchServicesViaReflection(
-  options: { endpoint: string; tls: boolean; timeout?: number }
+  options: { endpoint: string; tls: boolean; timeout?: number; additionalEndpoints?: Array<{ address: string; tls: boolean }> }
 ): Promise<import('./reflection-client').GrpcService[]> {
   const client = new ReflectionClient({
     endpoint: options.endpoint,
     tls: options.tls,
     timeout: options.timeout || 10000,
+    additionalEndpoints: options.additionalEndpoints || [],
   });
 
   try {
@@ -53,12 +54,13 @@ export async function fetchServicesViaReflection(
  * @returns Array of services with full type definitions
  */
 export async function fetchServicesWithCosmosOptimization(
-  options: { endpoint: string; tls: boolean; timeout?: number }
+  options: { endpoint: string; tls: boolean; timeout?: number; additionalEndpoints?: Array<{ address: string; tls: boolean }> }
 ): Promise<import('./reflection-client').GrpcService[]> {
   const client = new ReflectionClient({
     endpoint: options.endpoint,
     tls: options.tls,
     timeout: options.timeout || 10000,
+    additionalEndpoints: options.additionalEndpoints || [],
   });
 
   try {

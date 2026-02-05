@@ -72,6 +72,11 @@ export async function POST(req: Request) {
 
       console.log(`[Services] Attempt ${i + 1}/${endpointsToTry.length}: ${address} (TLS: ${tlsEnabled})`);
 
+      // Collect remaining endpoints for distributed descriptor loading
+      const additionalEndpoints = isChainMarker
+        ? endpointsToTry.filter((_, idx) => idx !== i).map(ep => ({ address: ep.address, tls: ep.tls }))
+        : [];
+
       const startTime = Date.now();
       try {
         // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
@@ -79,6 +84,7 @@ export async function POST(req: Request) {
           endpoint: address,
           tls: tlsEnabled,
           timeout: 10000, // 10 second timeout per endpoint
+          additionalEndpoints,
         });
         const responseTime = Date.now() - startTime;
 
@@ -111,10 +117,15 @@ export async function POST(req: Request) {
           const retryStartTime = Date.now();
           try {
             // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
+            // Rebuild additional endpoints with TLS disabled for the retried endpoint
+            const retryAdditionalEndpoints = isChainMarker
+              ? endpointsToTry.filter((_, idx) => idx !== i).map(ep => ({ address: ep.address, tls: ep.tls }))
+              : [];
             services = await fetchServicesWithCosmosOptimization({
               endpoint: address,
               tls: false,
               timeout: 10000,
+              additionalEndpoints: retryAdditionalEndpoints,
             });
             const retryResponseTime = Date.now() - retryStartTime;
 
