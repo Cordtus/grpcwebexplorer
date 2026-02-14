@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.3.0] - 2026-02-05
+
+### Added
+- **Per-Endpoint TLS Configuration**: Individual TLS settings for each endpoint in multi-endpoint setups
+  - `EndpointConfig` type with per-endpoint TLS toggle
+  - `EndpointSelector` component for managing endpoint list with individual TLS controls
+  - `/api/grpc/validate-endpoints` API for DNS reachability checks before connecting
+- **Stub Pool for Descriptor Loading**: Distributes descriptor load requests across multiple endpoints
+  - Configurable concurrency cap and per-call timeouts
+  - Rate-limiting resilience for high-volume service discovery
+- **Toast Notifications**: Sonner-based toast notifications for connection errors and round-robin status
+
+### Changed
+- **Automatic Load Balancing**: Removed manual round-robin toggle; load balancing is now automatic when multiple endpoints are configured
+- **AddNetworkDialog**: Unified dialog always shows endpoint selector regardless of endpoint count
+- **Select All Toggle**: Now correctly deselects when any endpoints are selected
+
+### Fixed
+- Methods incorrectly showing no parameters required (PR #40)
+- TLS mismatch causing descriptor loading failures when endpoint TLS settings differed from network default (PR #42)
+- Rate-limited endpoints causing cascading descriptor load failures
+
+## [1.2.0] - 2025-12-18
+
+### Added
+- **Real-Time Code Snippets**: Snippet generation updates live as form parameters change
+  - `selectedMethod` derived from `methodInstances` for real-time state
+  - 64-bit integer fields correctly use string representation in JSON
+  - Value merge logic preserves correct field types
+- **Dynamic REST Path Generation**: Auto-generate REST API paths from proto HTTP annotations
+  - TLS configuration mismatch warnings in Add Network dialog
+- **Cached Chains UI**: Browse and reuse previously connected chains
+  - Searchable chain dropdown in AddNetworkDialog with full chain list (scrollable, no truncation)
+  - Server-side caching for chain list to avoid GitHub API rate limits
+  - Browser autocomplete disabled to prevent duplicate dropdown overlays
+- **Round-Robin Endpoints**: Distribute method execution across multiple endpoints
+  - User-configurable round-robin toggle setting
+  - Endpoint rotation via mutable ref for consistent distribution
+
+### Changed
+- **CSS Consolidation**: Merged stylesheets and removed unused CSS files
+- **Package Manager**: Removed `package-lock.json` (yarn-only project)
+
+### Fixed
+- Results panel overflow with proper `min-w-0` width constraints (PR #34)
+- TLS toggle not being respected when adding networks (PR #33)
+- Left panel collapse button not working
+
 ## [1.1.0] - 2025-11-17
 
 ### Added
