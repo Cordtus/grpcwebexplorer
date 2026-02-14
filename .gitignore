@@ -48,12 +48,15 @@ desktop.ini
 # Project specific
 /public/output/
 CLAUDE.md
+PROJECT_BLUEPRINT.md
 .cache/
 *.bak
 .playwright-mcp/
 .claude/
+.serena/
 test-penumbra-*.ts
 test-penumbra-*.js
 
-# Internal documentation (gitignored)
+# Internal documentation
 /docs/
+.docs/
