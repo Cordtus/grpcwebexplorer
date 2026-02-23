@@ -779,6 +779,83 @@ export class ReflectionClient {
   }
 
   /**
+   * Recursively decode google.protobuf.Any fields in a JSON response object.
+   * Detects objects with both `typeUrl` and `value` keys (protobufjs camelCase output),
+   * resolves the inner protobuf type via reflection, and replaces the Any wrapper
+   * with the decoded inner message plus an `@type` field for provenance.
+   * Runs before decodeBase64BytesFields so inner messages also get UTF-8 treatment.
+   * @param obj - The JSON object to walk
+   * @param depth - Current recursion depth (capped at 50)
+   * @returns The object with Any fields decoded
+   */
+  private async decodeAnyFields(obj: any, depth: number = 0): Promise<any> {
+    const MAX_DEPTH = 50;
+    if (depth >= MAX_DEPTH || obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return Promise.all(obj.map(item => this.decodeAnyFields(item, depth + 1)));
+    }
+
+    if (typeof obj !== 'object') {
+      return obj;
+    }
+
+    // Detect google.protobuf.Any: object with typeUrl (string) and value (string/Buffer)
+    if (
+      typeof obj.typeUrl === 'string' && obj.typeUrl.length > 0 &&
+      (typeof obj.value === 'string' || Buffer.isBuffer(obj.value))
+    ) {
+      const typeName = obj.typeUrl.includes('/')
+        ? obj.typeUrl.substring(obj.typeUrl.lastIndexOf('/') + 1)
+        : obj.typeUrl;
+
+      try {
+        let msgType: protobuf.Type;
+        try {
+          msgType = this.root.lookupType(typeName);
+        } catch {
+          console.log(`[ReflectionClient] Loading type for Any field: ${typeName}`);
+          await this.loadServiceDescriptor(typeName);
+          msgType = this.root.lookupType(typeName);
+        }
+
+        const valueBuffer = typeof obj.value === 'string'
+          ? Buffer.from(obj.value, 'base64')
+          : obj.value;
+
+        const decoded = msgType.decode(new Uint8Array(valueBuffer));
+        const json = msgType.toObject(decoded, {
+          longs: String,
+          enums: String,
+          bytes: String,
+          defaults: true,
+          arrays: true,
+          objects: true,
+          oneofs: true,
+        });
+
+        // Recurse into the decoded message (it may contain nested Any fields)
+        const result = await this.decodeAnyFields(json, depth + 1);
+        result['@type'] = typeName;
+        return result;
+      } catch (err: any) {
+        // Graceful degradation: leave the Any field as-is
+        console.warn(`[ReflectionClient] Failed to decode Any field (${typeName}): ${err.message}`);
+        return obj;
+      }
+    }
+
+    // Recurse into all object properties
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = await this.decodeAnyFields(value, depth + 1);
+    }
+    return result;
+  }
+
+  /**
    * Recursively load all missing types until decode succeeds
    * Handles complex responses with multiple nested dependencies
    */
@@ -813,8 +890,9 @@ export class ReflectionClient {
       const totalTime = Date.now() - startTime;
       console.log(`[ReflectionClient] Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
 
-      // Decode base64 bytes fields that contain valid UTF-8 text
-      return this.decodeBase64BytesFields(json);
+      // Decode Any fields first, then base64 bytes fields
+      const anyDecoded = await this.decodeAnyFields(json);
+      return this.decodeBase64BytesFields(anyDecoded);
     } catch (decodeErr: any) {
       const errorMsg = decodeErr.message || String(decodeErr);
 
@@ -1370,8 +1448,13 @@ export class ReflectionClient {
                 objects: true,
                 oneofs: true,
               });
-              // Decode base64 bytes fields that contain valid UTF-8 text
-              resolve(this.decodeBase64BytesFields(json));
+              // Decode Any fields first, then base64 bytes fields
+              this.decodeAnyFields(json).then(decoded => {
+                resolve(this.decodeBase64BytesFields(decoded));
+              }).catch(() => {
+                // Fall back to just base64 decoding if Any decoding fails
+                resolve(this.decodeBase64BytesFields(json));
+              });
             } catch (decodeErr: any) {
               // Check if this is a missing type error
               const errorMsg = decodeErr.message || String(decodeErr);
