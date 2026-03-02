@@ -71,6 +71,7 @@ export interface MethodInstance {
   expanded?: boolean;
   pinned?: boolean;
   params?: Record<string, any>;
+  metadata?: Record<string, string>;
 }
 
 export interface ExecutionResult {
