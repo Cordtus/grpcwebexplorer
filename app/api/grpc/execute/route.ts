@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const startTime = Date.now();
 
   try {
-    const { endpoint, service, method, params, tlsEnabled } = await req.json();
+    const { endpoint, service, method, params, tlsEnabled, metadata } = await req.json();
 
     if (!endpoint || !service || !method) {
       return NextResponse.json(
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         await client.initializeForMethod(service);
 
         // Invoke method (60s timeout for complex queries like ValidatorInfo)
-        result = await client.invokeMethod(service, method, params || {}, 60000);
+        result = await client.invokeMethod(service, method, params || {}, 60000, metadata || {});
 
       } finally {
         client.close();
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
         try {
           await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, 60000);
+          result = await retryClient.invokeMethod(service, method, params || {}, 60000, metadata || {});
           console.log(`[Execute] ✅ Success without TLS`);
         } finally {
           retryClient.close();

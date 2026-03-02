@@ -762,6 +762,12 @@ export default function GrpcExplorerApp() {
     ));
   }, []);
 
+  const handleUpdateMetadata = useCallback((instanceId: string, metadata: Record<string, string>) => {
+    setMethodInstances(prev => prev.map(m =>
+      m.id === instanceId ? { ...m, metadata } : m
+    ));
+  }, []);
+
   // Execute method with optional round-robin endpoint distribution
   const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
     setIsExecuting(true);
@@ -809,7 +815,8 @@ export default function GrpcExplorerApp() {
           tlsEnabled: selectedTls,
           service: instance.service.fullName,
           method: instance.method.name,
-          params: instance.params
+          params: instance.params,
+          metadata: instance.metadata || {}
         })
       });
 
@@ -1089,6 +1096,7 @@ export default function GrpcExplorerApp() {
                   onRemove={() => handleRemoveMethodInstance(instance.id)}
                   onSelect={() => setSelectedMethodId(instance.id)}
                   onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                  onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
                   onExecute={() => handleExecuteMethod(instance)}
                   onTogglePin={() => toggleMethodPin(instance.id)}
                   isExecuting={isExecuting && selectedMethod?.id === instance.id}

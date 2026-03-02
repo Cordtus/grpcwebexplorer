@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, Code, AlertCircle, Loader2, Pin } from 'lucide-react';
+import { Play, Code, AlertCircle, Loader2, Pin, Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { ExpandableBlock } from './ExpandableBlock';
 import { cn } from '@/lib/utils';
 import ProtobufFormGenerator from './ProtobufFormGenerator';
@@ -14,9 +14,16 @@ interface MethodBlockProps {
   onRemove: () => void;
   onSelect: () => void;
   onUpdateParams: (params: Record<string, any>) => void;
+  onUpdateMetadata: (metadata: Record<string, string>) => void;
   onExecute: () => void;
   onTogglePin: () => void;
   isExecuting: boolean;
+}
+
+/** A single editable metadata header row */
+interface MetadataRow {
+  key: string;
+  value: string;
 }
 
 const MethodBlock = React.memo(function MethodBlock({
@@ -26,11 +33,22 @@ const MethodBlock = React.memo(function MethodBlock({
   onRemove,
   onSelect,
   onUpdateParams,
+  onUpdateMetadata,
   onExecute,
   onTogglePin,
   isExecuting
 }: MethodBlockProps) {
   const [params, setParams] = useState<Record<string, any>>(instance.params || {});
+
+  // Initialize metadata rows from instance.metadata
+  const initRows = (): MetadataRow[] => {
+    const meta = instance.metadata || {};
+    const rows = Object.entries(meta).map(([key, value]) => ({ key, value }));
+    return rows.length > 0 ? rows : [];
+  };
+
+  const [metadataRows, setMetadataRows] = useState<MetadataRow[]>(initRows);
+  const [metadataExpanded, setMetadataExpanded] = useState(false);
 
   // Update parent when params change
   useEffect(() => {
@@ -38,8 +56,37 @@ const MethodBlock = React.memo(function MethodBlock({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
+  // Update parent when metadata rows change
+  useEffect(() => {
+    const meta: Record<string, string> = {};
+    for (const row of metadataRows) {
+      if (row.key.trim()) {
+        meta[row.key.trim()] = row.value;
+      }
+    }
+    onUpdateMetadata(meta);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadataRows]);
+
   const handleParamsChange = (newParams: Record<string, any>) => {
     setParams(newParams);
+  };
+
+  const handleAddMetadataRow = () => {
+    setMetadataRows(prev => [...prev, { key: '', value: '' }]);
+    setMetadataExpanded(true);
+  };
+
+  const handleRemoveMetadataRow = (index: number) => {
+    setMetadataRows(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMetadataKeyChange = (index: number, key: string) => {
+    setMetadataRows(prev => prev.map((row, i) => i === index ? { ...row, key } : row));
+  };
+
+  const handleMetadataValueChange = (index: number, value: string) => {
+    setMetadataRows(prev => prev.map((row, i) => i === index ? { ...row, value } : row));
   };
 
   // Check if method has required fields
@@ -70,6 +117,8 @@ const MethodBlock = React.memo(function MethodBlock({
       return value !== undefined && value !== null && value !== '';
     });
   }, [instance.method.requestTypeDefinition, params]);
+
+  const activeMetadataCount = metadataRows.filter(r => r.key.trim()).length;
 
   return (
     <div onClick={onSelect} className="cursor-pointer">
@@ -136,6 +185,82 @@ const MethodBlock = React.memo(function MethodBlock({
               value={params}
               onChange={handleParamsChange}
             />
+          </div>
+
+          {/* Metadata headers */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMetadataExpanded(v => !v);
+                }}
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {metadataExpanded
+                  ? <ChevronDown className="h-3.5 w-3.5" />
+                  : <ChevronRight className="h-3.5 w-3.5" />
+                }
+                Metadata Headers
+                {activeMetadataCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold">
+                    {activeMetadataCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddMetadataRow();
+                }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title="Add metadata header"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </div>
+
+            {metadataExpanded && (
+              <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                {metadataRows.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic px-1">
+                    No headers. Click Add to include custom gRPC metadata (e.g. x-cosmos-block-height).
+                  </p>
+                ) : (
+                  metadataRows.map((row, index) => (
+                    <div key={index} className="flex gap-1.5 items-center">
+                      <input
+                        type="text"
+                        value={row.key}
+                        onChange={e => handleMetadataKeyChange(index, e.target.value)}
+                        placeholder="key"
+                        className="flex-1 min-w-0 px-2 py-1 text-xs rounded border border-input bg-background font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <input
+                        type="text"
+                        value={row.value}
+                        onChange={e => handleMetadataValueChange(index, e.target.value)}
+                        placeholder="value"
+                        className="flex-1 min-w-0 px-2 py-1 text-xs rounded border border-input bg-background font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleRemoveMetadataRow(index);
+                        }}
+                        className="shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Remove header"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           {/* Execute button */}

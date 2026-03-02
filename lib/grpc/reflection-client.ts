@@ -1362,13 +1362,16 @@ export class ReflectionClient {
   }
 
   /**
-   * Invoke method with JSON parameters
+   * Invoke method with JSON parameters and optional gRPC metadata headers.
+   * Invalid metadata keys/values are forwarded as-is; any error from the server
+   * is returned to the caller rather than being blocked client-side.
    */
   async invokeMethod(
     serviceName: string,
     methodName: string,
     params: any,
-    timeout: number = 10000
+    timeout: number = 10000,
+    metadata: Record<string, string> = {}
   ): Promise<any> {
     const methodInfo = this.findMethod(serviceName, methodName);
     if (!methodInfo) {
@@ -1384,6 +1387,9 @@ export class ReflectionClient {
     console.log(`  Request type: ${requestType.name}`);
     console.log(`  Response type: ${responseType.name}`);
     console.log(`  Params:`, JSON.stringify(params || {}, null, 2));
+    if (Object.keys(metadata).length > 0) {
+      console.log(`  Metadata:`, metadata);
+    }
 
     return new Promise((resolve, reject) => {
       const grpcCallStartTime = Date.now();
@@ -1409,14 +1415,24 @@ export class ReflectionClient {
         }));
         console.log(`[ReflectionClient] Request buffer size: ${requestBuffer.length} bytes`);
 
-        // Make call with deadline
+        // Build gRPC metadata from the provided key/value map.
+        // All entries are forwarded unconditionally; the server decides validity.
+        const callMetadata = new grpc.Metadata();
+        for (const [key, value] of Object.entries(metadata)) {
+          if (key.trim()) {
+            callMetadata.add(key.trim(), value);
+          }
+        }
+
+        // Make call with deadline and metadata
         const deadline = new Date(Date.now() + timeout);
         const call = client.makeUnaryRequest(
           methodPath,
           (buf: Buffer) => buf,
           (buf: Buffer) => buf,
           requestBuffer,
-          { deadline }, // Add deadline option for gRPC client
+          callMetadata,
+          { deadline },
           (error: grpc.ServiceError | null, response?: Buffer) => {
             client.close();
 
