@@ -13,16 +13,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronRight, ChevronDown, Search, Loader2, History, Database, Globe, Link, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, Loader2, History, Database, Globe, Link, AlertTriangle, Lock, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { debug } from '@/lib/utils/debug';
 import { listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 import EndpointSelector, { createEndpointConfigs } from './EndpointSelector';
-import { EndpointConfig } from '@/lib/types/grpc';
+import { EndpointConfig, ExplorerMode, GrpcAuthConfig, BufBsrSource } from '@/lib/types/grpc';
 
 interface AddNetworkDialogProps {
-	onAdd: (endpoint: string, tlsEnabled: boolean, endpointConfigs?: EndpointConfig[]) => void;
+	onAdd: (
+		endpoint: string,
+		tlsEnabled: boolean,
+		endpointConfigs?: EndpointConfig[],
+		mode?: ExplorerMode,
+		bsrSource?: BufBsrSource,
+		authConfig?: GrpcAuthConfig
+	) => void;
 	onClose: () => void;
+	defaultMode?: ExplorerMode | undefined;
+}
+
+interface BsrModule {
+	name: string;
+	owner: string;
+	description: string;
+	visibility: string;
 }
 
 interface ChainData {
@@ -32,7 +47,8 @@ interface ChainData {
 	grpc_endpoints: Array<{ address: string; provider?: string }>;
 }
 
-const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) => {
+const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, defaultMode }) => {
+	const [mode, setMode] = useState<ExplorerMode>(defaultMode || 'generic');
 	const [endpoint, setEndpoint] = useState('');
 	const [tlsEnabled, setTlsEnabled] = useState(true);
 	const [showDropdown, setShowDropdown] = useState(false);
@@ -47,6 +63,26 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	const [validatingEndpoints, setValidatingEndpoints] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const dropdownRef = useRef<HTMLDivElement>(null);
+
+	// Generic mode: BSR state
+	const [genericSourceTab, setGenericSourceTab] = useState<'endpoint' | 'bsr'>('endpoint');
+	const [bsrModule, setBsrModule] = useState('');
+	const [bsrVersion, setBsrVersion] = useState('main');
+	const [bsrAuthToken, setBsrAuthToken] = useState('');
+	const [bsrEndpoint, setBsrEndpoint] = useState('');
+	const [bsrTlsEnabled, setBsrTlsEnabled] = useState(true);
+	const [bsrOrgInput, setBsrOrgInput] = useState('');
+	const [bsrModules, setBsrModules] = useState<BsrModule[]>([]);
+	const [bsrPopularModules, setBsrPopularModules] = useState<BsrModule[]>([]);
+	const [loadingBsrModules, setLoadingBsrModules] = useState(false);
+
+	// Generic mode: auth state
+	const [authType, setAuthType] = useState<'none' | 'bearer' | 'api-key' | 'mtls'>('none');
+	const [bearerToken, setBearerToken] = useState('');
+	const [apiKeyHeader, setApiKeyHeader] = useState('');
+	const [apiKeyValue, setApiKeyValue] = useState('');
+	const [clientCert, setClientCert] = useState('');
+	const [clientKey, setClientKey] = useState('');
 
 	// Detect potential TLS configuration mismatch
 	const tlsWarning = useMemo(() => {
@@ -78,6 +114,39 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		const cached = listCachedChains();
 		setCachedChains(cached);
 	}, []);
+
+	// Load popular BSR modules on mount
+	useEffect(() => {
+		fetch('/api/bsr/modules?popular=true')
+			.then(res => res.json())
+			.then(data => setBsrPopularModules(data.modules || []))
+			.catch(() => {});
+	}, []);
+
+	// Search BSR org modules
+	const searchBsrOrg = async (org: string) => {
+		if (!org.trim()) { setBsrModules([]); return; }
+		setLoadingBsrModules(true);
+		try {
+			const res = await fetch(`/api/bsr/modules?owner=${encodeURIComponent(org.trim())}`);
+			const data = await res.json();
+			setBsrModules(data.modules || []);
+		} catch {
+			setBsrModules([]);
+		} finally {
+			setLoadingBsrModules(false);
+		}
+	};
+
+	/** Build auth config from current state */
+	const buildAuthConfig = (): GrpcAuthConfig | undefined => {
+		if (authType === 'none') return undefined;
+		const config: GrpcAuthConfig = { type: authType };
+		if (authType === 'bearer') config.bearerToken = bearerToken;
+		if (authType === 'api-key') { config.apiKeyHeader = apiKeyHeader; config.apiKeyValue = apiKeyValue; }
+		if (authType === 'mtls') { config.clientCert = clientCert; config.clientKey = clientKey; }
+		return config;
+	};
 
 	// Fetch chains from registry on mount
 	useEffect(() => {
@@ -142,8 +211,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 	};
 
 	// Add network with the current settings
-	const addNetwork = (finalEndpoint: string, tls: boolean, configs?: EndpointConfig[]) => {
-		onAdd(finalEndpoint, tls, configs);
+	const addNetwork = (finalEndpoint: string, tls: boolean, configs?: EndpointConfig[], bsrSource?: BufBsrSource) => {
+		onAdd(finalEndpoint, tls, configs, mode, bsrSource, buildAuthConfig());
 		setEndpoint('');
 		setTlsEnabled(true);
 		setShowDropdown(false);
@@ -301,6 +370,17 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 		[endpointConfigs]
 	);
 
+	/** Handle BSR module add */
+	const handleBsrAdd = () => {
+		if (!bsrModule.trim()) return;
+		const bsrSource: BufBsrSource = {
+			module: bsrModule.trim(),
+			...(bsrVersion && bsrVersion !== 'main' ? { version: bsrVersion } : {}),
+			...(bsrAuthToken ? { authToken: bsrAuthToken } : {}),
+		};
+		addNetwork(bsrEndpoint.trim() || '', bsrTlsEnabled, undefined, bsrSource);
+	};
+
 	return (
 		<Dialog open={true} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent className="sm:max-w-[525px]">
@@ -308,10 +388,288 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 					<DialogHeader>
 						<DialogTitle>Add Network</DialogTitle>
 						<DialogDescription>
-							Select a chain or enter a gRPC endpoint directly
+							{mode === 'cosmos'
+								? 'Select a chain or enter a gRPC endpoint directly'
+								: 'Connect to any gRPC server or browse buf.build schemas'
+							}
 						</DialogDescription>
 					</DialogHeader>
-					<div className="grid gap-4 py-4">
+
+					{/* Mode toggle */}
+					<div className="flex gap-1 mt-2 mb-3 p-1 bg-muted rounded-lg">
+						<button
+							type="button"
+							onClick={() => setMode('generic')}
+							className={cn(
+								"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+								mode === 'generic'
+									? "bg-background text-foreground shadow-sm"
+									: "text-muted-foreground hover:text-foreground"
+							)}
+						>
+							Generic gRPC
+						</button>
+						<button
+							type="button"
+							onClick={() => setMode('cosmos')}
+							className={cn(
+								"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+								mode === 'cosmos'
+									? "bg-background text-foreground shadow-sm"
+									: "text-muted-foreground hover:text-foreground"
+							)}
+						>
+							Cosmos SDK
+						</button>
+					</div>
+
+					<div className="grid gap-4 py-2">
+
+					{/* === GENERIC MODE === */}
+					{mode === 'generic' && (
+						<>
+							{/* Source tabs */}
+							<div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+								<button
+									type="button"
+									onClick={() => setGenericSourceTab('endpoint')}
+									className={cn(
+										"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+										genericSourceTab === 'endpoint'
+											? "bg-background text-foreground shadow-sm"
+											: "text-muted-foreground hover:text-foreground"
+									)}
+								>
+									Endpoint (Reflection)
+								</button>
+								<button
+									type="button"
+									onClick={() => setGenericSourceTab('bsr')}
+									className={cn(
+										"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+										genericSourceTab === 'bsr'
+											? "bg-background text-foreground shadow-sm"
+											: "text-muted-foreground hover:text-foreground"
+									)}
+								>
+									buf.build (BSR)
+								</button>
+							</div>
+
+							{genericSourceTab === 'endpoint' ? (
+								/* Generic endpoint tab */
+								<div className="grid gap-2">
+									<Label htmlFor="endpoint">
+										<span className="flex items-center gap-1.5">
+											<Link className="h-3.5 w-3.5" />
+											gRPC Endpoint
+										</span>
+									</Label>
+									<Input
+										ref={inputRef}
+										id="endpoint"
+										placeholder="host:port (e.g., grpc.example.com:443)"
+										value={endpoint}
+										onChange={(e) => setEndpoint(e.target.value)}
+										autoFocus
+										autoComplete="off"
+									/>
+									<div className="flex items-center gap-6 pt-1">
+										<div className="flex flex-col gap-1">
+											<div className="flex items-center gap-3">
+												<Switch id="tls-generic" checked={tlsEnabled} onCheckedChange={setTlsEnabled} />
+												<Label htmlFor="tls-generic" className="cursor-pointer text-sm">TLS</Label>
+											</div>
+											{tlsWarning && (
+												<div className="flex items-center gap-1.5 text-xs text-amber-500">
+													<AlertTriangle className="h-3 w-3 shrink-0" />
+													<span>{tlsWarning}</span>
+												</div>
+											)}
+										</div>
+									</div>
+								</div>
+							) : (
+								/* BSR tab */
+								<div className="grid gap-3">
+									<div className="grid gap-2">
+										<Label>Module</Label>
+										<Input
+											placeholder="owner/repository (e.g., connectrpc/eliza)"
+											value={bsrModule}
+											onChange={(e) => setBsrModule(e.target.value)}
+											autoFocus
+										/>
+										<p className="text-xs text-muted-foreground">
+											Full module path on buf.build
+										</p>
+									</div>
+
+									<div className="grid grid-cols-2 gap-2">
+										<div>
+											<Label className="text-xs">Version</Label>
+											<Input
+												placeholder="main"
+												value={bsrVersion}
+												onChange={(e) => setBsrVersion(e.target.value)}
+												className="mt-1"
+											/>
+										</div>
+										<div>
+											<Label className="text-xs">Auth Token (optional)</Label>
+											<Input
+												type="password"
+												placeholder="For private modules"
+												value={bsrAuthToken}
+												onChange={(e) => setBsrAuthToken(e.target.value)}
+												className="mt-1"
+											/>
+										</div>
+									</div>
+
+									{/* Optional target endpoint for execution */}
+									<div className="grid gap-2 pt-2 border-t border-border">
+										<Label className="text-xs text-muted-foreground">Target Endpoint (optional, for execution)</Label>
+										<div className="flex gap-2 items-center">
+											<Input
+												placeholder="host:port"
+												value={bsrEndpoint}
+												onChange={(e) => setBsrEndpoint(e.target.value)}
+												className="flex-1"
+											/>
+											<div className="flex items-center gap-2 shrink-0">
+												<Switch id="bsr-tls" checked={bsrTlsEnabled} onCheckedChange={setBsrTlsEnabled} />
+												<Label htmlFor="bsr-tls" className="text-xs cursor-pointer">TLS</Label>
+											</div>
+										</div>
+									</div>
+
+									{/* Org browser */}
+									<div className="grid gap-2 pt-2 border-t border-border">
+										<Label className="text-xs text-muted-foreground">Browse Organization</Label>
+										<div className="flex gap-2">
+											<Input
+												placeholder="Organization name"
+												value={bsrOrgInput}
+												onChange={(e) => setBsrOrgInput(e.target.value)}
+												className="flex-1"
+											/>
+											<Button type="button" variant="outline" size="sm" onClick={() => searchBsrOrg(bsrOrgInput)} disabled={loadingBsrModules}>
+												{loadingBsrModules ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+											</Button>
+										</div>
+										{bsrModules.length > 0 && (
+											<div className="max-h-[120px] overflow-y-auto border border-border rounded-lg p-1 space-y-0.5">
+												{bsrModules.map(m => (
+													<button
+														key={`${m.owner}/${m.name}`}
+														type="button"
+														onClick={() => setBsrModule(`${m.owner}/${m.name}`)}
+														className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors"
+													>
+														<span className="font-medium">{m.owner}/{m.name}</span>
+														{m.description && <span className="text-muted-foreground ml-2">{m.description}</span>}
+													</button>
+												))}
+											</div>
+										)}
+									</div>
+
+									{/* Popular modules */}
+									{bsrPopularModules.length > 0 && !bsrModules.length && (
+										<div className="grid gap-1">
+											<Label className="text-xs text-muted-foreground flex items-center gap-1">
+												<Package className="h-3 w-3" /> Popular Modules
+											</Label>
+											<div className="flex flex-wrap gap-1">
+												{bsrPopularModules.map(m => (
+													<button
+														key={`${m.owner}/${m.name}`}
+														type="button"
+														onClick={() => setBsrModule(`${m.owner}/${m.name}`)}
+														className="px-2 py-1 text-xs rounded-full border border-border hover:bg-muted transition-colors"
+													>
+														{m.owner}/{m.name}
+													</button>
+												))}
+											</div>
+										</div>
+									)}
+								</div>
+							)}
+
+							{/* Auth section (generic mode only) */}
+							<div className="grid gap-2 pt-2 border-t border-border">
+								<button
+									type="button"
+									onClick={() => setAuthType(authType === 'none' ? 'bearer' : 'none')}
+									className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+								>
+									<Lock className="h-3 w-3" />
+									Authentication
+									{authType !== 'none' && (
+										<span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold">
+											{authType}
+										</span>
+									)}
+								</button>
+
+								{authType !== 'none' && (
+									<div className="space-y-2">
+										<select
+											value={authType}
+											onChange={e => setAuthType(e.target.value as typeof authType)}
+											className="w-full px-2 py-1.5 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+										>
+											<option value="none">None</option>
+											<option value="bearer">Bearer Token</option>
+											<option value="api-key">API Key</option>
+											<option value="mtls">mTLS</option>
+										</select>
+
+										{authType === 'bearer' && (
+											<Input
+												type="password"
+												placeholder="Bearer token"
+												value={bearerToken}
+												onChange={e => setBearerToken(e.target.value)}
+											/>
+										)}
+
+										{authType === 'api-key' && (
+											<div className="flex gap-2">
+												<Input placeholder="Header (e.g., x-api-key)" value={apiKeyHeader} onChange={e => setApiKeyHeader(e.target.value)} className="flex-1" />
+												<Input type="password" placeholder="Value" value={apiKeyValue} onChange={e => setApiKeyValue(e.target.value)} className="flex-1" />
+											</div>
+										)}
+
+										{authType === 'mtls' && (
+											<div className="space-y-2">
+												<textarea
+													placeholder="PEM client certificate"
+													value={clientCert}
+													onChange={e => setClientCert(e.target.value)}
+													rows={3}
+													className="w-full px-2 py-1.5 text-xs rounded border border-input bg-background font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+												/>
+												<textarea
+													placeholder="PEM private key"
+													value={clientKey}
+													onChange={e => setClientKey(e.target.value)}
+													rows={3}
+													className="w-full px-2 py-1.5 text-xs rounded border border-input bg-background font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+												/>
+											</div>
+										)}
+									</div>
+								)}
+							</div>
+						</>
+					)}
+
+					{/* === COSMOS MODE === */}
+					{mode === 'cosmos' && (
+						<>
 						{/* Main input with dropdown */}
 						<div className="grid gap-2">
 							<div className="flex items-center justify-between">
@@ -510,12 +868,23 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose }) =
 								</div>
 							</div>
 						)}
+						</>
+					)}
+
 					</div>
 					<DialogFooter>
 						<Button type="button" variant="outline" onClick={handleCancel}>
 							Cancel
 						</Button>
-						{selectedChainDetails && endpointConfigs.length > 0 ? (
+						{mode === 'generic' && genericSourceTab === 'bsr' ? (
+							<Button
+								type="button"
+								onClick={handleBsrAdd}
+								disabled={!bsrModule.trim()}
+							>
+								{bsrEndpoint.trim() ? 'Add with Schema' : 'Browse Schema'}
+							</Button>
+						) : mode === 'cosmos' && selectedChainDetails && endpointConfigs.length > 0 ? (
 							<Button
 								type="button"
 								onClick={addWithSelectedEndpoints}

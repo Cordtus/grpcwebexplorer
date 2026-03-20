@@ -16,7 +16,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
-import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig } from '@/lib/types/grpc';
+import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig, ExplorerMode, BufBsrSource, GrpcAuthConfig } from '@/lib/types/grpc';
 import { descriptorLoader } from '@/lib/utils/descriptor-loader';
 import { toast } from 'sonner';
 
@@ -47,6 +47,7 @@ export default function GrpcExplorerApp() {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
+  const [defaultMode, setDefaultMode] = useState<ExplorerMode>('generic');
 
   // Round-robin endpoint index tracker per network (for load distribution)
   const endpointIndexRef = useRef<Map<string, number>>(new Map());
@@ -56,6 +57,16 @@ export default function GrpcExplorerApp() {
     if (!selectedMethodId) return null;
     return methodInstances.find(m => m.id === selectedMethodId) || null;
   }, [selectedMethodId, methodInstances]);
+
+  // Load defaultMode from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('grpc-explorer-default-mode');
+      if (saved === 'generic' || saved === 'cosmos') {
+        setDefaultMode(saved);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // Load persisted networks from localStorage on mount
   useEffect(() => {
@@ -229,7 +240,79 @@ export default function GrpcExplorerApp() {
   }, [networks]);
 
   // Add network
-  const handleAddNetwork = useCallback(async (endpoint: string, tlsEnabled: boolean, endpointConfigs?: EndpointConfig[]) => {
+  const handleAddNetwork = useCallback(async (
+    endpoint: string,
+    tlsEnabled: boolean,
+    endpointConfigs?: EndpointConfig[],
+    mode?: ExplorerMode,
+    bsrSource?: BufBsrSource,
+    authConfig?: GrpcAuthConfig
+  ) => {
+    const networkMode = mode || defaultMode;
+
+    // BSR source: fetch services from BSR route
+    if (bsrSource) {
+      const id = generateId();
+      const color = getNextColor();
+      const name = bsrSource.module;
+
+      const newNetwork: GrpcNetwork = {
+        id,
+        name,
+        endpoint: endpoint || '',
+        tlsEnabled,
+        services: [],
+        color,
+        loading: true,
+        expanded: true,
+        mode: networkMode,
+        bsrSource,
+        ...(authConfig ? { authConfig } : {}),
+      };
+
+      setNetworks(prev => {
+        if (autoCollapseEnabled) {
+          return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
+        }
+        return [...prev, newNetwork];
+      });
+
+      try {
+        const response = await fetch('/api/bsr/descriptor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            module: bsrSource.module,
+            version: bsrSource.version,
+            symbols: bsrSource.symbols,
+            authToken: bsrSource.authToken,
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Failed to fetch BSR descriptor');
+        }
+
+        const data = await response.json();
+        debug.log(`Loaded ${data.services?.length || 0} services from BSR ${bsrSource.module}`);
+
+        setNetworks(prev => prev.map(n =>
+          n.id === id
+            ? { ...n, services: data.services || [], loading: false }
+            : n
+        ));
+      } catch (err: any) {
+        setNetworks(prev => prev.map(n =>
+          n.id === id
+            ? { ...n, loading: false, error: err.message }
+            : n
+        ));
+      }
+
+      return;
+    }
+
     // Check client-side cache first to get chain-id for deduplication
     const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
     const cached = getFromCache<any>(cacheKey);
@@ -288,7 +371,9 @@ export default function GrpcExplorerApp() {
         loading: false,
         cached: true,
         cacheTimestamp: cached.timestamp || Date.now(),
-        expanded: true
+        expanded: true,
+        mode: networkMode,
+        ...(authConfig ? { authConfig } : {}),
       };
 
       setNetworks(prev => {
@@ -319,7 +404,9 @@ export default function GrpcExplorerApp() {
       loading: true,
       cached: false,
       cacheTimestamp: Date.now(),
-      expanded: true
+      expanded: true,
+      mode: networkMode,
+      ...(authConfig ? { authConfig } : {}),
     };
 
     // Add network to UI immediately with loading state
@@ -335,7 +422,7 @@ export default function GrpcExplorerApp() {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, tlsEnabled })
+        body: JSON.stringify({ endpoint, tlsEnabled, mode: networkMode })
       });
 
       if (!response.ok) throw new Error('Failed to fetch services');
@@ -816,7 +903,8 @@ export default function GrpcExplorerApp() {
           service: instance.service.fullName,
           method: instance.method.name,
           params: instance.params,
-          metadata: instance.metadata || {}
+          metadata: instance.metadata || {},
+          ...(instance.authConfig ? { authConfig: instance.authConfig } : {}),
         })
       });
 
@@ -1021,6 +1109,7 @@ export default function GrpcExplorerApp() {
                     params={selectedMethod.params || {}}
                     {...(network?.endpoint && { endpoint: network.endpoint })}
                     {...(network?.tlsEnabled !== undefined && { tlsEnabled: network.tlsEnabled })}
+                    mode={network?.mode}
                   />
                 );
               })() : (
@@ -1087,21 +1176,31 @@ export default function GrpcExplorerApp() {
                 <p className="text-xs mt-1">Select methods from the networks panel</p>
               </div>
             ) : (
-              methodInstances.map(instance => (
-                <MethodBlock
-                  key={instance.id}
-                  instance={instance}
-                  isSelected={selectedMethod?.id === instance.id}
-                  onToggle={() => toggleMethodExpanded(instance.id)}
-                  onRemove={() => handleRemoveMethodInstance(instance.id)}
-                  onSelect={() => setSelectedMethodId(instance.id)}
-                  onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
-                  onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
-                  onExecute={() => handleExecuteMethod(instance)}
-                  onTogglePin={() => toggleMethodPin(instance.id)}
-                  isExecuting={isExecuting && selectedMethod?.id === instance.id}
-                />
-              ))
+              methodInstances.map(instance => {
+                const network = networks.find(n => n.id === instance.networkId);
+                return (
+                  <MethodBlock
+                    key={instance.id}
+                    instance={instance}
+                    isSelected={selectedMethod?.id === instance.id}
+                    onToggle={() => toggleMethodExpanded(instance.id)}
+                    onRemove={() => handleRemoveMethodInstance(instance.id)}
+                    onSelect={() => setSelectedMethodId(instance.id)}
+                    onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                    onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
+                    onExecute={() => handleExecuteMethod(instance)}
+                    onTogglePin={() => toggleMethodPin(instance.id)}
+                    isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                    mode={network?.mode}
+                    networkAuthConfig={network?.authConfig}
+                    onUpdateAuth={(auth) => {
+                      setMethodInstances(prev => prev.map(m =>
+                        m.id === instance.id ? { ...m, authConfig: auth } : m
+                      ));
+                    }}
+                  />
+                );
+              })
             )}
           </div>
               </div>
@@ -1128,6 +1227,7 @@ export default function GrpcExplorerApp() {
         <AddNetworkDialog
           onAdd={handleAddNetwork}
           onClose={() => setShowAddNetwork(false)}
+          defaultMode={defaultMode}
         />
       )}
 
@@ -1141,6 +1241,11 @@ export default function GrpcExplorerApp() {
         onClose={() => setShowSettings(false)}
         autoCollapseEnabled={autoCollapseEnabled}
         onAutoCollapseChange={setAutoCollapseEnabled}
+        defaultMode={defaultMode}
+        onDefaultModeChange={(mode) => {
+          setDefaultMode(mode);
+          localStorage.setItem('grpc-explorer-default-mode', mode);
+        }}
       />
     </div>
   );

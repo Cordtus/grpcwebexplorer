@@ -31,12 +31,12 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
     // Extract namespace from service name (e.g., cosmos.bank.v1beta1 -> cosmos.bank)
     const parts = service.fullName.split('.');
     let namespace = parts[0];
-    
+
     // If it has version suffix (v1beta1, v1, v2, etc.), group by base namespace
     if (parts.length >= 2) {
       const versionPattern = /^v\d+(beta\d+)?$/;
       const lastPart = parts[parts.length - 1];
-      
+
       if (versionPattern.test(lastPart)) {
         namespace = parts.slice(0, -1).join('.');
       } else {
@@ -53,14 +53,14 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
     }
 
     const group = namespaceMap.get(namespace)!;
-    
+
     // Deduplicate methods by name within namespace
     const uniqueMethods = new Map<string, GrpcMethod>();
     service.methods.forEach(method => {
       const methodKey = method.name;
-      if (!uniqueMethods.has(methodKey) || 
+      if (!uniqueMethods.has(methodKey) ||
           // Prefer methods from newer versions
-          service.fullName.includes('v2') || 
+          service.fullName.includes('v2') ||
           (service.fullName.includes('v1') && !service.fullName.includes('beta'))) {
         uniqueMethods.set(methodKey, method);
       }
@@ -73,7 +73,7 @@ function groupMethodsByNamespace(services: GrpcService[]): NamespaceGroup[] {
     group.methodCount += uniqueMethods.size;
   });
 
-  return Array.from(namespaceMap.values()).sort((a, b) => 
+  return Array.from(namespaceMap.values()).sort((a, b) =>
     a.namespace.localeCompare(b.namespace)
   );
 }
@@ -139,9 +139,10 @@ const NetworkBlock = React.memo(function NetworkBlock({
     setExpandedNamespaces(newExpanded);
   };
 
-  const subtitle = network.chainId
+  const modeLabel = network.mode === 'cosmos' ? '[Cosmos] ' : network.mode === 'generic' ? '[gRPC] ' : '';
+  const subtitle = modeLabel + (network.chainId
     ? `${network.endpoint}${network.endpoints && network.endpoints.length > 0 ? ` (+${network.endpoints.length} fallback${network.endpoints.length > 1 ? 's' : ''})` : ''}`
-    : network.endpoint;
+    : network.endpoint);
 
   return (
     <ExpandableBlock

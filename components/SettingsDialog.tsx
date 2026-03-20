@@ -2,225 +2,265 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  getCacheTTL,
-  setCacheTTL,
-  CACHE_TTL_OPTIONS,
-  CACHE_TTL_LABELS,
-  type CacheTTLOption,
-  clearAllCache,
-  getCacheStats,
+	getCacheTTL,
+	setCacheTTL,
+	CACHE_TTL_OPTIONS,
+	CACHE_TTL_LABELS,
+	type CacheTTLOption,
+	clearAllCache,
+	getCacheStats,
 } from '@/lib/utils/client-cache';
 import { useTheme, type Theme } from '@/components/ThemeProvider';
+import type { ExplorerMode } from '@/lib/types/grpc';
 
 interface SettingsDialogProps {
-  open: boolean;
-  onClose: () => void;
-  autoCollapseEnabled?: boolean;
-  onAutoCollapseChange?: (enabled: boolean) => void;
+	open: boolean;
+	onClose: () => void;
+	autoCollapseEnabled?: boolean;
+	onAutoCollapseChange?: (enabled: boolean) => void;
+	defaultMode?: ExplorerMode | undefined;
+	onDefaultModeChange?: ((mode: ExplorerMode) => void) | undefined;
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
-  open,
-  onClose,
-  autoCollapseEnabled = true,
-  onAutoCollapseChange
+	open,
+	onClose,
+	autoCollapseEnabled = true,
+	onAutoCollapseChange,
+	defaultMode,
+	onDefaultModeChange,
 }) => {
-  const { theme, setTheme } = useTheme();
-  const [defaultTimeout, setDefaultTimeout] = useState(10000);
-  const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
-  const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
-  const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
+	const { theme, setTheme } = useTheme();
+	const [defaultTimeout, setDefaultTimeout] = useState(10000);
+	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
+	const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
+	const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
+	const [localDefaultMode, setLocalDefaultMode] = useState<ExplorerMode>(defaultMode || 'generic');
 
-  // Load current settings when dialog opens
-  useEffect(() => {
-    if (open) {
-      const currentTTL = getCacheTTL();
-      const option = Object.entries(CACHE_TTL_OPTIONS).find(
-        ([_, value]) => value === currentTTL
-      )?.[0] as CacheTTLOption || 'ONE_HOUR';
-      setCacheTTLState(option);
+	// Load current settings when dialog opens
+	useEffect(() => {
+		if (open) {
+			const currentTTL = getCacheTTL();
+			const option = Object.entries(CACHE_TTL_OPTIONS).find(
+				([_, value]) => value === currentTTL
+			)?.[0] as CacheTTLOption || 'ONE_HOUR';
+			setCacheTTLState(option);
 
-      // Load cache stats
-      setCacheStatsState(getCacheStats());
+			// Load cache stats
+			setCacheStatsState(getCacheStats());
 
-      // Load auto-collapse setting
-      setLocalAutoCollapse(autoCollapseEnabled);
-    }
-  }, [open, autoCollapseEnabled]);
+			// Load auto-collapse setting
+			setLocalAutoCollapse(autoCollapseEnabled);
 
-  return (
-    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            <DialogTitle>Settings</DialogTitle>
-          </div>
-          <DialogDescription>
-            Configure your gRPC Explorer preferences
-          </DialogDescription>
-        </DialogHeader>
+			// Load default mode setting
+			setLocalDefaultMode(defaultMode || 'generic');
+		}
+	}, [open, autoCollapseEnabled, defaultMode]);
 
-        <div className="space-y-6 mt-4">
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Appearance</h3>
-            <div className="space-y-2">
-              <label className="text-sm">Theme</label>
-              <div className="flex gap-2 flex-wrap">
-                {([
-                  { value: 'system', label: 'System' },
-                  { value: 'light', label: 'Light' },
-                  { value: 'dark', label: 'Dark' },
-                  { value: 'retro', label: '8-bit' }
-                ] as const).map((t) => (
-                  <button
-                    key={t.value}
-                    onClick={() => setTheme(t.value)}
-                    className={cn(
-                      "px-4 py-2 rounded text-sm font-medium transition-colors",
-                      theme === t.value
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary hover:bg-secondary/80"
-                    )}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+	return (
+		<Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+			<DialogContent className="sm:max-w-[500px]">
+				<DialogHeader>
+					<div className="flex items-center gap-2">
+						<Settings className="h-5 w-5" />
+						<DialogTitle>Settings</DialogTitle>
+					</div>
+					<DialogDescription>
+						Configure your gRPC Explorer preferences
+					</DialogDescription>
+				</DialogHeader>
 
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">gRPC Options</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm block mb-1">Default Request Timeout (ms)</label>
-                <input
-                  type="number"
-                  value={defaultTimeout}
-                  onChange={(e) => setDefaultTimeout(parseInt(e.target.value) || 10000)}
-                  className={cn(
-                    "w-full px-3 py-2 rounded text-sm",
-                    "bg-background border border-border",
-                    "focus:outline-none focus:ring-2 focus:ring-primary"
-                  )}
-                  min={1000}
-                  max={60000}
-                  step={1000}
-                />
-              </div>
-            </div>
-          </div>
+				<div className="space-y-6 mt-4">
+					<div>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Appearance</h3>
+						<div className="space-y-2">
+							<label className="text-sm">Theme</label>
+							<div className="flex gap-2 flex-wrap">
+								{([
+									{ value: 'system', label: 'System' },
+									{ value: 'light', label: 'Light' },
+									{ value: 'dark', label: 'Dark' },
+									{ value: 'retro', label: '8-bit' }
+								] as const).map((t) => (
+									<button
+										key={t.value}
+										onClick={() => setTheme(t.value)}
+										className={cn(
+											"px-4 py-2 rounded text-sm font-medium transition-colors",
+											theme === t.value
+												? "bg-primary text-primary-foreground"
+												: "bg-secondary hover:bg-secondary/80"
+										)}
+									>
+										{t.label}
+									</button>
+								))}
+							</div>
+						</div>
+					</div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Panel Behavior</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-sm font-medium">Auto-collapse panels</label>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically collapse other panels when opening a new one
-                  </p>
-                </div>
-                <Switch
-                  checked={localAutoCollapse}
-                  onCheckedChange={setLocalAutoCollapse}
-                />
-              </div>
-            </div>
-          </div>
+					<div>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Default Mode</h3>
+						<div className="flex gap-2">
+							{([
+								{ value: 'generic' as ExplorerMode, label: 'Generic gRPC' },
+								{ value: 'cosmos' as ExplorerMode, label: 'Cosmos SDK' },
+							]).map((m) => (
+								<button
+									key={m.value}
+									onClick={() => setLocalDefaultMode(m.value)}
+									className={cn(
+										"px-4 py-2 rounded text-sm font-medium transition-colors",
+										localDefaultMode === m.value
+											? "bg-primary text-primary-foreground"
+											: "bg-secondary hover:bg-secondary/80"
+									)}
+								>
+									{m.label}
+								</button>
+							))}
+						</div>
+						<p className="text-xs text-muted-foreground mt-2">
+							Default mode when adding new networks
+						</p>
+					</div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3">Cache</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm block mb-2">Cache Duration</label>
-                <select
-                  value={cacheTTL}
-                  onChange={(e) => setCacheTTLState(e.target.value as CacheTTLOption)}
-                  className={cn(
-                    "w-full px-3 py-2 rounded text-sm",
-                    "bg-background border border-border",
-                    "focus:outline-none focus:ring-2 focus:ring-primary",
-                    "cursor-pointer"
-                  )}
-                >
-                  {Object.entries(CACHE_TTL_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Controls how long service discovery results are cached
-                </p>
-              </div>
+					<div>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">gRPC Options</h3>
+						<div className="space-y-3">
+							<div>
+								<label className="text-sm block mb-1">Default Request Timeout (ms)</label>
+								<input
+									type="number"
+									value={defaultTimeout}
+									onChange={(e) => setDefaultTimeout(parseInt(e.target.value) || 10000)}
+									className={cn(
+										"w-full px-3 py-2 rounded text-sm",
+										"bg-background border border-border",
+										"focus:outline-none focus:ring-2 focus:ring-primary"
+									)}
+									min={1000}
+									max={60000}
+									step={1000}
+								/>
+							</div>
+						</div>
+					</div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm">Cache Statistics</label>
-                  <button
-                    onClick={() => {
-                      clearAllCache();
-                      setCacheStatsState(getCacheStats());
-                    }}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    Clear Cache
-                  </button>
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Cached entries: {cacheStats.count}</div>
-                  <div>Storage used: {cacheStats.sizeKB} KB</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+					<div>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Panel Behavior</h3>
+						<div className="space-y-3">
+							<div className="flex items-center justify-between">
+								<div className="space-y-0.5">
+									<label className="text-sm font-medium">Auto-collapse panels</label>
+									<p className="text-xs text-muted-foreground">
+										Automatically collapse other panels when opening a new one
+									</p>
+								</div>
+								<Switch
+									checked={localAutoCollapse}
+									onCheckedChange={setLocalAutoCollapse}
+								/>
+							</div>
+						</div>
+					</div>
 
-        <div className="mt-6 pt-4 border-t border-border flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className={cn(
-              "px-4 py-2 rounded text-sm transition-colors",
-              "bg-secondary hover:bg-secondary/80"
-            )}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              // Save cache TTL setting
-              setCacheTTL(cacheTTL);
+					<div>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Cache</h3>
+						<div className="space-y-4">
+							<div>
+								<label className="text-sm block mb-2">Cache Duration</label>
+								<select
+									value={cacheTTL}
+									onChange={(e) => setCacheTTLState(e.target.value as CacheTTLOption)}
+									className={cn(
+										"w-full px-3 py-2 rounded text-sm",
+										"bg-background border border-border",
+										"focus:outline-none focus:ring-2 focus:ring-primary",
+										"cursor-pointer"
+									)}
+								>
+									{Object.entries(CACHE_TTL_LABELS).map(([key, label]) => (
+										<option key={key} value={key}>
+											{label}
+										</option>
+									))}
+								</select>
+								<p className="text-xs text-muted-foreground mt-2">
+									Controls how long service discovery results are cached
+								</p>
+							</div>
 
-              // Save auto-collapse setting
-              if (onAutoCollapseChange) {
-                onAutoCollapseChange(localAutoCollapse);
-              }
+							<div>
+								<div className="flex items-center justify-between mb-2">
+									<label className="text-sm">Cache Statistics</label>
+									<button
+										onClick={() => {
+											clearAllCache();
+											setCacheStatsState(getCacheStats());
+										}}
+										className="text-xs text-destructive hover:underline"
+									>
+										Clear Cache
+									</button>
+								</div>
+								<div className="text-xs text-muted-foreground space-y-1">
+									<div>Cached entries: {cacheStats.count}</div>
+									<div>Storage used: {cacheStats.sizeKB} KB</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
 
-              onClose();
-            }}
-            className={cn(
-              "px-4 py-2 rounded text-sm transition-colors",
-              "bg-primary text-primary-foreground hover:bg-primary/90"
-            )}
-          >
-            Save
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+				<div className="mt-6 pt-4 border-t border-border flex justify-end gap-2">
+					<button
+						onClick={onClose}
+						className={cn(
+							"px-4 py-2 rounded text-sm transition-colors",
+							"bg-secondary hover:bg-secondary/80"
+						)}
+					>
+						Cancel
+					</button>
+					<button
+						onClick={() => {
+							// Save cache TTL setting
+							setCacheTTL(cacheTTL);
+
+							// Save auto-collapse setting
+							if (onAutoCollapseChange) {
+								onAutoCollapseChange(localAutoCollapse);
+							}
+
+							// Save default mode setting
+							if (onDefaultModeChange) {
+								onDefaultModeChange(localDefaultMode);
+							}
+
+							onClose();
+						}}
+						className={cn(
+							"px-4 py-2 rounded text-sm transition-colors",
+							"bg-primary text-primary-foreground hover:bg-primary/90"
+						)}
+					>
+						Save
+					</button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
 };
 
 export default SettingsDialog;
