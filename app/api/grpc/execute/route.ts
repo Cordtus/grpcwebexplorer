@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const startTime = Date.now();
 
   try {
-    const { endpoint, service, method, params, tlsEnabled, metadata } = await req.json();
+    const { endpoint, service, method, params, tlsEnabled, metadata, authConfig } = await req.json();
 
     if (!endpoint || !service || !method) {
       return NextResponse.json(
@@ -39,30 +39,43 @@ export async function POST(req: Request) {
 
     console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort} (TLS: ${tlsEnabled !== false})`);
 
+    // Build enriched metadata from auth config
+    const enrichedMetadata: Record<string, string> = { ...(metadata || {}) };
+    let clientCert: string | undefined;
+    let clientKey: string | undefined;
+
+    if (authConfig) {
+      if (authConfig.type === 'bearer' && authConfig.bearerToken) {
+        enrichedMetadata['authorization'] = `Bearer ${authConfig.bearerToken}`;
+      } else if (authConfig.type === 'api-key' && authConfig.apiKeyHeader && authConfig.apiKeyValue) {
+        enrichedMetadata[authConfig.apiKeyHeader] = authConfig.apiKeyValue;
+      } else if (authConfig.type === 'mtls') {
+        clientCert = authConfig.clientCert;
+        clientKey = authConfig.clientKey;
+      }
+    }
+
     // Try with TLS first, fallback to non-TLS if TLS fails
     let result: any;
     let usedTls = tlsEnabled !== false;
 
     try {
-      // Create reflection client with TLS
+      // Create reflection client with TLS (and optional mTLS)
       const client = new ReflectionClient({
         endpoint: endpointWithPort,
         tls: usedTls,
-        timeout: 60000, // 60s for very slow Penumbra methods (e.g. ValidatorInfo)
+        timeout: 60000,
+        clientCert,
+        clientKey,
       });
 
       try {
-        // Initialize only the specific service we need (fast!)
         await client.initializeForMethod(service);
-
-        // Invoke method (60s timeout for complex queries like ValidatorInfo)
-        result = await client.invokeMethod(service, method, params || {}, 60000, metadata || {});
-
+        result = await client.invokeMethod(service, method, params || {}, 60000, enrichedMetadata);
       } finally {
         client.close();
       }
     } catch (err: any) {
-      // Check if it's a TLS error
       const isTLSError = err.message?.includes('wrong version number') ||
                         err.message?.includes('SSL routines') ||
                         err.message?.includes('EPROTO');
@@ -71,22 +84,22 @@ export async function POST(req: Request) {
         console.log(`[Execute] TLS error detected, retrying ${endpointWithPort} without TLS...`);
         usedTls = false;
 
-        // Retry without TLS
         const retryClient = new ReflectionClient({
           endpoint: endpointWithPort,
           tls: false,
-          timeout: 60000, // 60s for very slow Penumbra methods
+          timeout: 60000,
+          clientCert,
+          clientKey,
         });
 
         try {
           await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, 60000, metadata || {});
-          console.log(`[Execute] ✅ Success without TLS`);
+          result = await retryClient.invokeMethod(service, method, params || {}, 60000, enrichedMetadata);
+          console.log(`[Execute] Success without TLS`);
         } finally {
           retryClient.close();
         }
       } else {
-        // Not a TLS error, or already tried without TLS
         throw err;
       }
     }

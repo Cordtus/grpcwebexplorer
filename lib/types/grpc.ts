@@ -1,6 +1,27 @@
 // Shared gRPC type definitions
 import { MessageTypeDefinition } from '@/components/ProtobufFormGenerator';
 
+/** Explorer mode: generic gRPC or Cosmos SDK-specific */
+export type ExplorerMode = 'generic' | 'cosmos';
+
+/** Authentication configuration for gRPC connections */
+export interface GrpcAuthConfig {
+	type: 'none' | 'bearer' | 'api-key' | 'mtls';
+	bearerToken?: string;
+	apiKeyHeader?: string;
+	apiKeyValue?: string;
+	clientCert?: string;
+	clientKey?: string;
+}
+
+/** BSR (buf.build Schema Registry) module source */
+export interface BufBsrSource {
+	module: string;
+	version?: string;
+	symbols?: string[];
+	authToken?: string;
+}
+
 // HTTP annotation from google.api.http option in proto files
 export interface HttpRule {
 	get?: string;
@@ -60,6 +81,9 @@ export interface GrpcNetwork {
   expanded?: boolean;
   cached?: boolean;
   cacheTimestamp?: number;
+  mode?: ExplorerMode;
+  bsrSource?: BufBsrSource;
+  authConfig?: GrpcAuthConfig;
 }
 
 export interface MethodInstance {
@@ -72,6 +96,7 @@ export interface MethodInstance {
   pinned?: boolean;
   params?: Record<string, any>;
   metadata?: Record<string, string>;
+  authConfig?: GrpcAuthConfig;
 }
 
 export interface ExecutionResult {

@@ -4,6 +4,7 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protobuf from 'protobufjs';
 import descriptorJson from 'protobufjs/google/protobuf/descriptor.json';
+import { DescriptorParser } from './descriptor-parser';
 
 // Inline reflection.proto definitions for both v1 and v1alpha
 const REFLECTION_PROTO_V1_SOURCE = `
@@ -176,9 +177,13 @@ export interface GrpcMethod {
 export interface ReflectionOptions {
   endpoint: string;
   tls: boolean;
-  timeout?: number;
+  timeout?: number | undefined;
   /** Additional endpoints to distribute descriptor loading across */
-  additionalEndpoints?: Array<{ address: string; tls: boolean }>;
+  additionalEndpoints?: Array<{ address: string; tls: boolean }> | undefined;
+  /** PEM-encoded client certificate for mTLS */
+  clientCert?: string | undefined;
+  /** PEM-encoded client private key for mTLS */
+  clientKey?: string | undefined;
 }
 
 /**
@@ -188,29 +193,42 @@ export interface ReflectionOptions {
 export class ReflectionClient {
   private client: grpc.Client;
   private reflectionStub: any;
-  private root: protobuf.Root;
-  private seenFiles = new Set<string>();
+  private parser: DescriptorParser;
   private descriptorRoot: protobuf.Root | null = null;
   private reflectionVersion: 'v1' | 'v1alpha' | null = null;
-  // Store raw method options for HTTP annotation extraction
-  private methodOptions: Map<string, any> = new Map();
   // Stub pool for distributing descriptor loads across multiple endpoints
   private stubPool: Array<{ stub: any; endpoint: string; tls: boolean; alive: boolean }> = [];
   private stubPoolIndex = 0;
   private reflectionProtoRoot: protobuf.Root | null = null;
 
   constructor(private options: ReflectionOptions) {
-    const credentials = options.tls
-      ? grpc.credentials.createSsl()
-      : grpc.credentials.createInsecure();
+    const credentials = this.buildCredentials(options.tls, options.clientCert, options.clientKey);
 
     this.client = new grpc.Client(options.endpoint, credentials, {
       'grpc.max_receive_message_length': -1,
       'grpc.max_send_message_length': -1,
     });
 
-    this.root = new protobuf.Root();
+    this.parser = new DescriptorParser();
   }
+
+  /** Build gRPC credentials, with optional mTLS support */
+  private buildCredentials(tls: boolean, clientCert?: string, clientKey?: string): grpc.ChannelCredentials {
+    if (!tls) return grpc.credentials.createInsecure();
+    if (clientCert && clientKey) {
+      return grpc.credentials.createSsl(
+        null,
+        Buffer.from(clientKey),
+        Buffer.from(clientCert)
+      );
+    }
+    return grpc.credentials.createSsl();
+  }
+
+  // Delegate to parser
+  private get root(): protobuf.Root { return this.parser.getRoot(); }
+  private get seenFiles(): Set<string> { return (this.parser as any).seenFiles; }
+  private get methodOptions(): Map<string, any> { return (this.parser as any).methodOptions; }
 
   /**
    * Initialize reflection stub (lightweight setup without loading all services)
@@ -221,9 +239,7 @@ export class ReflectionClient {
 
     this.descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
 
-    const credentials = this.options.tls
-      ? grpc.credentials.createSsl()
-      : grpc.credentials.createInsecure();
+    const credentials = this.buildCredentials(this.options.tls, this.options.clientCert, this.options.clientKey);
 
     // Try v1 first (newer, stable version)
     try {
@@ -307,9 +323,7 @@ export class ReflectionClient {
       throw new Error('Cannot create stub before primary reflection stub is initialized');
     }
 
-    const credentials = tls
-      ? grpc.credentials.createSsl()
-      : grpc.credentials.createInsecure();
+    const credentials = this.buildCredentials(tls);
 
     const versionPrefix = this.reflectionVersion === 'v1'
       ? 'grpc.reflection.v1'
@@ -928,414 +942,30 @@ export class ReflectionClient {
   }
 
   /**
-   * Process and register file descriptor
+   * Process and register file descriptor (delegates to DescriptorParser)
    */
   private processFileDescriptor(fdBytes: Buffer): void {
     try {
-      if (!this.descriptorRoot) {
-        throw new Error('Descriptor root not loaded');
-      }
-
-      const FileDescriptorProto = this.descriptorRoot.lookupType('google.protobuf.FileDescriptorProto');
-      const descriptor = FileDescriptorProto.decode(fdBytes) as any;
-      const filename = descriptor.name || 'unknown';
-
-      if (this.seenFiles.has(filename)) {
-        return;
-      }
-
-      this.seenFiles.add(filename);
-
-      this.addDescriptorToRoot(descriptor);
-
+      this.parser.processFileDescriptor(fdBytes);
     } catch (err) {
       console.warn(`[ReflectionClient] Failed to process descriptor:`, err);
     }
   }
 
-  /**
-   * Add descriptor to protobuf.js root (simplified)
-   */
-  private addDescriptorToRoot(descriptor: any): void {
-    const pkg = descriptor.package || '';
+  // addDescriptorToRoot, addMessageType, addEnumType, addServiceType,
+  // extractHttpRule, getFieldType, extractMessageTypeDefinition
+  // are now handled by DescriptorParser (this.parser)
 
-    // Create namespace if needed
-    let namespace: protobuf.Namespace = this.root;
-    if (pkg) {
-      const parts = pkg.split('.');
-      for (const part of parts) {
-        let next = namespace.get(part);
-        if (!next) {
-          next = new protobuf.Namespace(part);
-          namespace.add(next);
-        }
-        namespace = next as protobuf.Namespace;
-      }
-    }
-
-    // Add enums
-    if (descriptor.enumType) {
-      for (const enumType of descriptor.enumType) {
-        try {
-          this.addEnumType(namespace, enumType);
-        } catch (err) {
-          if (!(err as Error).message.includes('duplicate')) {
-            console.warn(`Failed to add enum ${enumType.name}:`, err);
-          }
-        }
-      }
-    }
-
-    // Add messages
-    if (descriptor.messageType) {
-      for (const msgType of descriptor.messageType) {
-        try {
-          this.addMessageType(namespace, msgType);
-        } catch (err) {
-          // Silently skip duplicates
-          if (!(err as Error).message.includes('duplicate')) {
-            console.warn(`Failed to add message ${msgType.name}:`, err);
-          }
-        }
-      }
-    }
-
-    // Add services
-    if (descriptor.service) {
-      for (const svcType of descriptor.service) {
-        try {
-          this.addServiceType(namespace, svcType, pkg);
-        } catch (err) {
-          // Silently skip duplicates
-          if (!(err as Error).message.includes('duplicate')) {
-            console.warn(`Failed to add service ${svcType.name}:`, err);
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Add message type to namespace
-   */
-  private addMessageType(namespace: protobuf.Namespace, msgType: any): void {
-    const fields: any = {};
-
-    if (msgType.field) {
-      for (const field of msgType.field) {
-        fields[field.name] = {
-          type: this.getFieldType(field),
-          id: field.number,
-          rule: field.label === 3 ? 'repeated' : undefined,
-        };
-      }
-    }
-
-    const message = new protobuf.Type(msgType.name);
-    for (const [name, fieldDef] of Object.entries(fields)) {
-      message.add(new protobuf.Field(name, (fieldDef as any).id, (fieldDef as any).type, (fieldDef as any).rule));
-    }
-
-    namespace.add(message);
-
-    // Recursively add nested enums
-    if (msgType.enumType) {
-      for (const nested of msgType.enumType) {
-        this.addEnumType(message, nested);
-      }
-    }
-
-    // Recursively add nested types
-    if (msgType.nestedType) {
-      for (const nested of msgType.nestedType) {
-        this.addMessageType(message, nested);
-      }
-    }
-  }
-
-  /**
-   * Add enum type to namespace
-   */
-  private addEnumType(namespace: protobuf.Namespace, enumType: any): void {
-    const values: { [key: string]: number } = {};
-
-    if (enumType.value) {
-      for (const value of enumType.value) {
-        values[value.name] = value.number;
-      }
-    }
-
-    const enumObj = new protobuf.Enum(enumType.name, values);
-    namespace.add(enumObj);
-  }
-
-  /**
-   * Add service type to namespace
-   */
-  private addServiceType(namespace: protobuf.Namespace, svcType: any, packagePath: string): void {
-    const service = new protobuf.Service(svcType.name);
-    const serviceFullName = packagePath ? `${packagePath}.${svcType.name}` : svcType.name;
-
-    if (svcType.method) {
-      for (const method of svcType.method) {
-        const protoMethod = new protobuf.Method(
-          method.name,
-          'rpc',
-          method.inputType.replace(/^\./, ''),
-          method.outputType.replace(/^\./, ''),
-          method.clientStreaming || false,
-          method.serverStreaming || false
-        );
-        service.add(protoMethod);
-
-        // Store raw options for later extraction of HTTP annotations
-        // Note: HTTP annotations (google.api.http) are typically NOT available via
-        // gRPC reflection as they are compile-time extensions for gRPC-gateway
-        if (method.options) {
-          const methodKey = `${serviceFullName}.${method.name}`;
-          this.methodOptions.set(methodKey, method.options);
-        }
-      }
-    }
-
-    namespace.add(service);
-  }
-
-  /**
-   * Extract HTTP rule from method options
-   * The google.api.http extension field number is 72295728
-   */
-  private extractHttpRule(methodKey: string): HttpRule | undefined {
-    const options = this.methodOptions.get(methodKey);
-    if (!options) return undefined;
-
-    // The HTTP annotation is stored in the extension field
-    // Field 72295728 corresponds to google.api.http
-    const httpAnnotation = options['.google.api.http'] ||
-                          options['google.api.http'] ||
-                          options['(google.api.http)'] ||
-                          options[72295728];
-
-    if (!httpAnnotation) return undefined;
-
-    const rule: HttpRule = {};
-
-    // Extract the HTTP method and path
-    if (httpAnnotation.get) rule.get = httpAnnotation.get;
-    if (httpAnnotation.post) rule.post = httpAnnotation.post;
-    if (httpAnnotation.put) rule.put = httpAnnotation.put;
-    if (httpAnnotation.delete) rule.delete = httpAnnotation.delete;
-    if (httpAnnotation.patch) rule.patch = httpAnnotation.patch;
-    if (httpAnnotation.body) rule.body = httpAnnotation.body;
-
-    // Handle additional bindings
-    if (httpAnnotation.additionalBindings && Array.isArray(httpAnnotation.additionalBindings)) {
-      rule.additionalBindings = httpAnnotation.additionalBindings.map((binding: any) => ({
-        get: binding.get,
-        post: binding.post,
-        put: binding.put,
-        delete: binding.delete,
-        patch: binding.patch,
-        body: binding.body,
-      }));
-    }
-
-    // Return undefined if no HTTP method was found
-    if (!rule.get && !rule.post && !rule.put && !rule.delete && !rule.patch) {
-      return undefined;
-    }
-
-    return rule;
-  }
-
-  /**
-   * Get field type string
-   */
-  private getFieldType(field: any): string {
-    const typeMap: Record<number, string> = {
-      1: 'double', 2: 'float', 3: 'int64', 4: 'uint64',
-      5: 'int32', 6: 'fixed64', 7: 'fixed32', 8: 'bool',
-      9: 'string', 12: 'bytes', 13: 'uint32', 15: 'sfixed32',
-      16: 'sfixed64', 17: 'sint32', 18: 'sint64',
-    };
-
-    if (field.type in typeMap) {
-      return typeMap[field.type];
-    }
-
-    if (field.typeName) {
-      return field.typeName.replace(/^\./, '');
-    }
-
-    return 'string';
-  }
-
-  /**
-   * Extract message type definition from protobuf root
-   * Always returns a valid MessageTypeDefinition - never undefined
-   * Methods with no parameters will have an empty fields array
-   */
+  /** Delegate to parser for message type extraction */
   private extractMessageTypeDefinition(typeName: string, visitedTypes: Set<string> = new Set()): MessageTypeDefinition {
-    try {
-      const message = this.root.lookupType(typeName);
-      if (!message) {
-        console.warn(`[ReflectionClient] Could not lookup type ${typeName}, returning empty definition`);
-        return {
-          name: typeName.split('.').pop() || typeName,
-          fullName: typeName,
-          fields: [],
-        };
-      }
-
-      const fields: MessageField[] = [];
-
-      // message.fields can be undefined or an empty object for messages with no fields
-      if (message.fields && Object.keys(message.fields).length > 0) {
-        for (const [fieldName, field] of Object.entries(message.fields)) {
-          const fieldObj = field as any;
-          const fieldType = fieldObj.type;
-          const rule = fieldObj.rule;
-          const comment = fieldObj.comment || '';
-
-          // Check if this is a nested message type (not a primitive)
-          const primitiveTypes = [
-            'string', 'int32', 'int64', 'uint32', 'uint64',
-            'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32',
-            'sfixed64', 'bool', 'bytes', 'double', 'float'
-          ];
-          const isNested = fieldType && typeof fieldType === 'string' && !primitiveTypes.includes(fieldType);
-
-          // Check if this is an enum
-          let enumValues: string[] | undefined;
-          let nestedFields: MessageField[] | undefined;
-
-          if (isNested) {
-            try {
-              const nestedType = this.root.lookup(fieldType);
-              if (nestedType && (nestedType as any).valuesById) {
-                // It's an enum
-                enumValues = Object.values((nestedType as any).valuesById) as string[];
-              } else if (nestedType && !visitedTypes.has(fieldType)) {
-                // It's a nested message - recursively extract its fields
-                visitedTypes.add(fieldType);
-                const nestedDefinition = this.extractMessageTypeDefinition(fieldType, visitedTypes);
-                nestedFields = nestedDefinition.fields;
-                visitedTypes.delete(fieldType);
-              }
-            } catch (e) {
-              // Failed to lookup nested type, will remain as generic nested field
-              console.warn(`[ReflectionClient] Failed to lookup nested type ${fieldType}:`, e);
-            }
-          }
-
-          const fieldDef: MessageField = {
-            name: fieldName,
-            type: fieldType,
-            rule: rule === 'repeated' ? 'repeated' : rule === 'required' ? 'required' : 'optional',
-            comment,
-            nested: isNested && !enumValues,
-          };
-
-          // Only add enumValues if it's defined (don't set to undefined)
-          if (enumValues) {
-            fieldDef.enumValues = enumValues;
-          }
-
-          // Add nested fields if we recursively extracted them
-          if (nestedFields && nestedFields.length > 0) {
-            fieldDef.nestedFields = nestedFields;
-          }
-
-          fields.push(fieldDef);
-        }
-      }
-
-      return {
-        name: message.name,
-        fullName: typeName,
-        fields,
-      };
-    } catch (error) {
-      console.error(`[ReflectionClient] Failed to extract message type definition for ${typeName}:`, error);
-      // Return empty definition on error rather than undefined
-      return {
-        name: typeName.split('.').pop() || typeName,
-        fullName: typeName,
-        fields: [],
-      };
-    }
+    return this.parser.extractMessageTypeDefinition(typeName, visitedTypes);
   }
 
   /**
-   * Get all services
+   * Get all services (delegates to DescriptorParser)
    */
   getServices(): GrpcService[] {
-    const services: GrpcService[] = [];
-
-    const traverse = (namespace: protobuf.Namespace, parentPath: string = ''): void => {
-      for (const [name, nested] of Object.entries(namespace.nested || {})) {
-        const fullPath = parentPath ? `${parentPath}.${name}` : name;
-
-        if (nested instanceof protobuf.Service) {
-          const methods: GrpcMethod[] = [];
-
-          for (const [methodName, method] of Object.entries(nested.methods)) {
-            const m = method as protobuf.Method;
-
-            // Validate method has required fields
-            if (!methodName || !m.requestType || !m.responseType) {
-              console.warn(`[ReflectionClient] Skipping invalid method in ${fullPath}: missing name or types`);
-              continue;
-            }
-
-            try {
-              // Extract type definitions for request and response
-              const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
-              const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
-
-              // Extract HTTP annotation if present
-              const methodKey = `${fullPath}.${methodName}`;
-              const httpRule = this.extractHttpRule(methodKey);
-
-              const methodObj: GrpcMethod = {
-                name: methodName,
-                fullName: `${fullPath}.${methodName}`,
-                serviceName: fullPath,
-                requestType: m.requestType,
-                responseType: m.responseType,
-                requestStreaming: m.requestStream || false,
-                responseStreaming: m.responseStream || false,
-                requestTypeDefinition,
-                responseTypeDefinition,
-              };
-
-              // Only add httpRule if it was found
-              if (httpRule) {
-                methodObj.httpRule = httpRule;
-              }
-
-              methods.push(methodObj);
-            } catch (err) {
-              console.warn(`[ReflectionClient] Failed to process method ${methodName} in ${fullPath}:`, err);
-            }
-          }
-
-          // Only add service if it has valid methods
-          if (methods.length > 0) {
-            services.push({
-              name,
-              fullName: fullPath,
-              methods,
-            });
-          }
-        } else if (nested instanceof protobuf.Namespace) {
-          traverse(nested, fullPath);
-        }
-      }
-    };
-
-    traverse(this.root);
-    return services;
+    return this.parser.getServices();
   }
 
   /**

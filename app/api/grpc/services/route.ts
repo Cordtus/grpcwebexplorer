@@ -10,18 +10,19 @@ export const runtime = 'nodejs';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { endpoint, tlsEnabled: tls, forceRefresh }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; } = body;
+    const { endpoint, tlsEnabled: tls, forceRefresh, mode }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; mode?: string } = body;
+    const isGenericMode = mode === 'generic';
 
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint is required' }, { status: 400 });
     }
 
-    // Check if this is a chain marker for round-robin mode
+    // Check if this is a chain marker for round-robin mode (Cosmos only)
     let isChainMarker = false;
     let chainName = '';
     let endpoints: Array<{ address: string; tls: boolean }> = [];
 
-    if (endpoint.startsWith('chain:')) {
+    if (!isGenericMode && endpoint.startsWith('chain:')) {
       isChainMarker = true;
       chainName = endpoint.replace('chain:', '');
       console.log(`[Services] Chain marker detected: ${chainName} - will use concurrent endpoint fetching`);
@@ -79,13 +80,22 @@ export async function POST(req: Request) {
 
       const startTime = Date.now();
       try {
-        // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
-        services = await fetchServicesWithCosmosOptimization({
-          endpoint: address,
-          tls: tlsEnabled,
-          timeout: 10000, // 10 second timeout per endpoint
-          additionalEndpoints,
-        });
+        // In generic mode, use standard reflection directly; Cosmos mode tries v2alpha1 first
+        if (isGenericMode) {
+          services = await fetchServicesViaReflection({
+            endpoint: address,
+            tls: tlsEnabled,
+            timeout: 10000,
+            additionalEndpoints,
+          });
+        } else {
+          services = await fetchServicesWithCosmosOptimization({
+            endpoint: address,
+            tls: tlsEnabled,
+            timeout: 10000,
+            additionalEndpoints,
+          });
+        }
         const responseTime = Date.now() - startTime;
 
         if (services.length === 0) {
@@ -116,17 +126,25 @@ export async function POST(req: Request) {
           console.log(`[Services] TLS error detected, retrying ${address} without TLS...`);
           const retryStartTime = Date.now();
           try {
-            // Use optimized Cosmos reflection (v2alpha1) when available, fallback to standard
             // Rebuild additional endpoints with TLS disabled for the retried endpoint
             const retryAdditionalEndpoints = isChainMarker
               ? endpointsToTry.filter((_, idx) => idx !== i).map(ep => ({ address: ep.address, tls: ep.tls }))
               : [];
-            services = await fetchServicesWithCosmosOptimization({
-              endpoint: address,
-              tls: false,
-              timeout: 10000,
-              additionalEndpoints: retryAdditionalEndpoints,
-            });
+            if (isGenericMode) {
+              services = await fetchServicesViaReflection({
+                endpoint: address,
+                tls: false,
+                timeout: 10000,
+                additionalEndpoints: retryAdditionalEndpoints,
+              });
+            } else {
+              services = await fetchServicesWithCosmosOptimization({
+                endpoint: address,
+                tls: false,
+                timeout: 10000,
+                additionalEndpoints: retryAdditionalEndpoints,
+              });
+            }
             const retryResponseTime = Date.now() - retryStartTime;
 
             if (services.length === 0) {
@@ -182,10 +200,9 @@ export async function POST(req: Request) {
       console.warn(`[Services] ${methodsNeedingDescriptors} methods have empty field definitions (will need on-demand loading)`);
     }
 
-    // Auto-detect chain-ID if not already set
-    // Try GetChainDescriptor first (v2alpha1), fallback to GetNodeInfo (v1beta1)
+    // Auto-detect chain-ID if not already set (Cosmos mode only)
     let detectedChainId = chainName;
-    if (!detectedChainId) {
+    if (!isGenericMode && !detectedChainId) {
       try {
         console.log('[Services] Attempting to detect chain-ID via GetChainDescriptor (v2alpha1)...');
         const chainDescriptorClient = new (await import('@/lib/grpc/reflection-client')).ReflectionClient({

@@ -216,6 +216,13 @@ export function getEndpointCacheKey(endpoint: string): string {
 }
 
 /**
+ * Generate cache key for BSR module descriptor
+ */
+export function getBsrCacheKey(module: string, version: string): string {
+  return `bsr:${module}:${version}`;
+}
+
+/**
  * Cached chain info for display purposes
  */
 export interface CachedChainInfo {
