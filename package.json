@@ -15,6 +15,9 @@
     "docker:up": "cd deployment && docker-compose up -d",
     "docker:down": "cd deployment && docker-compose down",
     "docker:logs": "cd deployment && docker-compose logs -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:grpc": "node deployment/test-grpc-reflection.js"
   },
   "dependencies": {
@@ -42,10 +45,12 @@
     "typescript": "^5.3.3"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.1.0",
     "postcss": "^8.5.3",
-    "tailwindcss": "3.4.1"
+    "tailwindcss": "3.4.1",
+    "vitest": "^4.1.0"
   }
 }
