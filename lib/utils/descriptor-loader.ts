@@ -91,7 +91,6 @@ class DescriptorLoaderQueue {
       this.abortController.abort();
       this.abortController = null;
     }
-    console.log('[DescriptorLoader] Paused background loading');
   }
 
   /**
@@ -99,7 +98,6 @@ class DescriptorLoaderQueue {
    */
   resume() {
     this.paused = false;
-    console.log('[DescriptorLoader] Resumed background loading');
     this.processQueue();
   }
 
@@ -126,8 +124,6 @@ class DescriptorLoaderQueue {
     this.abortController = new AbortController();
 
     try {
-      console.log(`[DescriptorLoader] Loading ${this.currentJob.serviceName} (${this.currentJob.priority} priority, ${this.queue.length} remaining)`);
-
       const response = await fetch('/api/grpc/descriptor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,7 +144,6 @@ class DescriptorLoaderQueue {
             serviceName: this.currentJob.serviceName,
             service: data.service,
           });
-          console.log(`[DescriptorLoader] Loaded ${this.currentJob.serviceName}`);
         }
       } else {
         // Re-queue with retry on failure (rate limiting, server errors)
@@ -162,7 +157,6 @@ class DescriptorLoaderQueue {
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log(`[DescriptorLoader] Aborted loading ${this.currentJob.serviceName}`);
         // Re-add to queue if aborted (will be processed when resumed)
         if (!this.loaded.has(jobKey)) {
           this.queue.unshift(this.currentJob);

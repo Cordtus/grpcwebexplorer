@@ -82,10 +82,8 @@ export default function GrpcExplorerApp() {
                        parsed.timestamp && (ttl === Infinity || age < ttl);
 
         if (isValid) {
-          console.log(`[NetworkCache] Restored ${parsed.networks.length} networks from cache (${Math.round(age / 60000)}min old, TTL: ${ttl === Infinity ? 'never' : Math.round(ttl / 60000) + 'min'})`);
           setNetworks(parsed.networks);
         } else {
-          console.log(`[NetworkCache] Cache expired (${Math.round(age / 60000)}min old, TTL: ${ttl === Infinity ? 'never' : Math.round(ttl / 60000) + 'min'}), starting fresh`);
           localStorage.removeItem('grpc-explorer-networks');
         }
       }
@@ -94,19 +92,26 @@ export default function GrpcExplorerApp() {
     }
   }, []);
 
-  // Persist networks to localStorage whenever they change
+  // Persist networks to localStorage whenever they change (debounced to avoid
+  // overwhelming the browser during rapid descriptor loads)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (networks.length > 0) {
-      try {
-        localStorage.setItem('grpc-explorer-networks', JSON.stringify({
-          networks,
-          timestamp: Date.now(),
-        }));
-        console.log(`[NetworkCache] Saved ${networks.length} networks to cache`);
-      } catch (err) {
-        console.error('[NetworkCache] Failed to save networks:', err);
-      }
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem('grpc-explorer-networks', JSON.stringify({
+            networks,
+            timestamp: Date.now(),
+          }));
+        } catch (err) {
+          console.error('[NetworkCache] Failed to save networks:', err);
+        }
+      }, 1000);
     }
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, [networks]);
 
   // Listen for background-loaded descriptors and update network state
@@ -341,7 +346,6 @@ export default function GrpcExplorerApp() {
             : autoCollapseEnabled ? { ...n, expanded: false } : n
         ));
 
-        console.log(`[NetworkCache] Added ${actualEndpoint} as fallback for chain ${cachedChainId}`);
         return;
       }
 
@@ -459,7 +463,6 @@ export default function GrpcExplorerApp() {
               : autoCollapseEnabled ? { ...n, expanded: false } : n
         ).filter((n): n is GrpcNetwork => n !== null));
 
-        console.log(`[NetworkCache] Added ${actualEndpoint} as fallback for chain ${fetchedChainId}`);
         return;
       }
 
@@ -504,11 +507,11 @@ export default function GrpcExplorerApp() {
     );
 
     if (servicesNeedingDescriptors.length === 0) {
-      console.log(`[DescriptorLoader] No services need descriptors for ${network.name}`);
+      debug.log(`[DescriptorLoader] No services need descriptors for ${network.name}`);
       return;
     }
 
-    console.log(`[DescriptorLoader] Enqueuing ${servicesNeedingDescriptors.length} services for ${network.name}`);
+    debug.log(`[DescriptorLoader] Enqueuing ${servicesNeedingDescriptors.length} services for ${network.name}`);
 
     descriptorLoader.enqueueBatch(
       servicesNeedingDescriptors.map((service) => ({
@@ -678,14 +681,14 @@ export default function GrpcExplorerApp() {
           if (loadedMethod?.requestTypeDefinition?.fields && loadedMethod.requestTypeDefinition.fields.length > 0) {
             enrichedMethod = loadedMethod;
             enrichedService = loadedService;
-            console.log(`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`);
+            debug.log(`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`);
           }
         }
       }
 
       // If still not loaded, fetch on-demand with priority over background loading
       if (enrichedMethod === method) {
-        console.log(`[UI] Loading field definitions for ${service.fullName}...`);
+        debug.log(`[UI] Loading field definitions for ${service.fullName}...`);
 
         // Pause background loading to prioritize user-initiated fetch
         descriptorLoader.pause();
@@ -697,7 +700,7 @@ export default function GrpcExplorerApp() {
         try {
           for (let attempt = 0; attempt < maxAttempts; attempt++) {
             if (attempt > 0) {
-              console.log(`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`);
+              debug.log(`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`);
               await new Promise(r => setTimeout(r, retryDelays[attempt]));
             }
 
@@ -726,7 +729,7 @@ export default function GrpcExplorerApp() {
                 if (enrichedMethodData) {
                   enrichedMethod = enrichedMethodData;
                   enrichedService = data.service;
-                  console.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
+                  debug.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
                   descriptorLoader.markLoaded(network.id, service.fullName);
 
                   // Update the network state so other methods from this service also get enriched data
@@ -881,7 +884,6 @@ export default function GrpcExplorerApp() {
         endpointIndexRef.current.set(network.id, (currentIndex + 1) % selectedConfigs.length);
 
         debug.log(`[RoundRobin] Using endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
-        console.log(`[RoundRobin] Request to ${selectedEndpoint} (TLS: ${selectedTls})`);
       } else if (selectedConfigs.length === 1) {
         // Single endpoint selected: use it directly
         selectedEndpoint = selectedConfigs[0].address;
