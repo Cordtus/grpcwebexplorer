@@ -194,31 +194,6 @@ const MethodBlock = React.memo(function MethodBlock({
         }
       >
         <div className="space-y-4">
-          {/* Stream indicators */}
-          <div className="flex gap-2">
-            {instance.method.requestStreaming && (
-              <span className="method-type-stream">Client streaming</span>
-            )}
-            {instance.method.responseStreaming && (
-              <span className="method-type-stream">Server streaming</span>
-            )}
-            {!instance.method.requestStreaming && !instance.method.responseStreaming && (
-              <span className="badge-muted">Unary</span>
-            )}
-          </div>
-
-          {/* Request/Response types */}
-          <div className="space-y-2 p-3 bg-muted/50 rounded-lg text-muted-sm">
-            <div className="flex-between">
-              <span>Request:</span>
-              <code className="font-mono text-blue-600 dark:text-blue-400">{instance.method.requestType}</code>
-            </div>
-            <div className="flex-between">
-              <span>Response:</span>
-              <code className="font-mono text-green-600 dark:text-green-400">{instance.method.responseType}</code>
-            </div>
-          </div>
-
           {/* Parameter inputs - using ProtobufFormGenerator */}
           <div className="space-y-3">
             <h4 className="section-subheader">Parameters</h4>

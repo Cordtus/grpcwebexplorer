@@ -34,15 +34,6 @@
     --ring: 211 100% 50%;
 
     --radius: 0.375rem;
-
-    --glass-bg: rgba(255, 255, 255, 0.9);
-    --glass-border: rgba(203, 213, 225, 0.5);
-    --hover-bg: rgba(241, 245, 249, 0.8);
-    --shadow-color: rgba(0, 0, 0, 0.1);
-
-    --traffic-red: #ef4444;
-    --traffic-yellow: #f59e0b;
-    --traffic-green: #10b981;
   }
 
   /* Dark theme */
@@ -76,15 +67,6 @@
     --ring: 211 100% 50%;
 
     --radius: 0.375rem;
-
-    --glass-bg: rgba(20, 20, 20, 0.85);
-    --glass-border: rgba(38, 38, 38, 0.5);
-    --hover-bg: rgba(31, 31, 31, 0.8);
-    --shadow-color: rgba(0, 0, 0, 0.8);
-
-    --traffic-red: #ee4444;
-    --traffic-yellow: #eebb44;
-    --traffic-green: #44ee66;
   }
 
   /* 8-bit theme - authentic VGA/EGA palette with pure, saturated colors */
@@ -124,15 +106,6 @@
     --ring: 180 100% 50%;
 
     --radius: 0rem; /* Sharp corners - no rounding for authentic 8-bit */
-
-    --glass-bg: rgba(0, 0, 68, 0.95);
-    --glass-border: rgba(0, 255, 255, 0.5);
-    --hover-bg: rgba(0, 255, 255, 0.15);
-    --shadow-color: rgba(0, 255, 255, 0.5);
-
-    --traffic-red: #ff0000;
-    --traffic-yellow: #ffff00;
-    --traffic-green: #00ff00;
   }
 }
 
@@ -140,13 +113,13 @@
   * {
     @apply border-border;
   }
-  
+
   html {
     @apply h-full;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   body {
     @apply bg-background text-foreground h-full overflow-hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -155,125 +128,15 @@
 }
 
 @layer components {
-  /* Glass morphism effect */
-  .glass {
-    backdrop-filter: blur(8px) saturate(180%);
-    -webkit-backdrop-filter: blur(8px) saturate(180%);
-    background-color: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-  }
-  
-  /* Subtle glass effect for surfaces */
-  .glass-subtle {
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    background-color: rgba(37, 37, 37, 0.8);
-  }
-  
   /* Panel styling */
   .panel {
     @apply bg-card border-border;
   }
-  
-  /* macOS-style titlebar */
-  .titlebar {
-    @apply glass border-b border-border;
-    -webkit-app-region: drag;
-  }
-  
-  .titlebar * {
-    -webkit-app-region: no-drag;
-  }
-  
-  /* Traffic light buttons */
-  .traffic-lights {
-    @apply flex items-center gap-2;
-  }
-  
-  .traffic-light {
-    @apply w-3 h-3 rounded-full transition-all duration-200;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  }
-  
-  .traffic-light:hover {
-    transform: scale(1.1);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-                0 0 4px currentColor;
-  }
-  
-  .traffic-light:active {
-    transform: scale(0.95);
-  }
-  
-  .traffic-light.red {
-    @apply bg-[var(--traffic-red)];
-  }
-  
-  .traffic-light.yellow {
-    @apply bg-[var(--traffic-yellow)];
-  }
-  
-  .traffic-light.green {
-    @apply bg-[var(--traffic-green)];
-  }
-  
-  /* Tab styling */
-  .tab {
-    @apply relative px-3 py-1.5 text-sm transition-all duration-200;
-    @apply hover:bg-secondary/50 cursor-pointer select-none;
-  }
-  
-  .tab.active {
-    @apply bg-secondary;
-  }
-  
-  .tab.active::after {
-    content: '';
-    @apply absolute bottom-0 left-0 right-0 h-[2px] bg-primary;
-  }
-  
+
   /* Button variants */
   .btn-primary {
     @apply bg-primary text-primary-foreground hover:bg-primary/90;
     @apply transition-colors duration-200;
-  }
-  
-  .btn-ghost {
-    @apply hover:bg-secondary/50 transition-colors duration-200;
-  }
-  
-  /* Input styling */
-  .input-dark {
-    @apply bg-input border-border focus:border-primary;
-    @apply transition-colors duration-200;
-  }
-  
-  /* Tree view styling */
-  .tree-item {
-    @apply flex items-center gap-2 px-2 py-1 rounded cursor-pointer;
-    @apply hover:bg-secondary/50 transition-colors duration-150;
-  }
-  
-  .tree-item.selected {
-    @apply bg-primary/20 text-primary;
-  }
-  
-  /* Code/JSON viewer */
-  .code-viewer {
-    @apply bg-background/50 border border-border rounded-md p-4;
-    @apply font-mono text-sm;
-  }
-  
-  /* Loading spinner */
-  .spinner {
-    @apply animate-spin text-primary;
-  }
-  
-  /* Divider */
-  .divider {
-    @apply h-px bg-border;
   }
 
   /* Flex utilities for common patterns */
@@ -312,10 +175,6 @@
     @apply p-1.5 hover:bg-secondary/50 rounded transition-colors;
   }
 
-  .icon-btn-sm {
-    @apply p-1 hover:bg-secondary/50 rounded transition-colors;
-  }
-
   /* Form input base */
   .form-input {
     @apply w-full px-3 py-2 rounded text-sm bg-input border border-border;
@@ -334,22 +193,6 @@
   /* Badge variants */
   .badge {
     @apply text-xs px-2 py-0.5 rounded-full;
-  }
-
-  .badge-success {
-    @apply badge bg-green-500/20 text-green-600 dark:text-green-400;
-  }
-
-  .badge-warning {
-    @apply badge bg-amber-500/20 text-amber-600 dark:text-amber-400;
-  }
-
-  .badge-error {
-    @apply badge bg-red-500/20 text-red-600 dark:text-red-400;
-  }
-
-  .badge-info {
-    @apply badge bg-blue-500/20 text-blue-600 dark:text-blue-400;
   }
 
   .badge-muted {
@@ -372,16 +215,7 @@
     @apply border border-border rounded-lg p-3;
   }
 
-  .panel-header {
-    @apply flex items-center justify-between p-4 border-b border-border;
-  }
-
   /* Method type badges */
-  .method-type-unary {
-    @apply text-xs px-2 py-0.5 rounded-full;
-    @apply bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/30;
-  }
-
   .method-type-stream {
     @apply text-xs px-2 py-0.5 rounded-full;
     @apply bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30;
@@ -389,61 +223,6 @@
 }
 
 @layer utilities {
-  /* macOS-style scrollbar */
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    transition: background-color 0.2s;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-  
-  /* Subtle shadow for depth */
-  .shadow-panel {
-    box-shadow: 0 2px 8px var(--shadow-color);
-  }
-  
-  /* Glow effect for active elements */
-  .glow-primary {
-    box-shadow: 0 0 10px rgba(10, 132, 255, 0.3);
-  }
-  
-  /* Smooth transitions */
-  .transition-smooth {
-    @apply transition-all duration-200 ease-in-out;
-  }
-  
-  /* Prevent text selection in UI elements */
-  .no-select {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    user-select: none;
-  }
-  
-  /* Draggable areas */
-  .draggable {
-    -webkit-app-region: drag;
-  }
-
-  .no-drag {
-    -webkit-app-region: no-drag;
-  }
-
   /* Marquee scrolling text on hover */
   .marquee-container {
     @apply overflow-hidden;
@@ -464,33 +243,14 @@
 }
 
 /* Animation keyframes */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-100%);
-  }
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
 }
 
 /* Apply animations to dialogs and popovers */
@@ -501,6 +261,7 @@
 [data-state="closed"] {
   animation: fadeIn 200ms ease-out reverse;
 }
+
 /* Code snippet scrollbar with theme-matching colors */
 .code-snippet-scroll::-webkit-scrollbar {
   width: 8px;
@@ -513,13 +274,13 @@
 }
 
 .code-snippet-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(96, 165, 250, 0.5); /* blue-400 with transparency */
+  background-color: rgba(96, 165, 250, 0.5);
   border-radius: 4px;
   transition: background-color 0.2s;
 }
 
 .code-snippet-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(96, 165, 250, 0.7); /* blue-400 more opaque on hover */
+  background-color: rgba(96, 165, 250, 0.7);
 }
 
 .code-snippet-scroll::-webkit-scrollbar-corner {
