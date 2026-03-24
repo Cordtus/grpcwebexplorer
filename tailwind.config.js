@@ -11,16 +11,6 @@ export default {
   theme: {
   	extend: {
   		colors: {
-  			'dark-bg': '#000000',
-  			'dark-surface': '#141414',
-  			'dark-border': '#262626',
-  			'dark-highlight': '#1f1f1f',
-  			'blue-accent': '#0a84ff',
-  			'blue-accent-hover': '#0074e0',
-  			'text-primary': '#fafafa',
-  			'text-secondary': '#999999',
-  			'error-red': '#ee4444',
-  			'warning-yellow': '#eebb44',
   			'success-green': '#44ee66',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -54,14 +44,7 @@ export default {
   			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			chart: {
-  				'1': 'hsl(var(--chart-1))',
-  				'2': 'hsl(var(--chart-2))',
-  				'3': 'hsl(var(--chart-3))',
-  				'4': 'hsl(var(--chart-4))',
-  				'5': 'hsl(var(--chart-5))'
-  			}
+  			ring: 'hsl(var(--ring))'
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
