@@ -370,11 +370,15 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		[endpointConfigs]
 	);
 
+	/** Normalize BSR module: strip buf.build prefix and protocol */
+	const normalizeBsrModule = (input: string): string =>
+		input.trim().replace(/^https?:\/\//, '').replace(/^buf\.build\//, '');
+
 	/** Handle BSR module add */
 	const handleBsrAdd = () => {
 		if (!bsrModule.trim()) return;
 		const bsrSource: BufBsrSource = {
-			module: bsrModule.trim(),
+			module: normalizeBsrModule(bsrModule),
 			...(bsrVersion && bsrVersion !== 'main' ? { version: bsrVersion } : {}),
 			...(bsrAuthToken ? { authToken: bsrAuthToken } : {}),
 		};

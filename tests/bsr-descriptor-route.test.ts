@@ -49,6 +49,34 @@ describe('BSR descriptor route handler', () => {
 		expect(res.status).toBe(400);
 	});
 
+	it('normalizes buf.build/ prefix from module', async () => {
+		mockFetch.mockResolvedValueOnce(new Response(GREETER_FDS_BYTES, {
+			status: 200,
+			headers: { 'Content-Type': 'application/x-protobuf' },
+		}));
+
+		const res = await POST(makeRequest({ module: 'buf.build/test/greeter' }));
+		expect(res.status).toBe(200);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'https://buf.build/test/greeter/descriptor/main?imports=true',
+			expect.any(Object)
+		);
+	});
+
+	it('normalizes full https://buf.build/ URL from module', async () => {
+		mockFetch.mockResolvedValueOnce(new Response(GREETER_FDS_BYTES, {
+			status: 200,
+			headers: { 'Content-Type': 'application/x-protobuf' },
+		}));
+
+		const res = await POST(makeRequest({ module: 'https://buf.build/test/greeter' }));
+		expect(res.status).toBe(200);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'https://buf.build/test/greeter/descriptor/main?imports=true',
+			expect.any(Object)
+		);
+	});
+
 	it('returns 404 when BSR returns 404', async () => {
 		mockFetch.mockResolvedValueOnce(new Response('', { status: 404, statusText: 'Not Found' }));
 
