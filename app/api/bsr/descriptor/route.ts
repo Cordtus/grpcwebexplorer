@@ -14,8 +14,13 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'Module is required' }, { status: 400 });
 		}
 
+		// Normalize: strip buf.build prefix and protocol if present
+		const normalized = module
+			.replace(/^https?:\/\//, '')
+			.replace(/^buf\.build\//, '');
+
 		// Validate module format: "owner/repository"
-		const parts = module.split('/');
+		const parts = normalized.split('/');
 		if (parts.length !== 2 || !parts[0] || !parts[1]) {
 			return NextResponse.json(
 				{ error: 'Invalid module format. Expected "owner/repository".' },

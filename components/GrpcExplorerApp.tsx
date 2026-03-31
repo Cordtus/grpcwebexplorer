@@ -1,13 +1,11 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronUp, Plus, Network, Play, X, Loader2, Copy, Check, ChevronLeft, ChevronRight, Pin, PinOff } from 'lucide-react';
+import { ChevronDown, Plus, Network, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ExpandableBlock } from './ExpandableBlock';
 import NetworkBlock from './NetworkBlock';
 import MethodBlock from './MethodBlock';
-import MethodDescriptor from './MethodDescriptor';
-import ResultsPanel from './ResultsPanel';
+import MethodDetailPanel, { MethodDetailPanelEmpty } from './MethodDetailPanel';
 import AddNetworkDialog from './AddNetworkDialog';
 import MenuBar from './MenuBar';
 import HelpDialog from './HelpDialog';
@@ -41,7 +39,6 @@ export default function GrpcExplorerApp() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [descriptorSize, setDescriptorSize] = useState<'expanded' | 'small' | 'minimized'>('expanded');
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
@@ -1052,7 +1049,7 @@ export default function GrpcExplorerApp() {
         />
       )}
 
-      {/* Right Column - Menu, Descriptor, and Center/Right Panels */}
+      {/* Right Column - Menu + Method Instances / Detail Panel */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         {/* Menu Bar */}
         <MenuBar
@@ -1060,165 +1057,94 @@ export default function GrpcExplorerApp() {
           onShowSettings={() => setShowSettings(true)}
         />
 
-        {/* Method Descriptor - Three size states */}
-        {descriptorSize !== 'minimized' && (
-          <div className="border-b border-border bg-card">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-              <h3 className="text-sm font-semibold text-foreground">
-                Method Descriptor
-              </h3>
-              <div className="flex items-center gap-1">
-                {descriptorSize === 'expanded' && (
-                  <button
-                    onClick={() => setDescriptorSize('small')}
-                    className="p-1 hover:bg-secondary/50 rounded transition-colors"
-                    title="Make descriptor smaller"
-                  >
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                )}
-                {descriptorSize === 'small' && (
-                  <>
-                    <button
-                      onClick={() => setDescriptorSize('expanded')}
-                      className="p-1 hover:bg-secondary/50 rounded transition-colors"
-                      title="Expand descriptor"
-                    >
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => setDescriptorSize('minimized')}
-                      className="p-1 hover:bg-secondary/50 rounded transition-colors"
-                      title="Minimize descriptor"
-                    >
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className={cn(
-              "overflow-y-auto",
-              descriptorSize === 'expanded' ? 'max-h-96' : 'max-h-48'
-            )}>
-              {selectedMethod ? (() => {
-                const network = networks.find(n => n.id === selectedMethod.networkId);
-                return (
-                  <MethodDescriptor
-                    method={selectedMethod.method}
-                    service={selectedMethod.service}
-                    color={selectedMethod.color}
-                    params={selectedMethod.params || {}}
-                    {...(network?.endpoint && { endpoint: network.endpoint })}
-                    {...(network?.tlsEnabled !== undefined && { tlsEnabled: network.tlsEnabled })}
-                    mode={network?.mode}
-                  />
-                );
-              })() : (
-                <div className={cn(
-                  "flex items-center justify-center text-muted-foreground",
-                  descriptorSize === 'expanded' ? 'h-64' : 'h-32'
-                )}>
-                  <div className="text-center">
-                    <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Select a method to view its descriptor</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Minimized bar when panel is minimized */}
-        {descriptorSize === 'minimized' && (
-          <div className="border-b border-border bg-card">
-            <button
-              onClick={() => setDescriptorSize('small')}
-              className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-secondary/50 transition-colors"
-              title="Expand descriptor panel"
-            >
-              <span className="text-xs text-muted-foreground">
-                {selectedMethod ? `${selectedMethod.service.name}.${selectedMethod.method.name}` : 'Method Descriptor'}
-              </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </div>
-        )}
-
-        {/* Center and Right Panels */}
+        {/* Method Instances (left) + Detail Panel (right) */}
         <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            {/* Center Panel - Method Instances */}
-            <ResizablePanel defaultSize={33} minSize={25} id="methods-panel" order={1} collapsible={false}>
+            {/* Left: Method Instances */}
+            <ResizablePanel defaultSize={33} minSize={20} id="methods-panel" order={1} collapsible={false}>
               <div className="h-full border-r border-border bg-background overflow-y-auto">
-          <div className="sticky top-0 z-10 bg-background border-b border-border">
-            <div className="flex items-center justify-between p-4">
-              <h2 className="text-sm font-semibold text-foreground">Method Instances</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {methodInstances.length} active
-                </span>
-                {methodInstances.length > 0 && (
-                  <button
-                    onClick={handleClearAllMethods}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+                <div className="sticky top-0 z-10 bg-background border-b border-border">
+                  <div className="flex items-center justify-between p-4">
+                    <h2 className="text-sm font-semibold text-foreground">Method Instances</h2>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {methodInstances.length} active
+                      </span>
+                      {methodInstances.length > 0 && (
+                        <button
+                          onClick={handleClearAllMethods}
+                          className="text-xs text-destructive hover:underline"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-          <div className="p-4 space-y-3">
-            {methodInstances.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No methods selected</p>
-                <p className="text-xs mt-1">Select methods from the networks panel</p>
-              </div>
-            ) : (
-              methodInstances.map(instance => {
-                const network = networks.find(n => n.id === instance.networkId);
-                return (
-                  <MethodBlock
-                    key={instance.id}
-                    instance={instance}
-                    isSelected={selectedMethod?.id === instance.id}
-                    onToggle={() => toggleMethodExpanded(instance.id)}
-                    onRemove={() => handleRemoveMethodInstance(instance.id)}
-                    onSelect={() => setSelectedMethodId(instance.id)}
-                    onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
-                    onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
-                    onExecute={() => handleExecuteMethod(instance)}
-                    onTogglePin={() => toggleMethodPin(instance.id)}
-                    isExecuting={isExecuting && selectedMethod?.id === instance.id}
-                    mode={network?.mode}
-                    networkAuthConfig={network?.authConfig}
-                    onUpdateAuth={(auth) => {
-                      setMethodInstances(prev => prev.map(m =>
-                        m.id === instance.id ? { ...m, authConfig: auth } : m
-                      ));
-                    }}
-                  />
-                );
-              })
-            )}
-          </div>
+                <div className="p-4 space-y-3">
+                  {methodInstances.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">No methods selected</p>
+                      <p className="text-xs mt-1">Select methods from the networks panel</p>
+                    </div>
+                  ) : (
+                    methodInstances.map(instance => {
+                      const network = networks.find(n => n.id === instance.networkId);
+                      return (
+                        <MethodBlock
+                          key={instance.id}
+                          instance={instance}
+                          isSelected={selectedMethod?.id === instance.id}
+                          onToggle={() => toggleMethodExpanded(instance.id)}
+                          onRemove={() => handleRemoveMethodInstance(instance.id)}
+                          onSelect={() => setSelectedMethodId(instance.id)}
+                          onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
+                          onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
+                          onExecute={() => handleExecuteMethod(instance)}
+                          onTogglePin={() => toggleMethodPin(instance.id)}
+                          isExecuting={isExecuting && selectedMethod?.id === instance.id}
+                          mode={network?.mode}
+                          networkAuthConfig={network?.authConfig}
+                          onUpdateAuth={(auth) => {
+                            setMethodInstances(prev => prev.map(m =>
+                              m.id === instance.id ? { ...m, authConfig: auth } : m
+                            ));
+                          }}
+                        />
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </ResizablePanel>
 
             <ResizableHandle withHandle className="w-2 bg-border hover:bg-primary transition-colors" />
 
-            {/* Right Panel - Results */}
-            <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="results-panel" order={2} collapsible={false}>
-              <div className="h-full w-full bg-card flex flex-col min-w-0 overflow-hidden">
-                <ResultsPanel
-                  result={currentResult || null}
-                  isExecuting={isExecuting}
-                  selectedMethod={selectedMethod}
-                />
-              </div>
+            {/* Right: Proto / Code / Results (tabbed) */}
+            <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="detail-panel" order={2} collapsible={false}>
+              {selectedMethod ? (() => {
+                const network = networks.find(n => n.id === selectedMethod.networkId);
+                return (
+                  <MethodDetailPanel
+                    key={selectedMethod.id}
+                    method={selectedMethod.method}
+                    service={selectedMethod.service}
+                    color={selectedMethod.color}
+                    params={selectedMethod.params || {}}
+                    metadata={selectedMethod.metadata || {}}
+                    authConfig={selectedMethod.authConfig}
+                    result={currentResult || null}
+                    isExecuting={isExecuting}
+                    {...(network?.endpoint ? { endpoint: network.endpoint } : {})}
+                    {...(network?.tlsEnabled !== undefined ? { tlsEnabled: network.tlsEnabled } : {})}
+                    mode={network?.mode}
+                  />
+                );
+              })() : (
+                <MethodDetailPanelEmpty />
+              )}
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
