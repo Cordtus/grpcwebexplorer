@@ -6,8 +6,8 @@ gRPC servive over
 [server reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto).
 Schemas can also be imported from the [Buf Schema Registry](https://buf.build/) if reflection service is not exposed.
 
-Requests are proxied through server-side API routes (browsers can't make native
-gRPC calls), so the app needs a Node.js backend -- it's not purely client-side.
+Requests proxy through Next.js API routes using `@grpc/grpc-js`. Deploys to
+Vercel as-is or self-host via Docker / Node.js.
 
 ## Features
 
