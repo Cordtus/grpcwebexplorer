@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
+import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for comprehensive testing
@@ -97,9 +98,9 @@ export async function POST(req: Request) {
               executionTime,
             });
 
-          } catch (err: any) {
+          } catch (err: unknown) {
             const executionTime = Date.now() - methodStartTime;
-            const errorMsg = err.message || String(err);
+            const errorMsg = errorMessage(err);
 
             let status: TestResult['status'] = 'error';
 
@@ -193,16 +194,16 @@ export async function POST(req: Request) {
       groupedErrors,
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     const totalTime = Date.now() - startTime;
 
     console.error('[TestCompatibility] Fatal error:', err);
 
     return NextResponse.json({
       success: false,
-      error: err.message || 'Failed to test compatibility',
+      error: errorMessage(err),
       totalTime,
-      details: err.stack,
+      details: err instanceof Error ? err.stack : undefined,
     }, { status: 500 });
   }
 }

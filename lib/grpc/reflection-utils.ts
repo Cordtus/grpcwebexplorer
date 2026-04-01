@@ -2,6 +2,7 @@
 // Utility functions for gRPC reflection matching the old API from utils/grpcReflection.ts
 
 import { ReflectionClient } from './reflection-client';
+import { errorMessage } from '@/lib/utils';
 
 // Re-export types for convenience
 export type {
@@ -135,9 +136,9 @@ export async function fetchServicesWithCosmosOptimization(
     console.log(`[Reflection] Got ${standardServices.length} services via standard reflection`);
     return standardServices;
 
-  } catch (err: any) {
-    console.error('[Reflection] Error in fetchServicesWithCosmosOptimization:', err.message);
-    console.error('[Reflection] Stack trace:', err.stack);
+  } catch (err: unknown) {
+    console.error('[Reflection] Error in fetchServicesWithCosmosOptimization:', errorMessage(err));
+    if (err instanceof Error) console.error('[Reflection] Stack trace:', err.stack);
     throw err;
   } finally {
     client.close();

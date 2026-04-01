@@ -1,3 +1,5 @@
+import { errorMessage } from '@/lib/utils';
+
 type DescriptorJob = {
   networkId: string;
   endpoint: string;
@@ -155,8 +157,8 @@ class DescriptorLoaderQueue {
           console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);
         }
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
         // Re-add to queue if aborted (will be processed when resumed)
         if (!this.loaded.has(jobKey)) {
           this.queue.unshift(this.currentJob);
@@ -165,7 +167,7 @@ class DescriptorLoaderQueue {
         // Re-queue with retry on error (network issues, rate limiting)
         const retryCount = (this.currentJob.retryCount || 0) + 1;
         if (retryCount <= this.maxRetries) {
-          console.warn(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}: ${err.message} (retry ${retryCount}/${this.maxRetries})`);
+          console.warn(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}: ${errorMessage(err)} (retry ${retryCount}/${this.maxRetries})`);
           this.queue.push({ ...this.currentJob, retryCount, priority: 'normal' });
         } else {
           console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);

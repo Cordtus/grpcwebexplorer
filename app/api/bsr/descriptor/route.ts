@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { DescriptorParser } from '@/lib/grpc/descriptor-parser';
+import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -84,10 +85,10 @@ export async function POST(req: Request) {
 			version: ref,
 			serviceCount: services.length,
 		});
-	} catch (err: any) {
+	} catch (err: unknown) {
 		console.error('[BSR] Error:', err);
 		return NextResponse.json(
-			{ error: err.message || 'Failed to fetch BSR descriptor' },
+			{ error: errorMessage(err) },
 			{ status: 500 }
 		);
 	}

@@ -209,20 +209,6 @@ export function getServicesCacheKey(endpoint: string, tlsEnabled: boolean): stri
 }
 
 /**
- * Generate cache key for endpoint configuration
- */
-export function getEndpointCacheKey(endpoint: string): string {
-  return `endpoint:${endpoint}`;
-}
-
-/**
- * Generate cache key for BSR module descriptor
- */
-export function getBsrCacheKey(module: string, version: string): string {
-  return `bsr:${module}:${version}`;
-}
-
-/**
  * Cached chain info for display purposes
  */
 export interface CachedChainInfo {

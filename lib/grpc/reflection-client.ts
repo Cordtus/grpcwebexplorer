@@ -5,6 +5,7 @@ import * as grpc from '@grpc/grpc-js';
 import * as protobuf from 'protobufjs';
 import descriptorJson from 'protobufjs/google/protobuf/descriptor.json';
 import { DescriptorParser } from './descriptor-parser';
+import { errorMessage } from '@/lib/utils';
 
 // Inline reflection.proto definitions for both v1 and v1alpha
 const REFLECTION_PROTO_V1_SOURCE = `
@@ -273,8 +274,8 @@ export class ReflectionClient {
       this.reflectionProtoRoot = reflectionRootV1;
       console.log('[ReflectionClient] Using grpc.reflection.v1');
       return;
-    } catch (v1Error: any) {
-      console.log(`[ReflectionClient] grpc.reflection.v1 failed: ${v1Error.message}, trying v1alpha...`);
+    } catch (v1Error: unknown) {
+      console.log(`[ReflectionClient] grpc.reflection.v1 failed: ${errorMessage(v1Error)}, trying v1alpha...`);
       this.reflectionStub = null;
     }
 
@@ -309,8 +310,8 @@ export class ReflectionClient {
       this.reflectionVersion = 'v1alpha';
       this.reflectionProtoRoot = reflectionRootV1Alpha;
       console.log('[ReflectionClient] Using grpc.reflection.v1alpha');
-    } catch (v1alphaError: any) {
-      throw new Error(`Failed to initialize reflection stub with both v1 and v1alpha: ${v1alphaError.message}`);
+    } catch (v1alphaError: unknown) {
+      throw new Error(`Failed to initialize reflection stub with both v1 and v1alpha: ${errorMessage(v1alphaError)}`);
     }
   }
 
@@ -386,8 +387,8 @@ export class ReflectionClient {
           alive: true,
         });
         added++;
-      } catch (err: any) {
-        console.warn(`[ReflectionClient] Failed to create stub for ${ep.address}: ${err.message}`);
+      } catch (err: unknown) {
+        console.warn(`[ReflectionClient] Failed to create stub for ${ep.address}: ${errorMessage(err)}`);
       }
     }
 
@@ -703,8 +704,8 @@ export class ReflectionClient {
 
       try {
         return await this.loadServiceDescriptorViaStub(next.stub, symbol, poolTimeoutMs);
-      } catch (err: any) {
-        console.warn(`[ReflectionClient] Pool stub ${this.stubPool[next.index].endpoint} failed for ${symbol}: ${err.message}`);
+      } catch (err: unknown) {
+        console.warn(`[ReflectionClient] Pool stub ${this.stubPool[next.index].endpoint} failed for ${symbol}: ${errorMessage(err)}`);
         this.removeStubFromPool(next.index);
       }
     }
@@ -854,9 +855,9 @@ export class ReflectionClient {
         const result = await this.decodeAnyFields(json, depth + 1);
         result['@type'] = typeName;
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Graceful degradation: leave the Any field as-is
-        console.warn(`[ReflectionClient] Failed to decode Any field (${typeName}): ${err.message}`);
+        console.warn(`[ReflectionClient] Failed to decode Any field (${typeName}): ${errorMessage(err)}`);
         return obj;
       }
     }
@@ -907,8 +908,8 @@ export class ReflectionClient {
       // Decode Any fields first, then base64 bytes fields
       const anyDecoded = await this.decodeAnyFields(json);
       return this.decodeBase64BytesFields(anyDecoded);
-    } catch (decodeErr: any) {
-      const errorMsg = decodeErr.message || String(decodeErr);
+    } catch (decodeErr: unknown) {
+      const errorMsg = errorMessage(decodeErr);
 
       // Check if it's a missing type error
       if (errorMsg.includes('no such Type or Enum')) {
@@ -1101,9 +1102,9 @@ export class ReflectionClient {
                 // Fall back to just base64 decoding if Any decoding fails
                 resolve(this.decodeBase64BytesFields(json));
               });
-            } catch (decodeErr: any) {
+            } catch (decodeErr: unknown) {
               // Check if this is a missing type error
-              const errorMsg = decodeErr.message || String(decodeErr);
+              const errorMsg = errorMessage(decodeErr);
               if (errorMsg.includes('no such Type or Enum')) {
                 console.warn(`[ReflectionClient] Missing type detected during decode, attempting recursive dependency loading...`);
                 // Recursively load all missing types with retry limit
@@ -1219,8 +1220,8 @@ export class ReflectionClient {
 
       console.log(`[ReflectionClient] Found ${services.length} query services via v2alpha1`);
       return services;
-    } catch (err: any) {
-      console.log(`[ReflectionClient] v2alpha1 query services not available: ${err.message}`);
+    } catch (err: unknown) {
+      console.log(`[ReflectionClient] v2alpha1 query services not available: ${errorMessage(err)}`);
       return [];
     }
   }
@@ -1291,8 +1292,8 @@ export class ReflectionClient {
         fullName: 'cosmos.tx.v1beta1.Transactions',
         methods,
       };
-    } catch (err: any) {
-      console.log(`[ReflectionClient] v2alpha1 tx descriptor not available: ${err.message}`);
+    } catch (err: unknown) {
+      console.log(`[ReflectionClient] v2alpha1 tx descriptor not available: ${errorMessage(err)}`);
       return null;
     }
   }

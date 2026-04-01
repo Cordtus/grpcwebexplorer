@@ -1,6 +1,8 @@
 // lib/utils/endpoint-manager.ts
 // Endpoint management with failure tracking, smart timeouts, and prioritization
 
+import { errorMessage } from '@/lib/utils';
+
 interface EndpointConfig {
   address: string;
   tls: boolean;
@@ -272,9 +274,10 @@ export async function fetchWithConcurrentEndpoints(
           responseTime,
           tls: ep.tls,
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         const responseTime = Date.now() - startTime;
-        const isTimeout = err.message?.includes('timeout') || err.message?.includes('Timeout');
+        const msg = errorMessage(err);
+        const isTimeout = msg.includes('timeout') || msg.includes('Timeout');
 
         endpointManager.recordFailure(ep.address, isTimeout);
 

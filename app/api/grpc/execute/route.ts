@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
+import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
@@ -75,10 +76,11 @@ export async function POST(req: Request) {
       } finally {
         client.close();
       }
-    } catch (err: any) {
-      const isTLSError = err.message?.includes('wrong version number') ||
-                        err.message?.includes('SSL routines') ||
-                        err.message?.includes('EPROTO');
+    } catch (err: unknown) {
+      const msg = errorMessage(err);
+      const isTLSError = msg.includes('wrong version number') ||
+                        msg.includes('SSL routines') ||
+                        msg.includes('EPROTO');
 
       if (usedTls && isTLSError) {
         console.log(`[Execute] TLS error detected, retrying ${endpointWithPort} without TLS...`);
@@ -117,16 +119,16 @@ export async function POST(req: Request) {
       tls: usedTls,
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     const executionTime = Date.now() - startTime;
 
     console.error('[Execute] Error:', err);
 
     return NextResponse.json({
       success: false,
-      error: err.message || 'Failed to invoke method',
+      error: errorMessage(err),
       executionTime,
-      details: err.stack,
+      details: err instanceof Error ? err.stack : undefined,
     }, { status: 500 });
   }
 }

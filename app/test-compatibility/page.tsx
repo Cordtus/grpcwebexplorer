@@ -58,8 +58,8 @@ export default function TestCompatibilityPage() {
       } else {
         setError(data.error);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to run tests');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to run tests');
     } finally {
       setTesting(false);
     }
