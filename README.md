@@ -1,10 +1,10 @@
 # gRPC Web Explorer
 
 A web UI for gRPC servers, in the style of [Postman](https://www.postman.com/)
-or [grpcui](https://github.com/fullstorydev/grpcui). Self-hosted, works with any
-gRPC server that supports
+or [grpcui](https://github.com/fullstorydev/grpcui). Easily self-hosted, and works with any
+gRPC servive over
 [server reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto).
-Schemas can also be imported from the [Buf Schema Registry](https://buf.build/).
+Schemas can also be imported from the [Buf Schema Registry](https://buf.build/) if reflection service is not exposed.
 
 Requests are proxied through server-side API routes (browsers can't make native
 gRPC calls), so the app needs a Node.js backend -- it's not purely client-side.
