@@ -1,47 +1,44 @@
 # gRPC Web Explorer
 
-`grpc-web-explorer` is a web-based tool for interacting with gRPC servers. It's
-like [Postman](https://www.postman.com/) or [grpcui](https://github.com/fullstorydev/grpcui),
-but runs as a self-hosted web application with built-in support for
-[Cosmos SDK](https://cosmos.network/) chains.
+A web UI for gRPC servers, in the style of [Postman](https://www.postman.com/)
+or [grpcui](https://github.com/fullstorydev/grpcui). Self-hosted, works with any
+gRPC server that supports
+[server reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto).
+Schemas can also be imported from the [Buf Schema Registry](https://buf.build/).
 
-The tool uses [server reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto)
-to discover services and methods, then dynamically generates input forms from protobuf
-schemas. You select a method, fill in the fields, hit execute, and see the response --
-no `.proto` files or code generation required.
-
-Because browsers can't speak gRPC natively (HTTP/2 with binary framing), the application
-proxies requests through Next.js API routes: your browser sends JSON, the server translates
-it to protobuf and forwards it over gRPC, then returns the response as JSON.
+Requests are proxied through server-side API routes (browsers can't make native
+gRPC calls), so the app needs a Node.js backend -- it's not purely client-side.
 
 ## Features
 
-- Connect to multiple gRPC endpoints simultaneously, with color-coded UI to keep them distinct
-- Auto-generated request forms from protobuf definitions -- supports nested messages, repeated
-  fields, enums, maps, and all scalar types
-- Hierarchical search across namespaces, services, and methods
-- Cosmos chain registry integration with 100+ chains available out of the box
-- Round-robin load distribution across multiple endpoints for the same chain
-- Client-side caching with configurable TTL (1hr to indefinite) -- no server-side state
-- Automatic base64 decoding of `bytes` fields in responses
-- Execution history with timing data (last 50 per method)
-- Both plaintext and TLS connections, with automatic TLS retry on SSL errors
-- Supports v1 and v1alpha reflection protocols with automatic version detection
-- Keyboard shortcuts for common operations
+- Server reflection (v1/v1alpha, auto-detected) and BSR schema import
+- Multiple simultaneous connections, color-coded
+- Request forms generated from protobuf definitions (nested messages, repeated
+  fields, enums, maps, all scalar types)
+- Auth: Bearer tokens, API keys, mTLS
+- Code export: grpcurl, curl/REST, TypeScript, Go, Python -- includes current
+  params, metadata, and auth
+- REST path mapping from `google.api.http` annotations
+- Round-robin endpoints, DNS validation, automatic blacklisting on failure,
+  TLS auto-retry
+- Search by namespace, service, or method
+- Client-side caching (configurable TTL, localStorage)
+- Execution history with timing
+- Keyboard shortcuts
+- Light/Dark/Retro themes
+- Optional Cosmos SDK chain registry integration (100+ chains)
 
 ## Installation
 
-### Docker (recommended)
+### Docker
 
 ```shell
 docker compose -f deployment/docker-compose.yml up -d
 ```
 
-The web UI is then available at `http://localhost:3000`.
-
 ### Yarn
 
-Requires Node.js 20+.
+Node.js 20+.
 
 ```shell
 yarn install
@@ -49,7 +46,7 @@ yarn build:prod
 yarn start:prod
 ```
 
-The server auto-detects an available port starting at 3000.
+Auto-detects an available port starting at 3000.
 
 ### Development
 
@@ -58,128 +55,137 @@ yarn install
 yarn dev
 ```
 
-Starts a dev server at `http://localhost:3000`.
-
-See [deployment/README.md](deployment/README.md) for systemd service configuration and
-other deployment options.
+See [deployment/README.md](deployment/README.md) for systemd and other deployment
+options.
 
 ## Usage
 
-When you open the application, you're presented with a three-panel interface: networks
-on the left, method forms in the center, and results on the right.
+### Connecting
 
-### Connecting to a Server
+`Cmd/Ctrl+N` opens the connection dialog. Two modes:
 
-Click **Add Network** (or `Cmd/Ctrl+N`) to open the connection dialog. You have three
-options:
+**Generic gRPC** (default) has two tabs:
 
-**Chain registry** -- type to search 100+ Cosmos chains. Select a chain and the tool
-fetches its gRPC endpoints automatically. With round-robin enabled, all endpoints are
-added for load distribution. Otherwise, pick a specific one.
+- *Endpoint* -- enter `host:port`, configure TLS and optional auth (Bearer,
+  API key, or mTLS). Discovers services via reflection.
 
-**Direct endpoint** -- paste any gRPC address (e.g. `grpc.myserver.com:443`). Toggle
-TLS as needed. Works with any gRPC server that supports reflection, not just Cosmos.
+- *buf.build* -- search BSR modules by org or browse popular ones. Pick a
+  module and version, provide an execution endpoint. Private modules supported
+  with auth token.
 
-**Recently used** -- re-connect to chains you've used before. Shows chain ID, endpoint,
-service count, and cache age.
+**Cosmos SDK** -- searchable chain registry. Select a chain to pull its gRPC
+endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry).
+Supports multi-endpoint selection for round-robin. Endpoints are DNS-validated
+before use.
 
-### Browsing Services
+Both modes show recently used connections.
 
-Once connected, the left panel shows all services discovered via reflection, organized
-by namespace. Use the search bar to filter:
+### Browsing
 
-- Type a namespace prefix (e.g. `cosmos.bank`) to see all services in that namespace
-- Type a service name to see all its methods
-- Type a method name to jump directly to matching methods
+Services are listed by namespace in the left panel. The search bar filters
+across namespaces, services, and methods.
 
-Click a method name to open it in the center panel.
+### Executing
 
-### Executing RPCs
+Select a method to get a generated form. Fill in fields, hit **Execute**
+(`Cmd/Ctrl+Enter`). The right panel shows:
 
-The center panel shows a dynamically generated form based on the method's protobuf
-request type. Fill in the fields and click **Execute** (or `Cmd/Ctrl+Enter`).
-
-The response appears in the right panel with:
-- Response data (JSON)
-- Protobuf schema for request and response types
-- Execution timing
-
-For methods that take no parameters (like many query methods), just hit execute with
-the empty form.
-
-### Caching
-
-Service discovery results are cached client-side in localStorage. Configure the TTL
-in Settings (gear icon): None, 1hr, 6hr, 24hr, 36hr, 72hr, or Never expire. The cache
-indicator in the menu bar shows current cache status and provides a quick clear button.
+- **Proto** -- request/response type definitions
+- **Code** -- client stubs in 5 languages (snippet or full scaffold)
+- **Results** -- response JSON, timing, status
 
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
 | `Cmd/Ctrl+N` | Add network |
-| `Cmd/Ctrl+W` | Close active method tab |
-| `Cmd/Ctrl+Enter` | Execute selected method |
-| `Cmd/Ctrl+Shift+?` | Show keyboard shortcut help |
+| `Cmd/Ctrl+W` | Close tab |
+| `Cmd/Ctrl+Enter` | Execute |
+| `Cmd/Ctrl+/` | Focus search |
+| `Cmd/Ctrl+Tab` | Next tab |
+| `Cmd/Ctrl+Shift+Tab` | Previous tab |
+| `Cmd/Ctrl+Shift+E` | Export params |
+| `Cmd/Ctrl+Shift+I` | Import params |
+| `Cmd/Ctrl+Shift+?` | Shortcut help |
 
 ### Settings
 
-Access via the gear icon in the menu bar:
+Gear icon in the menu bar:
 
-- **Theme**: Light, Dark, 8-bit Retro, or match system preference
-- **Request Timeout**: 1s -- 60s (default: 60s)
-- **Auto-Collapse**: Automatically collapse panels when selecting new methods
-- **Round-Robin**: Distribute requests across all available endpoints
-- **Cache Duration**: Configure or disable client-side caching
+- Theme (Light, Dark, 8-bit Retro, System)
+- Default mode (Generic / Cosmos)
+- Request timeout (1s--60s, default 10s)
+- Auto-collapse panels
+- Cache TTL (None / 1hr / 6hr / 24hr / 36hr / 72hr / Never)
 
-## Environment Variables
-
-| Variable | Description | Default |
-|---|---|---|
-| `PORT` | Server port (production) | `3000` |
-| `GRPC_ENDPOINTS` | Comma-separated default endpoints | None |
-| `NEXT_TELEMETRY_DISABLED` | Disable Next.js telemetry | `1` (prod build) |
-
-## How It Works
+## Architecture
 
 ```
-Browser (HTTP/JSON)  -->  Next.js API Routes  -->  gRPC Server (protobuf/HTTP2)
+Browser (JSON)  -->  Next.js API Routes  -->  gRPC Server (protobuf/HTTP2)
 ```
 
-The application exposes four API routes:
+### Routes
 
 | Route | Purpose |
 |---|---|
-| `POST /api/grpc/services` | Service discovery via server reflection |
-| `POST /api/grpc/execute` | Method invocation with JSON-to-protobuf marshalling |
-| `GET /api/chains` | Cosmos chain registry listing (1hr server cache) |
-| `GET /api/chains?name={chain}` | Endpoint data for a specific chain |
+| `POST /api/grpc/services` | Service discovery via reflection |
+| `POST /api/grpc/execute` | RPC invocation |
+| `POST /api/grpc/descriptor` | Lazy-load service field definitions |
+| `POST /api/grpc/validate-endpoints` | DNS validation |
+| `POST /api/grpc/test-compatibility` | Bulk method testing |
+| `GET /api/bsr/modules` | BSR module search |
+| `POST /api/bsr/descriptor` | Fetch FileDescriptorSet from BSR |
+| `GET /api/chains` | Cosmos chain registry |
 
-The reflection client supports both v1 and v1alpha protocols, detects the server's
-version automatically, and recursively resolves nested protobuf type dependencies
-(up to depth 50 for complex Cosmos SDK chains). For Cosmos chains, it also tries the
-v2alpha1 `ReflectionService` for faster query/tx enumeration before falling back to
-standard reflection.
+### Reflection
+
+Custom implementation on `@grpc/grpc-js` and `protobufjs`. Supports v1 and
+v1alpha with auto-detection. Recursively resolves nested type dependencies
+(depth limit 50). Cosmos chains also try v2alpha1 for faster service enumeration.
+
+### Endpoint Management
+
+Tracks per-endpoint health: success/failure counts, response times. Blacklists
+after 5 consecutive failures (recovers after 3 successes or 1 hour). Retries
+without TLS on SSL errors.
+
+## Environment Variables
+
+| Variable | Default |
+|---|---|
+| `PORT` | `3000` |
+| `NEXT_TELEMETRY_DISABLED` | `1` (prod build) |
+
+## Testing
+
+```shell
+yarn test              # Unit tests (vitest)
+yarn test:watch        # Watch mode
+yarn test:coverage     # Coverage
+
+# Integration (needs dev server running)
+yarn dev               # Terminal 1
+yarn test:grpc         # Terminal 2
+```
 
 ## Troubleshooting
 
-**Connection failures**: Verify the endpoint format is `hostname:port` with no protocol
-prefix. Ensure TLS setting matches the server (port 443 typically requires TLS). The
-application automatically retries without TLS on SSL errors.
+**Connection failures**: Endpoint format is `host:port`, no protocol prefix.
+Port 443 usually needs TLS on; other ports usually need it off. The UI warns
+on mismatches and retries without TLS on SSL errors.
 
-**No services found**: The gRPC server must have
-[reflection enabled](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md#known-implementations).
-Unlike grpcurl/grpcui, this tool does not support `.proto` files or protoset files as
-descriptor sources -- reflection is required.
+**No services**: Server must support reflection, or import from BSR. No
+`.proto` / protoset support.
 
-**Stale data**: Check cache TTL in Settings. Clear cache via the cache indicator in
-the menu bar or Settings > Cache > Clear Cache.
+**BSR issues**: Module path is `owner/repository`. Version defaults to `main`.
+Private modules need an auth token.
 
-**Chain registry rate limits**: The GitHub API allows 60 requests/hour. Chain data is
-cached for 1 hour. If the registry is unavailable, use direct endpoint entry.
+**Stale data**: Check cache TTL in settings, or clear via the menu bar cache
+indicator.
 
-**Network issues**: The browser must reach the Next.js server, and the server must have
-outbound access to gRPC endpoints (typically ports 9090, 443).
+**Unreachable endpoints**: DNS validation runs before connecting. If all
+endpoints fail, verify the server has outbound access to the gRPC ports
+(typically 9090, 443).
 
 ## License
 
