@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { fetchServicesViaReflection, fetchServicesWithCosmosOptimization, type GrpcService } from '@/lib/grpc/reflection-utils';
 import { endpointManager } from '@/lib/utils/endpoint-manager';
+import { errorMessage } from '@/lib/utils';
 import { fetchChainApis } from '@/lib/services/chainRegistry';
 
 export const runtime = 'nodejs';
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     let services: GrpcService[] = [];
     let successfulEndpoint: string | null = null;
     let tlsUsed: boolean = false;
-    let lastError: any = null;
+    let lastError: unknown = null;
 
     // Prioritize endpoints before trying
     const prioritizedEndpoints = endpointManager.prioritizeEndpoints(endpoints);
@@ -111,15 +112,16 @@ export async function POST(req: Request) {
 
         console.log(`[Services] Success with ${address} (${responseTime}ms, ${services.length} services total, ${emptyServices} empty)`);
         break; // Exit loop on success
-      } catch (err: any) {
+      } catch (err: unknown) {
         const responseTime = Date.now() - startTime;
-        const isTimeout = err.message?.includes('timeout') || err.message?.includes('Timeout');
-        const isTLSError = err.message?.includes('wrong version number') ||
-                          err.message?.includes('SSL routines') ||
-                          err.message?.includes('EPROTO');
+        const msg = errorMessage(err);
+        const isTimeout = msg.includes('timeout') || msg.includes('Timeout');
+        const isTLSError = msg.includes('wrong version number') ||
+                          msg.includes('SSL routines') ||
+                          msg.includes('EPROTO');
 
         lastError = err;
-        console.error(`[Services] Failed: ${address} (${responseTime}ms) - ${err.message}`);
+        console.error(`[Services] Failed: ${address} (${responseTime}ms) - ${msg}`);
 
         // If TLS failed with version mismatch, retry without TLS
         if (tlsEnabled && isTLSError) {
@@ -160,8 +162,8 @@ export async function POST(req: Request) {
 
             console.log(`[Services] Success with ${address} without TLS (${retryResponseTime}ms, ${services.length} services total, ${emptyServices} empty)`);
             break; // Exit loop on success
-          } catch (retryErr: any) {
-            console.error(`[Services] Retry without TLS also failed: ${retryErr.message}`);
+          } catch (retryErr: unknown) {
+            console.error(`[Services] Retry without TLS also failed: ${errorMessage(retryErr)}`);
             endpointManager.recordFailure(address, false);
             lastError = retryErr;
           }
@@ -180,7 +182,7 @@ export async function POST(req: Request) {
     if (!successfulEndpoint) {
       console.error('[Services] All endpoints failed');
       return NextResponse.json({
-        error: `Failed to fetch services: ${lastError?.message || 'All endpoints failed'}`,
+        error: `Failed to fetch services: ${lastError ? errorMessage(lastError) : 'All endpoints failed'}`,
         details: `Tried ${endpointsToTry.length} endpoint(s) sequentially`,
       }, { status: 500 });
     }
@@ -227,8 +229,8 @@ export async function POST(req: Request) {
         } finally {
           chainDescriptorClient.close();
         }
-      } catch (err: any) {
-        console.log(`[Services] GetChainDescriptor failed: ${err.message}, trying fallback...`);
+      } catch (err: unknown) {
+        console.log(`[Services] GetChainDescriptor failed: ${errorMessage(err)}, trying fallback...`);
 
         // Fallback to GetNodeInfo (v1beta1)
         try {
@@ -255,8 +257,8 @@ export async function POST(req: Request) {
           } finally {
             nodeInfoClient.close();
           }
-        } catch (fallbackErr: any) {
-          console.log(`[Services] Could not auto-detect chain-ID: ${fallbackErr.message}`);
+        } catch (fallbackErr: unknown) {
+          console.log(`[Services] Could not auto-detect chain-ID: ${errorMessage(fallbackErr)}`);
           // Not a critical error - continue without chain-ID
         }
       }
@@ -306,10 +308,10 @@ export async function POST(req: Request) {
         ...(methodsNeedingDescriptors > 0 ? [`${methodsNeedingDescriptors} methods need on-demand field definition loading.`] : []),
       ],
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Services] Error in services route:', err);
     return NextResponse.json({
-      error: err.message || 'Failed to fetch services',
+      error: errorMessage(err),
     }, { status: 500 });
   }
 }

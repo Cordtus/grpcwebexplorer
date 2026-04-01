@@ -2,6 +2,7 @@
 // List and browse BSR modules by organization + curated popular list
 
 import { NextResponse } from 'next/server';
+import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
 
 			console.log(`[BSR] Found ${modules.length} modules for ${owner}`);
 			return NextResponse.json({ modules });
-		} catch (err: any) {
+		} catch (err: unknown) {
 			console.error(`[BSR] Error listing modules for ${owner}:`, err);
 			return NextResponse.json({ modules: [] });
 		}

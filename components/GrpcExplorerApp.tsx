@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ChevronDown, Plus, Network, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, errorMessage } from '@/lib/utils';
 import NetworkBlock from './NetworkBlock';
 import MethodBlock from './MethodBlock';
 import MethodDetailPanel, { MethodDetailPanelEmpty } from './MethodDetailPanel';
@@ -304,10 +304,10 @@ export default function GrpcExplorerApp() {
             ? { ...n, services: data.services || [], loading: false }
             : n
         ));
-      } catch (err: any) {
+      } catch (err: unknown) {
         setNetworks(prev => prev.map(n =>
           n.id === id
-            ? { ...n, loading: false, error: err.message }
+            ? { ...n, loading: false, error: errorMessage(err) }
             : n
         ));
       }

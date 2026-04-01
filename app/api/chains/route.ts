@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchChainList, fetchChainData } from '@/lib/services/chainRegistry';
+import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -46,10 +47,10 @@ export async function GET(req: Request) {
         },
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in /api/chains:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch chain data' },
+      { error: errorMessage(error) },
       { status: 500 }
     );
   }
