@@ -5,14 +5,16 @@ import { fetchServicesViaReflection, fetchServicesWithCosmosOptimization, type G
 import { endpointManager } from '@/lib/utils/endpoint-manager';
 import { errorMessage } from '@/lib/utils';
 import { fetchChainApis } from '@/lib/services/chainRegistry';
+import { normalizeRequestTimeoutMs } from '@/lib/utils/client-cache';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { endpoint, tlsEnabled: tls, forceRefresh, mode }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; mode?: string } = body;
+    const { endpoint, tlsEnabled: tls, forceRefresh, mode, timeoutMs }: { endpoint: string; tlsEnabled: boolean; forceRefresh: boolean; mode?: string; timeoutMs?: unknown } = body;
     const isGenericMode = mode === 'generic';
+    const requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
 
     if (!endpoint) {
       return NextResponse.json({ error: 'Endpoint is required' }, { status: 400 });
@@ -86,14 +88,14 @@ export async function POST(req: Request) {
           services = await fetchServicesViaReflection({
             endpoint: address,
             tls: tlsEnabled,
-            timeout: 10000,
+            timeout: requestTimeoutMs,
             additionalEndpoints,
           });
         } else {
           services = await fetchServicesWithCosmosOptimization({
             endpoint: address,
             tls: tlsEnabled,
-            timeout: 10000,
+            timeout: requestTimeoutMs,
             additionalEndpoints,
           });
         }
@@ -136,14 +138,14 @@ export async function POST(req: Request) {
               services = await fetchServicesViaReflection({
                 endpoint: address,
                 tls: false,
-                timeout: 10000,
+                timeout: requestTimeoutMs,
                 additionalEndpoints: retryAdditionalEndpoints,
               });
             } else {
               services = await fetchServicesWithCosmosOptimization({
                 endpoint: address,
                 tls: false,
-                timeout: 10000,
+                timeout: requestTimeoutMs,
                 additionalEndpoints: retryAdditionalEndpoints,
               });
             }

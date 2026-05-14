@@ -2,19 +2,30 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Settings, Download, Upload, Trash2, Database, HelpCircle } from 'lucide-react';
+import { Settings, Trash2, Database, HelpCircle, Plus, Plug } from 'lucide-react';
 import { getCacheStats, clearAllCache } from '@/lib/utils/client-cache';
+import type { ExplorerMode } from '@/lib/types/grpc';
 
 interface MenuBarProps {
+  mode?: ExplorerMode;
+  onPrimaryAction?: () => void;
   onShowSettings?: () => void;
   onShowKeyboardShortcuts?: () => void;
   onShowHelp?: () => void;
 }
 
-export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onShowHelp }: MenuBarProps) {
+export default function MenuBar({
+  mode = 'generic',
+  onPrimaryAction,
+  onShowSettings,
+  onShowKeyboardShortcuts,
+  onShowHelp
+}: MenuBarProps) {
   const [cacheStats, setCacheStats] = useState({ count: 0, sizeKB: 0 });
   const [showCacheMenu, setShowCacheMenu] = useState(false);
   const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const primaryLabel = mode === 'cosmos' ? 'Add Network' : 'Connect gRPC';
+  const PrimaryIcon = mode === 'cosmos' ? Plus : Plug;
 
   // Update cache stats
   const updateCacheStats = () => {
@@ -24,7 +35,7 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
 
   // Handle clear cache
   const handleClearCache = () => {
-    if (confirm('Clear all cached data? This will remove all networks and you will need to re-add them.')) {
+    if (confirm('Clear all cached data? This will remove saved sources and connections, and you will need to add them again.')) {
       clearAllCache();
       // Also clear network cache
       localStorage.removeItem('grpc-explorer-networks');
@@ -41,7 +52,7 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
   }, []);
 
   return (
-    <div className="h-10 bg-secondary/30 border-b border-border flex-between px-4 shrink-0 relative z-50">
+    <div className="h-10 bg-secondary/30 border-b border-border flex-between px-2 sm:px-4 shrink-0 relative z-20">
       {/* Left side - App title */}
       <div className="flex-center-2">
         <h1 className="section-header">gRPC Explorer</h1>
@@ -49,6 +60,16 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
 
       {/* Right side - Actions */}
       <div className="flex-center-1">
+        <button
+          onClick={onPrimaryAction}
+          className="flex-center gap-1.5 px-2 py-1 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded transition-colors"
+          title={primaryLabel}
+          aria-label={primaryLabel}
+        >
+          <PrimaryIcon className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{primaryLabel}</span>
+        </button>
+
         {/* Cache Stats */}
         <div className="relative">
           <button
@@ -60,9 +81,9 @@ export default function MenuBar({ onShowSettings, onShowKeyboardShortcuts, onSho
             title="Cache information"
           >
             <Database className="h-3.5 w-3.5" />
-            <span>{cacheStats.count} cached</span>
+            <span className="hidden md:inline">{cacheStats.count} cached</span>
             <span className="text-muted-foreground/70">
-              ({cacheStats.sizeKB}KB)
+              <span className="hidden lg:inline">({cacheStats.sizeKB}KB)</span>
             </span>
           </button>
 

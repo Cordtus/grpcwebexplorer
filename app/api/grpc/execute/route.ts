@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
 import { errorMessage } from '@/lib/utils';
+import { normalizeRequestTimeoutMs } from '@/lib/utils/client-cache';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
@@ -12,7 +13,8 @@ export async function POST(req: Request) {
   const startTime = Date.now();
 
   try {
-    const { endpoint, service, method, params, tlsEnabled, metadata, authConfig } = await req.json();
+    const { endpoint, service, method, params, tlsEnabled, metadata, authConfig, timeoutMs } = await req.json();
+    const requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs, 60000);
 
     if (!endpoint || !service || !method) {
       return NextResponse.json(
@@ -65,14 +67,14 @@ export async function POST(req: Request) {
       const client = new ReflectionClient({
         endpoint: endpointWithPort,
         tls: usedTls,
-        timeout: 60000,
+        timeout: requestTimeoutMs,
         clientCert,
         clientKey,
       });
 
       try {
         await client.initializeForMethod(service);
-        result = await client.invokeMethod(service, method, params || {}, 60000, enrichedMetadata);
+        result = await client.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
       } finally {
         client.close();
       }
@@ -89,14 +91,14 @@ export async function POST(req: Request) {
         const retryClient = new ReflectionClient({
           endpoint: endpointWithPort,
           tls: false,
-          timeout: 60000,
+          timeout: requestTimeoutMs,
           clientCert,
           clientKey,
         });
 
         try {
           await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, 60000, enrichedMetadata);
+          result = await retryClient.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
           console.log(`[Execute] Success without TLS`);
         } finally {
           retryClient.close();

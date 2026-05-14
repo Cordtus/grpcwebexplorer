@@ -5,6 +5,7 @@ type DescriptorJob = {
   endpoint: string;
   tlsEnabled: boolean;
   serviceName: string;
+  timeoutMs?: number;
   priority: 'high' | 'normal';
   timestamp: number;
   retryCount?: number;
@@ -133,6 +134,7 @@ class DescriptorLoaderQueue {
           endpoint: this.currentJob.endpoint,
           tlsEnabled: this.currentJob.tlsEnabled,
           serviceName: this.currentJob.serviceName,
+          timeoutMs: this.currentJob.timeoutMs,
         }),
         signal: this.abortController.signal,
       });

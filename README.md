@@ -18,6 +18,8 @@ Vercel as-is or self-host via Docker / Node.js.
 - Auth: Bearer tokens, API keys, mTLS
 - Code export: grpcurl, curl/REST, TypeScript, Go, Python -- includes current
   params, metadata, and auth
+- Optional base64/binary response inspection while preserving original response
+  JSON for copy and save actions
 - REST path mapping from `google.api.http` annotations
 - Round-robin endpoints, DNS validation, automatic blacklisting on failure,
   TLS auto-retry
@@ -73,17 +75,17 @@ options.
   module and version, provide an execution endpoint. Private modules supported
   with auth token.
 
-**Cosmos SDK** -- searchable chain registry. Select a chain to pull its gRPC
+**Cosmos SDK** is the network-oriented flow. Select a chain to pull its gRPC
 endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry).
-Supports multi-endpoint selection for round-robin. Endpoints are DNS-validated
-before use.
+Supports multi-endpoint selection for round-robin execution. Endpoints are
+DNS-validated before use.
 
-Both modes show recently used connections.
+Recently used chain shortcuts are shown in the Cosmos SDK flow.
 
 ### Browsing
 
-Services are listed by namespace in the left panel. The search bar filters
-across namespaces, services, and methods.
+Services are listed by namespace in the left source/network panel. The search
+bar filters across namespaces, services, and methods.
 
 ### Executing
 
@@ -98,14 +100,9 @@ Select a method to get a generated form. Fill in fields, hit **Execute**
 
 | Shortcut | Action |
 |---|---|
-| `Cmd/Ctrl+N` | Add network |
+| `Cmd/Ctrl+N` | Open connection dialog |
 | `Cmd/Ctrl+W` | Close tab |
 | `Cmd/Ctrl+Enter` | Execute |
-| `Cmd/Ctrl+/` | Focus search |
-| `Cmd/Ctrl+Tab` | Next tab |
-| `Cmd/Ctrl+Shift+Tab` | Previous tab |
-| `Cmd/Ctrl+Shift+E` | Export params |
-| `Cmd/Ctrl+Shift+I` | Import params |
 | `Cmd/Ctrl+Shift+?` | Shortcut help |
 
 ### Settings
@@ -114,7 +111,7 @@ Gear icon in the menu bar:
 
 - Theme (Light, Dark, 8-bit Retro, System)
 - Default mode (Generic / Cosmos)
-- Request timeout (1s--60s, default 10s)
+- Service discovery timeout (1s--60s, default 10s)
 - Auto-collapse panels
 - Cache TTL (None / 1hr / 6hr / 24hr / 36hr / 72hr / Never)
 

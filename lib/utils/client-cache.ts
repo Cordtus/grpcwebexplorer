@@ -11,6 +11,12 @@ const CACHE_VERSION = '1.0.0';
 const CACHE_PREFIX = 'grpc-explorer:';
 const SETTINGS_KEY = 'grpc-explorer:settings';
 
+export const REQUEST_TIMEOUT_MS = {
+  DEFAULT: 10000,
+  MIN: 1000,
+  MAX: 60000,
+} as const;
+
 // Cache TTL options (in milliseconds)
 export const CACHE_TTL_OPTIONS = {
   NONE: 0,
@@ -33,6 +39,55 @@ export const CACHE_TTL_LABELS: Record<CacheTTLOption, string> = {
   SEVENTY_TWO_HOURS: '72 hours',
   MAX: 'Never expire',
 };
+
+export function normalizeRequestTimeoutMs(
+  value: unknown,
+  defaultValue: number = REQUEST_TIMEOUT_MS.DEFAULT
+): number {
+  if (value === null || value === '' || typeof value === 'boolean') {
+    return defaultValue;
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return defaultValue;
+  }
+
+  const rounded = Math.round(parsed);
+  return Math.min(
+    REQUEST_TIMEOUT_MS.MAX,
+    Math.max(REQUEST_TIMEOUT_MS.MIN, rounded)
+  );
+}
+
+export function getRequestTimeoutMs(): number {
+  if (typeof window === 'undefined') return REQUEST_TIMEOUT_MS.DEFAULT;
+
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    if (!settings) return REQUEST_TIMEOUT_MS.DEFAULT;
+
+    const parsed = JSON.parse(settings);
+    return normalizeRequestTimeoutMs(parsed.requestTimeoutMs);
+  } catch {
+    return REQUEST_TIMEOUT_MS.DEFAULT;
+  }
+}
+
+export function setRequestTimeoutMs(timeoutMs: number): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    const parsed = settings ? JSON.parse(settings) : {};
+
+    parsed.requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+  } catch (error) {
+    console.warn('Failed to save request timeout setting:', error);
+  }
+}
 
 /**
  * Get user's preferred cache TTL setting

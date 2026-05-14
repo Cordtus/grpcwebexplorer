@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
 } from '@/components/ui/dialog';
 import { HelpCircle, Network, Play, Keyboard, Database, AlertTriangle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
 
   const sections = [
     { id: 'overview', label: 'Quick Start', icon: HelpCircle },
-    { id: 'networks', label: 'Adding Networks', icon: Network },
+    { id: 'networks', label: 'Connections', icon: Network },
     { id: 'methods', label: 'Executing Methods', icon: Play },
     { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
     { id: 'cache', label: 'Cache Management', icon: Database },
@@ -60,9 +60,9 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                   1
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium">Add a Network</h4>
+                  <h4 className="text-sm font-medium">Connect a Source</h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Click "Add Network" and enter a gRPC endpoint or select from the Cosmos Chain Registry
+                    Use Generic gRPC for reflection or buf.build schemas, or Cosmos SDK for chain registry networks
                   </p>
                 </div>
               </div>
@@ -74,7 +74,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                 <div>
                   <h4 className="text-sm font-medium">Browse Services</h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Expand services in the left panel to view available methods
+                    Expand sources in the left panel to view available services and methods
                   </p>
                 </div>
               </div>
@@ -98,35 +98,34 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
         return (
           <div className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-2">Adding Networks</h3>
+              <h3 className="font-semibold mb-2">Connections</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                The Add Network dialog provides a searchable dropdown of all chains from the Cosmos Chain Registry.
+                Generic gRPC connects to reflection endpoints or buf.build schemas. Cosmos SDK mode adds chain networks from the registry.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Quick Add:</span> Select from Chain List
+                  <span className="text-primary">Cosmos SDK:</span> Add Network
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
-                  <li>The dropdown shows all available chains - type to filter</li>
-                  <li>Click a chain name to select it</li>
-                  <li>With <strong>Round-robin ON</strong>: Chain is added immediately with all endpoints</li>
-                  <li>With <strong>Round-robin OFF</strong>: Choose "Use All Endpoints" or pick a specific one</li>
+                  <li>Switch to Cosmos SDK mode</li>
+                  <li>Search for a chain or paste a direct endpoint</li>
+                  <li>Select the endpoints you want to use</li>
+                  <li>Click "Add Network"</li>
                 </ol>
               </div>
 
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Direct Endpoint:</span> Custom gRPC Server
+                  <span className="text-primary">Generic gRPC:</span> Reflection Endpoint
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" button</li>
+                  <li>Open the Generic gRPC connection flow</li>
                   <li>Paste or type a gRPC endpoint (e.g., <code className="bg-secondary px-1 rounded">grpc.myserver.com:443</code>)</li>
                   <li>Configure TLS toggle as needed</li>
-                  <li>Click "Add Network"</li>
+                  <li>Click "Connect Server"</li>
                 </ol>
                 <p className="text-xs text-muted-foreground mt-2">
                   The label changes to "Direct Endpoint" when you enter an address with a port or domain.
@@ -135,25 +134,25 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
 
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="text-primary">Recent:</span> Previously Used Chains
+                  <span className="text-primary">Cosmos Recent:</span> Previously Used Chains
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click "Add Network" → "Recent" button</li>
+                  <li>Open Cosmos SDK mode and click "Recent"</li>
                   <li>Select from chains you've used before</li>
                   <li>Shows chain-id, service count, and cache age</li>
                 </ol>
               </div>
 
               <div className="border border-border rounded-lg p-4 bg-secondary/20">
-                <h4 className="text-sm font-semibold mb-2">Round-Robin Mode</h4>
+                <h4 className="text-sm font-semibold mb-2">Multi-endpoint Execution</h4>
                 <ul className="text-sm text-muted-foreground space-y-1.5">
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span><strong>ON:</strong> Clicking a chain adds it instantly. Method calls rotate through all endpoints.</span>
+                    <span>Selecting multiple endpoints rotates method calls across them.</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span><strong>OFF (default):</strong> Shows endpoint picker. Uses your selected endpoint for all calls.</span>
+                    <span>Unreachable endpoints are deselected during validation before use.</span>
                   </li>
                 </ul>
               </div>
@@ -175,7 +174,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
               <div className="border border-border rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-3">Steps:</h4>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                  <li>Select a network tab from the left panel</li>
+                  <li>Select a source from the left panel</li>
                   <li>Expand a service to view its methods</li>
                   <li>Click a method to open it in the center panel</li>
                   <li>Fill in the generated parameter form with typed inputs</li>
@@ -221,9 +220,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
 
             <div className="space-y-4">
               {[
-                { category: 'Navigation', shortcuts: [SHORTCUTS.NEXT_TAB, SHORTCUTS.PREV_TAB] },
                 { category: 'Actions', shortcuts: [SHORTCUTS.ADD_NETWORK, SHORTCUTS.CLOSE_TAB, SHORTCUTS.EXECUTE] },
-                { category: 'Data', shortcuts: [SHORTCUTS.EXPORT, SHORTCUTS.IMPORT] },
                 { category: 'Help', shortcuts: [SHORTCUTS.SHOW_SHORTCUTS] },
               ].map(({ category, shortcuts }) => (
                 <div key={category}>
@@ -293,7 +290,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                 <ul className="text-sm text-muted-foreground space-y-1.5">
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>All cached chains appear in Add Network → "Recent" button</span>
+                    <span>Cached Cosmos chains appear in the Cosmos SDK "Recent" button</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -416,10 +413,14 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[900px] max-h-[80vh] p-0">
-        <div className="flex h-full">
+      <DialogContent className="sm:max-w-[900px] h-[calc(100dvh-1rem)] sm:h-auto sm:max-h-[80vh] p-0 overflow-hidden">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Help & Guide</DialogTitle>
+          <DialogDescription>Learn how to use gRPC Explorer</DialogDescription>
+        </DialogHeader>
+        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full overflow-hidden flex-col sm:flex-row">
           {/* Sidebar */}
-          <div className="w-56 bg-secondary/30 border-r border-border p-4 space-y-1">
+          <div className="w-full max-w-full min-w-0 sm:w-56 shrink-0 bg-secondary/30 border-b sm:border-b-0 sm:border-r border-border p-3 sm:p-4">
             <div className="px-3 py-2 mb-2">
               <h2 className="text-sm font-semibold">Help & Guide</h2>
               <p className="text-xs text-muted-foreground mt-1">
@@ -427,6 +428,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
               </p>
             </div>
 
+            <div className="flex w-full min-w-0 max-w-full gap-1 overflow-x-auto pb-1 sm:block sm:space-y-1 sm:overflow-visible sm:pb-0">
             {sections.map((section) => {
               const Icon = section.icon;
               return (
@@ -434,7 +436,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                   key={section.id}
                   onClick={() => setActiveSection(section.id as Section)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
+                    "shrink-0 sm:w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
                     activeSection === section.id
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-secondary/50"
@@ -445,10 +447,11 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Content */}
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 min-h-0 min-w-0 max-w-full p-4 sm:p-6 overflow-y-auto">
             {renderContent()}
           </div>
         </div>

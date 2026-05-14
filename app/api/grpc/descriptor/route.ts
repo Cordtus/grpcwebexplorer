@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadServiceDescriptor } from '@/lib/grpc/reflection-utils';
+import { normalizeRequestTimeoutMs } from '@/lib/utils/client-cache';
 
 export async function POST(request: NextRequest) {
   try {
-    const { endpoint, tlsEnabled, serviceName } = await request.json();
+    const { endpoint, tlsEnabled, serviceName, timeoutMs } = await request.json();
+    const requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
 
     if (!endpoint || typeof tlsEnabled !== 'boolean' || !serviceName) {
       return NextResponse.json(
@@ -15,7 +17,7 @@ export async function POST(request: NextRequest) {
     console.log(`[API] Loading descriptor for ${serviceName} from ${endpoint}`);
 
     const service = await loadServiceDescriptor(
-      { endpoint, tls: tlsEnabled, timeout: 10000 },
+      { endpoint, tls: tlsEnabled, timeout: requestTimeoutMs },
       serviceName
     );
 

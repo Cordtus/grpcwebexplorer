@@ -11,7 +11,7 @@ import MenuBar from './MenuBar';
 import HelpDialog from './HelpDialog';
 import SettingsDialog from './SettingsDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, listCachedChains, type CachedChainInfo } from '@/lib/utils/client-cache';
+import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, getRequestTimeoutMs } from '@/lib/utils/client-cache';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
 import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig, ExplorerMode, BufBsrSource, GrpcAuthConfig } from '@/lib/types/grpc';
@@ -39,15 +39,33 @@ export default function GrpcExplorerApp() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  );
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
   const [defaultMode, setDefaultMode] = useState<ExplorerMode>('generic');
+  const [requestTimeoutMs, setRequestTimeoutMs] = useState(10000);
 
   // Round-robin endpoint index tracker per network (for load distribution)
   const endpointIndexRef = useRef<Map<string, number>>(new Map());
+  const leftPanelCollapsedRef = useRef(leftPanelCollapsed);
+  const isOverlayModeRef = useRef(isOverlayMode);
+  const userCollapsedPanelRef = useRef(userCollapsedPanel);
+
+  useEffect(() => {
+    leftPanelCollapsedRef.current = leftPanelCollapsed;
+  }, [leftPanelCollapsed]);
+
+  useEffect(() => {
+    isOverlayModeRef.current = isOverlayMode;
+  }, [isOverlayMode]);
+
+  useEffect(() => {
+    userCollapsedPanelRef.current = userCollapsedPanel;
+  }, [userCollapsedPanel]);
 
   // Derive selectedMethod from methodInstances to ensure it updates with params changes
   const selectedMethod = useMemo(() => {
@@ -62,6 +80,7 @@ export default function GrpcExplorerApp() {
       if (saved === 'generic' || saved === 'cosmos') {
         setDefaultMode(saved);
       }
+      setRequestTimeoutMs(getRequestTimeoutMs());
     } catch { /* ignore */ }
   }, []);
 
@@ -144,14 +163,18 @@ export default function GrpcExplorerApp() {
       // Auto-collapse threshold: 1024px
       const collapseThreshold = 1024;
 
-      if (width < collapseThreshold && !leftPanelCollapsed) {
-        // Window is narrow, collapse the panel
-        setLeftPanelCollapsed(true);
+      if (width < collapseThreshold) {
+        // Narrow windows start collapsed, but an intentionally opened overlay
+        // must stay open until the user closes it.
+        if (!isOverlayModeRef.current && !leftPanelCollapsedRef.current) {
+          setLeftPanelCollapsed(true);
+          setUserCollapsedPanel(false);
+        }
+      } else if (isOverlayModeRef.current) {
+        setLeftPanelCollapsed(false);
         setIsOverlayMode(false);
         setUserCollapsedPanel(false);
-      } else if (width >= collapseThreshold && leftPanelCollapsed && !isOverlayMode && !userCollapsedPanel) {
-        // Window is wide enough, restore panel if it was auto-collapsed
-        // Do NOT restore if user manually collapsed it
+      } else if (leftPanelCollapsedRef.current && !userCollapsedPanelRef.current) {
         setLeftPanelCollapsed(false);
       }
     };
@@ -159,7 +182,9 @@ export default function GrpcExplorerApp() {
     handleResize(); // Initial check
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [leftPanelCollapsed, isOverlayMode, userCollapsedPanel]);
+  }, []);
+
+  const isMobileLayout = windowWidth < 768;
 
   // Calculate responsive left panel width
   const getLeftPanelWidth = () => {
@@ -203,7 +228,7 @@ export default function GrpcExplorerApp() {
       key: 'n',
       ctrl: true,
       handler: () => setShowAddNetwork(true),
-      description: 'Add new network'
+      description: 'Open connection dialog'
     },
     {
       key: 'w',
@@ -423,7 +448,7 @@ export default function GrpcExplorerApp() {
       const response = await fetch('/api/grpc/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, tlsEnabled, mode: networkMode })
+        body: JSON.stringify({ endpoint, tlsEnabled, mode: networkMode, timeoutMs: requestTimeoutMs })
       });
 
       if (!response.ok) throw new Error('Failed to fetch services');
@@ -492,7 +517,7 @@ export default function GrpcExplorerApp() {
           : n
       ));
     }
-  }, [networks, getNextColor, autoCollapseEnabled]);
+  }, [networks, getNextColor, autoCollapseEnabled, defaultMode, requestTimeoutMs]);
 
   // Helper to enqueue descriptor loading jobs for a network
   const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
@@ -516,11 +541,12 @@ export default function GrpcExplorerApp() {
         endpoint: network.endpoint,
         tlsEnabled: network.tlsEnabled,
         serviceName: service.fullName,
+        timeoutMs: requestTimeoutMs,
         priority: 'normal' as const,
         timestamp: Date.now(),
       }))
     );
-  }, []);
+  }, [requestTimeoutMs]);
 
   // Start background descriptor loading when networks are added or updated
   useEffect(() => {
@@ -567,7 +593,8 @@ export default function GrpcExplorerApp() {
         body: JSON.stringify({
           endpoint: network.endpoint,
           tlsEnabled: network.tlsEnabled,
-          forceRefresh: true
+          forceRefresh: true,
+          timeoutMs: requestTimeoutMs
         })
       });
 
@@ -611,7 +638,7 @@ export default function GrpcExplorerApp() {
           : n
       ));
     }
-  }, [networks]);
+  }, [networks, requestTimeoutMs]);
 
   // Toggle network expansion
   const toggleNetworkExpanded = useCallback((networkId: string) => {
@@ -636,6 +663,7 @@ export default function GrpcExplorerApp() {
             endpoint: targetNetwork.endpoint,
             tlsEnabled: targetNetwork.tlsEnabled,
             serviceName: service.fullName,
+            timeoutMs: requestTimeoutMs,
             priority: 'high',
             timestamp: Date.now(),
           });
@@ -656,7 +684,7 @@ export default function GrpcExplorerApp() {
         n.id === networkId ? { ...n, expanded: !n.expanded } : n
       );
     });
-  }, [autoCollapseEnabled]);
+  }, [autoCollapseEnabled, requestTimeoutMs]);
 
   // Add method instance to center panel
   const handleSelectMethod = useCallback(async (network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
@@ -708,7 +736,8 @@ export default function GrpcExplorerApp() {
                 body: JSON.stringify({
                   endpoint: network.endpoint,
                   tlsEnabled: network.tlsEnabled,
-                  serviceName: service.fullName
+                  serviceName: service.fullName,
+                  timeoutMs: requestTimeoutMs
                 })
               });
 
@@ -795,7 +824,7 @@ export default function GrpcExplorerApp() {
 
       setSelectedMethodId(newInstance.id);
     }
-  }, [methodInstances, autoCollapseEnabled, networks]);
+  }, [methodInstances, autoCollapseEnabled, networks, requestTimeoutMs]);
 
   // Remove method instance
   const handleRemoveMethodInstance = useCallback((instanceId: string) => {
@@ -964,6 +993,13 @@ export default function GrpcExplorerApp() {
     return executionResults.find(r => r.methodId === selectedMethod.id);
   }, [selectedMethod, executionResults]);
 
+  const sourcePanelTitle = defaultMode === 'cosmos' ? 'Networks' : 'Sources';
+  const emptySourceTitle = defaultMode === 'cosmos' ? 'No networks added' : 'No sources connected';
+  const emptySourceAction = defaultMode === 'cosmos' ? 'Add your first network' : 'Connect a gRPC source';
+  const sourcePanelToggleLabel = leftPanelCollapsed
+    ? `Show ${sourcePanelTitle.toLowerCase()} panel`
+    : `Hide ${sourcePanelTitle.toLowerCase()} panel`;
+
   return (
     <div className="h-screen w-screen bg-background flex relative overflow-hidden">
       {/* Left Panel - Networks (Full Height) - Collapsible */}
@@ -977,21 +1013,21 @@ export default function GrpcExplorerApp() {
           !leftPanelCollapsed && !isOverlayMode
             ? { width: `${getLeftPanelWidth()}px` }
             : isOverlayMode && !leftPanelCollapsed
-            ? { width: '420px' }
+            ? { width: 'min(420px, calc(100vw - 24px))' }
             : undefined
         }
       >
         <div className="sticky top-0 z-10 bg-card border-b border-border">
           <div className="flex items-center justify-between p-4">
             {!leftPanelCollapsed && (
-              <h2 className="text-sm font-semibold text-foreground">Networks</h2>
+              <h2 className="text-sm font-semibold text-foreground">{sourcePanelTitle}</h2>
             )}
             <div className="flex items-center gap-1">
               <button
                 onClick={handleLeftPanelToggle}
                 className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
-                title={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
-                aria-label={leftPanelCollapsed ? "Show networks panel" : "Hide networks panel"}
+                title={sourcePanelToggleLabel}
+                aria-label={sourcePanelToggleLabel}
               >
                 {leftPanelCollapsed ? (
                   <ChevronRight className="h-5 w-5 text-foreground" />
@@ -1003,7 +1039,7 @@ export default function GrpcExplorerApp() {
                 <button
                   onClick={() => setShowAddNetwork(true)}
                   className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
-                  title="Add network"
+                  title={defaultMode === 'cosmos' ? 'Add network' : 'Connect gRPC source'}
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -1017,12 +1053,12 @@ export default function GrpcExplorerApp() {
             {networks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No networks added</p>
+                <p className="text-sm">{emptySourceTitle}</p>
                 <button
                   onClick={() => setShowAddNetwork(true)}
                   className="mt-3 text-xs text-primary hover:underline"
                 >
-                  Add your first network
+                  {emptySourceAction}
                 </button>
               </div>
             ) : (
@@ -1053,15 +1089,23 @@ export default function GrpcExplorerApp() {
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         {/* Menu Bar */}
         <MenuBar
+          mode={defaultMode}
+          onPrimaryAction={() => setShowAddNetwork(true)}
           onShowHelp={() => setShowHelp(true)}
           onShowSettings={() => setShowSettings(true)}
         />
 
         {/* Method Instances (left) + Detail Panel (right) */}
         <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
-          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+          <ResizablePanelGroup direction={isMobileLayout ? "vertical" : "horizontal"} className="h-full w-full">
             {/* Left: Method Instances */}
-            <ResizablePanel defaultSize={33} minSize={20} id="methods-panel" order={1} collapsible={false}>
+            <ResizablePanel
+              defaultSize={isMobileLayout ? 42 : 33}
+              minSize={isMobileLayout ? 24 : 20}
+              id="methods-panel"
+              order={1}
+              collapsible={false}
+            >
               <div className="h-full border-r border-border bg-background overflow-y-auto">
                 <div className="sticky top-0 z-10 bg-background border-b border-border">
                   <div className="flex items-center justify-between p-4">
@@ -1087,7 +1131,9 @@ export default function GrpcExplorerApp() {
                     <div className="text-center py-8 text-muted-foreground">
                       <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
                       <p className="text-sm">No methods selected</p>
-                      <p className="text-xs mt-1">Select methods from the networks panel</p>
+                      <p className="text-xs mt-1">
+                        Select methods from the {sourcePanelTitle.toLowerCase()} panel
+                      </p>
                     </div>
                   ) : (
                     methodInstances.map(instance => {
@@ -1120,10 +1166,23 @@ export default function GrpcExplorerApp() {
               </div>
             </ResizablePanel>
 
-            <ResizableHandle withHandle className="w-2 bg-border hover:bg-primary transition-colors" />
+            <ResizableHandle
+              withHandle
+              className={cn(
+                "bg-border hover:bg-primary transition-colors",
+                isMobileLayout ? "h-2 w-full" : "w-2"
+              )}
+            />
 
             {/* Right: Proto / Code / Results (tabbed) */}
-            <ResizablePanel defaultSize={67} minSize={30} maxSize={80} id="detail-panel" order={2} collapsible={false}>
+            <ResizablePanel
+              defaultSize={isMobileLayout ? 58 : 67}
+              minSize={isMobileLayout ? 32 : 30}
+              maxSize={isMobileLayout ? 76 : 80}
+              id="detail-panel"
+              order={2}
+              collapsible={false}
+            >
               {selectedMethod ? (() => {
                 const network = networks.find(n => n.id === selectedMethod.networkId);
                 return (
@@ -1170,6 +1229,8 @@ export default function GrpcExplorerApp() {
         autoCollapseEnabled={autoCollapseEnabled}
         onAutoCollapseChange={setAutoCollapseEnabled}
         defaultMode={defaultMode}
+        requestTimeoutMs={requestTimeoutMs}
+        onRequestTimeoutChange={setRequestTimeoutMs}
         onDefaultModeChange={(mode) => {
           setDefaultMode(mode);
           localStorage.setItem('grpc-explorer-default-mode', mode);

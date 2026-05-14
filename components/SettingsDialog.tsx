@@ -14,8 +14,11 @@ import { cn } from '@/lib/utils';
 import {
 	getCacheTTL,
 	setCacheTTL,
+	setRequestTimeoutMs,
 	CACHE_TTL_OPTIONS,
 	CACHE_TTL_LABELS,
+	REQUEST_TIMEOUT_MS,
+	normalizeRequestTimeoutMs,
 	type CacheTTLOption,
 	clearAllCache,
 	getCacheStats,
@@ -30,6 +33,8 @@ interface SettingsDialogProps {
 	onAutoCollapseChange?: (enabled: boolean) => void;
 	defaultMode?: ExplorerMode | undefined;
 	onDefaultModeChange?: ((mode: ExplorerMode) => void) | undefined;
+	requestTimeoutMs?: number | undefined;
+	onRequestTimeoutChange?: ((timeoutMs: number) => void) | undefined;
 }
 
 const SettingsDialog: React.FC<SettingsDialogProps> = ({
@@ -39,9 +44,11 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 	onAutoCollapseChange,
 	defaultMode,
 	onDefaultModeChange,
+	requestTimeoutMs = REQUEST_TIMEOUT_MS.DEFAULT,
+	onRequestTimeoutChange,
 }) => {
 	const { theme, setTheme } = useTheme();
-	const [defaultTimeout, setDefaultTimeout] = useState(10000);
+	const [defaultTimeout, setDefaultTimeout] = useState(String(requestTimeoutMs));
 	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
 	const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
 	const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
@@ -64,8 +71,10 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
 			// Load default mode setting
 			setLocalDefaultMode(defaultMode || 'generic');
+
+			setDefaultTimeout(String(normalizeRequestTimeoutMs(requestTimeoutMs)));
 		}
-	}, [open, autoCollapseEnabled, defaultMode]);
+	}, [open, autoCollapseEnabled, defaultMode, requestTimeoutMs]);
 
 	return (
 		<Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -131,7 +140,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 							))}
 						</div>
 						<p className="text-xs text-muted-foreground mt-2">
-							Default mode when adding new networks
+							Controls which connection flow opens by default
 						</p>
 					</div>
 
@@ -139,20 +148,24 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 						<h3 className="text-sm font-semibold text-muted-foreground mb-3">gRPC Options</h3>
 						<div className="space-y-3">
 							<div>
-								<label className="text-sm block mb-1">Default Request Timeout (ms)</label>
+								<label className="text-sm block mb-1">Service Discovery Timeout (ms)</label>
 								<input
 									type="number"
 									value={defaultTimeout}
-									onChange={(e) => setDefaultTimeout(parseInt(e.target.value) || 10000)}
+									onChange={(e) => setDefaultTimeout(e.target.value)}
+									onBlur={() => setDefaultTimeout(String(normalizeRequestTimeoutMs(defaultTimeout)))}
 									className={cn(
 										"w-full px-3 py-2 rounded text-sm",
 										"bg-background border border-border",
 										"focus:outline-none focus:ring-2 focus:ring-primary"
 									)}
-									min={1000}
-									max={60000}
+									min={REQUEST_TIMEOUT_MS.MIN}
+									max={REQUEST_TIMEOUT_MS.MAX}
 									step={1000}
 								/>
+								<p className="text-xs text-muted-foreground mt-2">
+									Used for service discovery and descriptor loading.
+								</p>
 							</div>
 						</div>
 					</div>
@@ -237,6 +250,12 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 						onClick={() => {
 							// Save cache TTL setting
 							setCacheTTL(cacheTTL);
+
+							const normalizedTimeout = normalizeRequestTimeoutMs(defaultTimeout);
+							setRequestTimeoutMs(normalizedTimeout);
+							if (onRequestTimeoutChange) {
+								onRequestTimeoutChange(normalizedTimeout);
+							}
 
 							// Save auto-collapse setting
 							if (onAutoCollapseChange) {

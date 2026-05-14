@@ -3,6 +3,7 @@ import { fetchChainList, fetchChainData } from '@/lib/services/chainRegistry';
 import { errorMessage } from '@/lib/utils';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // Allow Next.js to cache this route (uses fetch cache internally)
 // Revalidate every hour

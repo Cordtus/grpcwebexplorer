@@ -32,13 +32,8 @@ export function useKeyboardShortcuts(shortcuts: ShortcutHandler[]) {
 }
 
 export const SHORTCUTS = {
-  ADD_NETWORK: { key: 'n', ctrl: true, description: 'Add new network' },
+  ADD_NETWORK: { key: 'n', ctrl: true, description: 'Open connection dialog' },
   CLOSE_TAB: { key: 'w', ctrl: true, description: 'Close current tab' },
   EXECUTE: { key: 'Enter', ctrl: true, description: 'Execute method' },
-  SEARCH: { key: '/', ctrl: true, description: 'Focus search' },
-  NEXT_TAB: { key: 'Tab', ctrl: true, description: 'Next tab' },
-  PREV_TAB: { key: 'Tab', ctrl: true, shift: true, description: 'Previous tab' },
-  EXPORT: { key: 'e', ctrl: true, shift: true, description: 'Export parameters' },
-  IMPORT: { key: 'i', ctrl: true, shift: true, description: 'Import parameters' },
   SHOW_SHORTCUTS: { key: '?', ctrl: true, shift: true, description: 'Show keyboard shortcuts' },
 };

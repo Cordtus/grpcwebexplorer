@@ -3,11 +3,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
 	Copy, Check, FileCode, AlertTriangle, Code2, Terminal,
-	CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronRight, Save, Network
+	CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronRight, Save, Network, Binary
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GrpcMethod, GrpcService, GrpcAuthConfig, ExplorerMode } from '@/lib/types/grpc';
 import { generateRestUrl } from '@/lib/utils/rest-path-mapper';
+import { decodeBinaryValuesForDisplay, isDecodedBinaryValue, type DecodedBinaryValue } from '@/lib/utils/response-decoder';
 import {
 	generateGrpcurl,
 	generateCurl,
@@ -62,6 +63,31 @@ function hasNonEmptyParams(params: Record<string, any>): boolean {
 
 // ── JsonViewer (inlined from ResultsPanel) ──────────────────────────────
 
+function DecodedBinaryViewer({ value }: { value: DecodedBinaryValue }) {
+	return (
+		<span className="inline-flex max-w-full flex-col gap-1 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
+			<span className="flex flex-wrap items-center gap-2">
+				<span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
+					<Binary className="h-3 w-3" />
+					base64
+				</span>
+				<span className="text-muted-foreground">{value.byteLength} bytes</span>
+			</span>
+			<span className="break-all text-green-600 dark:text-green-400">&quot;{value.original}&quot;</span>
+			{value.text ? (
+				<span className="break-all text-foreground">
+					<span className="text-muted-foreground">decoded text: </span>
+					&quot;{value.text}&quot;
+				</span>
+			) : (
+				<span className="break-all text-muted-foreground">
+					hex: {value.hexPreview}{value.byteLength > 32 ? ' ...' : ''}
+				</span>
+			)}
+		</span>
+	);
+}
+
 function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number; path?: string }) {
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	const [copiedKeys, setCopiedKeys] = useState<Set<string>>(new Set());
@@ -73,7 +99,9 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
 	};
 
 	const handleCopyValue = (value: any, key: string) => {
-		const text = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+		const text = isDecodedBinaryValue(value)
+			? value.text || value.original
+			: typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
 		navigator.clipboard.writeText(text);
 		const next = new Set(copiedKeys);
 		next.add(key);
@@ -83,6 +111,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
 
 	if (data === null) return <span className="text-muted-foreground">null</span>;
 	if (data === undefined) return <span className="text-muted-foreground">undefined</span>;
+	if (isDecodedBinaryValue(data)) return <DecodedBinaryViewer value={data} />;
 	if (typeof data === 'string') return <span className="text-green-600 dark:text-green-400 break-all">&quot;{data}&quot;</span>;
 	if (typeof data === 'number') return <span className="text-blue-600 dark:text-blue-400">{data}</span>;
 	if (typeof data === 'boolean') return <span className="text-purple-600 dark:text-purple-400">{data.toString()}</span>;
@@ -134,7 +163,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
 				{entries.map(([key, value]) => {
 					const itemKey = `${path}.${key}`;
 					const isOpen = level === 0 || expanded.has(itemKey);
-					const isObj = typeof value === 'object' && value !== null;
+					const isObj = typeof value === 'object' && value !== null && !isDecodedBinaryValue(value);
 
 					return (
 						<div key={key} className="mb-1 group min-w-0 overflow-hidden">
@@ -199,6 +228,7 @@ export default function MethodDetailPanel({
 	const [copied, setCopied] = useState<string | null>(null);
 	const [resultViewMode, setResultViewMode] = useState<'formatted' | 'raw'>('formatted');
 	const [resultCopied, setResultCopied] = useState(false);
+	const [decodeBinaryValues, setDecodeBinaryValues] = useState(false);
 
 	// Track identity so we can reset tab on method change
 	const methodKey = `${service.fullName}.${method.name}`;
@@ -303,6 +333,10 @@ export default function MethodDetailPanel({
 
 	const curlUnsupported = codeTab === 'curl' && !restResult.supported;
 	const hasScaffoldToggle = codeTab === 'typescript' || codeTab === 'go' || codeTab === 'python';
+	const displayResultData = useMemo(() => {
+		if (!decodeBinaryValues || !result?.data) return result?.data;
+		return decodeBinaryValuesForDisplay(result.data);
+	}, [decodeBinaryValues, result?.data]);
 
 	const codeTabs: { key: CodeTab; label: string }[] = useMemo(() => {
 		const all: { key: CodeTab; label: string }[] = [
@@ -455,7 +489,7 @@ export default function MethodDetailPanel({
 											<span className="text-green-400">{f.type}</span>
 											<span className="text-foreground">{f.name}</span>
 											{f.rule === 'repeated' && <span className="text-amber-400 text-[10px]">repeated</span>}
-											{f.comment && <span className="text-muted-foreground ml-2">// {f.comment}</span>}
+												{f.comment && <span className="text-muted-foreground ml-2">{'// '}{f.comment}</span>}
 										</div>
 									))}
 								</div>
@@ -550,16 +584,16 @@ export default function MethodDetailPanel({
 					<div className="h-full flex flex-col min-h-0">
 						{/* Results toolbar */}
 						{result && (
-							<div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-border/50">
-								<div className={result.success ? "status-success" : "status-error"}>
+							<div className="shrink-0 flex flex-col gap-2 px-4 py-2 border-b border-border/50 sm:flex-row sm:items-center sm:justify-between">
+								<div className={cn(result.success ? "status-success" : "status-error", "min-w-0 flex-wrap px-2 py-1.5")}>
 									{result.success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
 									<span className="text-xs font-medium">{result.success ? 'Success' : 'Failed'}</span>
 									<span className="text-muted-foreground text-[11px] ml-2">{formatDuration(result.duration)}</span>
 									{result.endpoint && (
-										<span className="text-muted-foreground text-[11px] ml-2 font-mono">{result.endpoint}</span>
+										<span className="min-w-0 max-w-full truncate text-muted-foreground text-[11px] ml-2 font-mono sm:max-w-[12rem]">{result.endpoint}</span>
 									)}
 								</div>
-								<div className="flex items-center gap-1">
+								<div className="flex flex-wrap items-center justify-end gap-1">
 									<div className="flex gap-1 mr-1">
 										<button
 											onClick={() => setResultViewMode('formatted')}
@@ -580,6 +614,21 @@ export default function MethodDetailPanel({
 											Raw
 										</button>
 									</div>
+									<button
+										onClick={() => setDecodeBinaryValues((enabled) => !enabled)}
+										aria-label="Decode base64 and binary values"
+										aria-pressed={decodeBinaryValues}
+										className={cn(
+											"inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+											decodeBinaryValues
+												? "bg-primary text-primary-foreground"
+												: "bg-muted text-muted-foreground hover:bg-muted/70"
+										)}
+										title="Decode base64 and binary-looking values in the formatted response view"
+									>
+										<Binary className="h-3.5 w-3.5" />
+										<span className="hidden sm:inline">Decode</span>
+									</button>
 									<button onClick={handleSaveAsJSON} className="icon-btn" title="Save as JSON file">
 										<Save className="h-4 w-4 text-muted-foreground" />
 									</button>
@@ -622,7 +671,7 @@ export default function MethodDetailPanel({
 												<h3 className="section-header mb-2">Response Data</h3>
 												{resultViewMode === 'formatted' ? (
 													<div className="text-xs font-mono overflow-x-auto min-w-0 w-full">
-														<JsonViewer data={result.data} />
+														<JsonViewer data={displayResultData} />
 													</div>
 												) : (
 													<pre className="text-xs text-foreground whitespace-pre font-mono bg-muted/50 p-3 rounded overflow-x-auto min-w-0">

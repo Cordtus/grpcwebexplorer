@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.1] - 2026-05-14
+
+### Added
+- Optional response inspection for base64/binary-looking values without changing copied or saved raw response JSON.
+
+### Changed
+- Response bytes are preserved as base64 in API JSON; decoding is now an explicit inspection choice in the results UI.
+- Mobile layout now uses viewport-safe dialogs and responsive method/detail panes.
+- Generic gRPC copy now refers to connecting sources instead of adding Cosmos networks.
+- Service discovery timeout setting is now persisted and sent with discovery and descriptor loading requests.
+- Help and README shortcut lists now match the shortcuts wired in the application.
+
+### Fixed
+- Mobile source/network panel no longer immediately re-collapses after tapping the collapsed rail.
+- Help dialog now provides required accessible dialog title/description metadata.
+- Existing lint failure in the proto response-field comment rendering.
+
 ## [1.3.0] - 2026-02-05
 
 ### Added

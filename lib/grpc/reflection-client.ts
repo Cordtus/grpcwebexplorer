@@ -213,6 +213,13 @@ export class ReflectionClient {
     this.parser = new DescriptorParser();
   }
 
+  private getTimeoutMs(defaultMs = 10000): number {
+    const timeout = this.options.timeout;
+    return typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
+      ? timeout
+      : defaultMs;
+  }
+
   /** Build gRPC credentials, with optional mTLS support */
   private buildCredentials(tls: boolean, clientCert?: string, clientKey?: string): grpc.ChannelCredentials {
     if (!tls) return grpc.credentials.createInsecure();
@@ -447,8 +454,8 @@ export class ReflectionClient {
 
       const timeout = setTimeout(() => {
         call.cancel();
-        reject(new Error('Reflection test timeout'));
-      }, 5000);
+        reject(new Error(`Reflection test timeout after ${this.getTimeoutMs(5000)}ms`));
+      }, this.getTimeoutMs(5000));
 
       call.on('data', () => {
         hasData = true;
@@ -614,6 +621,22 @@ export class ReflectionClient {
     return new Promise((resolve, reject) => {
       const call = this.reflectionStub.ServerReflectionInfo();
       const services: string[] = [];
+      let resolved = false;
+      const timeoutMs = this.getTimeoutMs();
+
+      const settle = (fn: () => void) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
+        fn();
+      };
+
+      const timer = setTimeout(() => {
+        settle(() => {
+          try { call.cancel(); } catch { /* ignore */ }
+          reject(new Error(`Timeout after ${timeoutMs}ms`));
+        });
+      }, timeoutMs);
 
       call.on('data', (response: any) => {
         if (response.listServicesResponse) {
@@ -623,8 +646,8 @@ export class ReflectionClient {
         }
       });
 
-      call.on('end', () => resolve(services));
-      call.on('error', reject);
+      call.on('end', () => settle(() => resolve(services)));
+      call.on('error', (err: Error) => settle(() => reject(err)));
 
       call.write({ listServices: '*' });
       call.end();
@@ -635,7 +658,7 @@ export class ReflectionClient {
    * Load service descriptor by symbol name
    */
   private async loadServiceDescriptor(symbol: string): Promise<void> {
-    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol);
+    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol, this.getTimeoutMs());
   }
 
   /**
@@ -696,7 +719,7 @@ export class ReflectionClient {
     const aliveCount = this.stubPool.filter(s => s.alive).length;
     const maxAttempts = Math.min(aliveCount, 3);
     // Aggressive timeout for pool stubs - fail fast, let primary handle fallback
-    const poolTimeoutMs = 5000;
+    const poolTimeoutMs = Math.min(this.getTimeoutMs(), 5000);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const next = this.getNextStub();
@@ -710,8 +733,8 @@ export class ReflectionClient {
       }
     }
 
-    // Final fallback: always try primary (no timeout - let it take as long as needed)
-    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol);
+    // Final fallback: always try primary with the configured request timeout.
+    return this.loadServiceDescriptorViaStub(this.reflectionStub, symbol, this.getTimeoutMs());
   }
 
   /**
@@ -748,57 +771,10 @@ export class ReflectionClient {
   }
 
   /**
-   * Decode base64-encoded bytes fields that contain valid UTF-8 text
-   * Cosmos SDK often stores decimal numbers as bytes (e.g., epoch_provisions, amounts)
-   */
-  private decodeBase64BytesFields(obj: any): any {
-    if (obj === null || obj === undefined) {
-      return obj;
-    }
-
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.decodeBase64BytesFields(item));
-    }
-
-    if (typeof obj === 'object') {
-      const result: any = {};
-      for (const [key, value] of Object.entries(obj)) {
-        result[key] = this.decodeBase64BytesFields(value);
-      }
-      return result;
-    }
-
-    // Check if it's a base64-encoded string that decodes to valid text
-    if (typeof obj === 'string' && obj.length > 0) {
-      // Only try to decode strings that look like base64 (alphanumeric + /+=)
-      if (/^[A-Za-z0-9+/]+=*$/.test(obj) && obj.length >= 4) {
-        try {
-          const decoded = Buffer.from(obj, 'base64').toString('utf-8');
-          // Check if decoded string is valid UTF-8 text (printable ASCII or valid UTF-8)
-          // and doesn't contain control characters (except newlines/tabs)
-          if (decoded.length > 0 && !/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(decoded)) {
-            // Verify it's not binary data by checking if it re-encodes correctly
-            // and contains mostly printable characters
-            const printableRatio = (decoded.match(/[\x20-\x7E\n\r\t]/g) || []).length / decoded.length;
-            if (printableRatio > 0.9) {
-              return decoded;
-            }
-          }
-        } catch {
-          // Not valid base64 or UTF-8, return original
-        }
-      }
-    }
-
-    return obj;
-  }
-
-  /**
    * Recursively decode google.protobuf.Any fields in a JSON response object.
    * Detects objects with both `typeUrl` and `value` keys (protobufjs camelCase output),
    * resolves the inner protobuf type via reflection, and replaces the Any wrapper
    * with the decoded inner message plus an `@type` field for provenance.
-   * Runs before decodeBase64BytesFields so inner messages also get UTF-8 treatment.
    * @param obj - The JSON object to walk
    * @param depth - Current recursion depth (capped at 50)
    * @returns The object with Any fields decoded
@@ -905,9 +881,7 @@ export class ReflectionClient {
       const totalTime = Date.now() - startTime;
       console.log(`[ReflectionClient] Successfully decoded response after loading ${loadedTypes.size} unique type(s) across ${depth} attempt(s) in ${totalTime}ms (decode: ${decodeTime}ms)`);
 
-      // Decode Any fields first, then base64 bytes fields
-      const anyDecoded = await this.decodeAnyFields(json);
-      return this.decodeBase64BytesFields(anyDecoded);
+      return this.decodeAnyFields(json);
     } catch (decodeErr: unknown) {
       const errorMsg = errorMessage(decodeErr);
 
@@ -1025,12 +999,22 @@ export class ReflectionClient {
     return new Promise((resolve, reject) => {
       const grpcCallStartTime = Date.now();
       const client = new grpc.Client(this.options.endpoint,
-        this.options.tls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
+        this.buildCredentials(this.options.tls, this.options.clientCert, this.options.clientKey),
         {
           'grpc.max_receive_message_length': -1,
           'grpc.max_send_message_length': -1,
         }
       );
+      let settled = false;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        try { client.close(); } catch { /* ignore */ }
+        fn();
+      };
 
       try {
         // Encode request
@@ -1065,19 +1049,17 @@ export class ReflectionClient {
           callMetadata,
           { deadline },
           (error: grpc.ServiceError | null, response?: Buffer) => {
-            client.close();
-
             if (error) {
               console.error(`[ReflectionClient] gRPC Error for ${methodPath}:`);
               console.error(`  Code: ${error.code}`);
               console.error(`  Message: ${error.message}`);
               console.error(`  Details: ${error.details || 'none'}`);
-              reject(new Error(`gRPC Error (code ${error.code}): ${error.message}`));
+              settle(() => reject(new Error(`gRPC Error (code ${error.code}): ${error.message}`)));
               return;
             }
 
             if (!response) {
-              reject(new Error('No response received'));
+              settle(() => reject(new Error('No response received')));
               return;
             }
 
@@ -1095,12 +1077,12 @@ export class ReflectionClient {
                 objects: true,
                 oneofs: true,
               });
-              // Decode Any fields first, then base64 bytes fields
+
+              // Decode protobuf Any wrappers while preserving bytes as base64.
               this.decodeAnyFields(json).then(decoded => {
-                resolve(this.decodeBase64BytesFields(decoded));
+                settle(() => resolve(decoded));
               }).catch(() => {
-                // Fall back to just base64 decoding if Any decoding fails
-                resolve(this.decodeBase64BytesFields(json));
+                settle(() => resolve(json));
               });
             } catch (decodeErr: unknown) {
               // Check if this is a missing type error
@@ -1110,27 +1092,24 @@ export class ReflectionClient {
                 // Recursively load all missing types with retry limit
                 this.loadAllMissingTypes(responseType, response, 0)
                   .then((json) => {
-                    resolve(json);
+                    settle(() => resolve(json));
                   })
                   .catch((loadErr) => {
-                    reject(new Error(`Failed to load all missing types: ${loadErr.message}`));
+                    settle(() => reject(new Error(`Failed to load all missing types: ${loadErr.message}`)));
                   });
               } else {
-                reject(new Error(`Failed to decode response: ${decodeErr}`));
+                settle(() => reject(new Error(`Failed to decode response: ${decodeErr}`)));
               }
             }
           }
         );
 
-        setTimeout(() => {
-          call.cancel();
-          client.close();
-          reject(new Error(`Timeout after ${timeout}ms`));
+        timeoutHandle = setTimeout(() => {
+          try { call.cancel(); } catch { /* ignore */ }
+          settle(() => reject(new Error(`Timeout after ${timeout}ms`)));
         }, timeout);
-
       } catch (err) {
-        client.close();
-        reject(err);
+        settle(() => reject(err));
       }
     });
   }
@@ -1151,7 +1130,7 @@ export class ReflectionClient {
         'cosmos.base.reflection.v2alpha1.ReflectionService',
         'GetQueryServicesDescriptor',
         {},
-        10000
+        this.getTimeoutMs()
       );
 
       console.log('[ReflectionClient] v2alpha1 response structure:', JSON.stringify(response).substring(0, 500));
@@ -1242,7 +1221,7 @@ export class ReflectionClient {
         'cosmos.base.reflection.v2alpha1.ReflectionService',
         'GetTxDescriptor',
         {},
-        10000
+        this.getTimeoutMs()
       );
 
       if (!response || !response.tx || !response.tx.msgs) {

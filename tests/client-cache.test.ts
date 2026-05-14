@@ -4,6 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import {
 	getServicesCacheKey,
+	normalizeRequestTimeoutMs,
+	REQUEST_TIMEOUT_MS,
 } from '@/lib/utils/client-cache';
 
 describe('Cache key generation', () => {
@@ -24,5 +26,26 @@ describe('Cache key generation', () => {
 			const key2 = getServicesCacheKey('host2:443', true);
 			expect(key1).not.toBe(key2);
 		});
+	});
+});
+
+describe('Request timeout settings', () => {
+	it('uses the default timeout for invalid values', () => {
+		expect(normalizeRequestTimeoutMs(undefined)).toBe(REQUEST_TIMEOUT_MS.DEFAULT);
+		expect(normalizeRequestTimeoutMs(null)).toBe(REQUEST_TIMEOUT_MS.DEFAULT);
+		expect(normalizeRequestTimeoutMs('')).toBe(REQUEST_TIMEOUT_MS.DEFAULT);
+		expect(normalizeRequestTimeoutMs(false)).toBe(REQUEST_TIMEOUT_MS.DEFAULT);
+		expect(normalizeRequestTimeoutMs('not-a-number')).toBe(REQUEST_TIMEOUT_MS.DEFAULT);
+	});
+
+	it('clamps timeout values to the supported range', () => {
+		expect(normalizeRequestTimeoutMs(100)).toBe(REQUEST_TIMEOUT_MS.MIN);
+		expect(normalizeRequestTimeoutMs(120000)).toBe(REQUEST_TIMEOUT_MS.MAX);
+	});
+
+	it('accepts numeric strings and rounds values', () => {
+		expect(normalizeRequestTimeoutMs('2500')).toBe(2500);
+		expect(normalizeRequestTimeoutMs(2500.4)).toBe(2500);
+		expect(normalizeRequestTimeoutMs(2500.6)).toBe(2501);
 	});
 });

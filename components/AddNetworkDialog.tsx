@@ -64,6 +64,10 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 	const inputRef = useRef<HTMLInputElement>(null);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 
+	useEffect(() => {
+		setMode(defaultMode || 'generic');
+	}, [defaultMode]);
+
 	// Generic mode: BSR state
 	const [genericSourceTab, setGenericSourceTab] = useState<'endpoint' | 'bsr'>('endpoint');
 	const [bsrModule, setBsrModule] = useState('');
@@ -111,17 +115,19 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 
 	// Load cached chains on mount
 	useEffect(() => {
+		if (mode !== 'cosmos') return;
 		const cached = listCachedChains();
 		setCachedChains(cached);
-	}, []);
+	}, [mode]);
 
 	// Load popular BSR modules on mount
 	useEffect(() => {
+		if (mode !== 'generic' || genericSourceTab !== 'bsr') return;
 		fetch('/api/bsr/modules?popular=true')
 			.then(res => res.json())
 			.then(data => setBsrPopularModules(data.modules || []))
 			.catch(() => {});
-	}, []);
+	}, [genericSourceTab, mode]);
 
 	// Search BSR org modules
 	const searchBsrOrg = async (org: string) => {
@@ -140,7 +146,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 
 	/** Build auth config from current state */
 	const buildAuthConfig = (): GrpcAuthConfig | undefined => {
-		if (authType === 'none') return undefined;
+		if (mode !== 'generic' || authType === 'none') return undefined;
 		const config: GrpcAuthConfig = { type: authType };
 		if (authType === 'bearer') config.bearerToken = bearerToken;
 		if (authType === 'api-key') { config.apiKeyHeader = apiKeyHeader; config.apiKeyValue = apiKeyValue; }
@@ -150,7 +156,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 
 	// Fetch chains from registry on mount
 	useEffect(() => {
-		if (chains.length === 0) {
+		if (mode === 'cosmos' && chains.length === 0) {
 			setLoadingChains(true);
 			fetch('/api/chains')
 				.then(res => res.json())
@@ -161,7 +167,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 				.catch(err => console.error('Failed to fetch chains:', err))
 				.finally(() => setLoadingChains(false));
 		}
-	}, [chains.length]);
+	}, [chains.length, mode]);
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -369,6 +375,25 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		() => endpointConfigs.filter(ep => ep.selected).length,
 		[endpointConfigs]
 	);
+	const isCosmosMode = mode === 'cosmos';
+	const dialogTitle = isCosmosMode ? 'Add Network' : 'Connect Source';
+	const dialogDescription = isCosmosMode
+		? 'Select a Cosmos SDK chain or enter a gRPC endpoint directly'
+		: 'Connect to a gRPC server or browse buf.build schemas';
+	const primarySubmitLabel = isCosmosMode ? 'Add Network' : 'Connect Server';
+
+	const handleModeChange = (nextMode: ExplorerMode) => {
+		if (nextMode === mode) return;
+
+		setMode(nextMode);
+		setEndpoint('');
+		setShowDropdown(false);
+		setShowCachedChains(false);
+		setFilteredChains(nextMode === 'cosmos' ? chains : []);
+		setSelectedChainDetails(null);
+		setEndpointConfigs([]);
+		setGenericSourceTab('endpoint');
+	};
 
 	/** Normalize BSR module: strip buf.build prefix and protocol */
 	const normalizeBsrModule = (input: string): string =>
@@ -390,20 +415,15 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 			<DialogContent className="sm:max-w-[525px]">
 				<form onSubmit={handleSubmit}>
 					<DialogHeader>
-						<DialogTitle>Add Network</DialogTitle>
-						<DialogDescription>
-							{mode === 'cosmos'
-								? 'Select a chain or enter a gRPC endpoint directly'
-								: 'Connect to any gRPC server or browse buf.build schemas'
-							}
-						</DialogDescription>
+						<DialogTitle>{dialogTitle}</DialogTitle>
+						<DialogDescription>{dialogDescription}</DialogDescription>
 					</DialogHeader>
 
 					{/* Mode toggle */}
 					<div className="flex gap-1 mt-2 mb-3 p-1 bg-muted rounded-lg">
 						<button
 							type="button"
-							onClick={() => setMode('generic')}
+							onClick={() => handleModeChange('generic')}
 							className={cn(
 								"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
 								mode === 'generic'
@@ -415,7 +435,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 						</button>
 						<button
 							type="button"
-							onClick={() => setMode('cosmos')}
+							onClick={() => handleModeChange('cosmos')}
 							className={cn(
 								"flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
 								mode === 'cosmos'
@@ -886,7 +906,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 								onClick={handleBsrAdd}
 								disabled={!bsrModule.trim()}
 							>
-								{bsrEndpoint.trim() ? 'Add with Schema' : 'Browse Schema'}
+								{bsrEndpoint.trim() ? 'Connect with Schema' : 'Browse Schema'}
 							</Button>
 						) : mode === 'cosmos' && selectedChainDetails && endpointConfigs.length > 0 ? (
 							<Button
@@ -908,7 +928,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 								type="submit"
 								disabled={!endpoint.trim()}
 							>
-								Add Network
+								{primarySubmitLabel}
 							</Button>
 						)}
 					</DialogFooter>
