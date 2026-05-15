@@ -64,17 +64,23 @@ function hasNonEmptyParams(params: Record<string, any>): boolean {
 // ── JsonViewer (inlined from ResultsPanel) ──────────────────────────────
 
 function DecodedBinaryViewer({ value }: { value: DecodedBinaryValue }) {
+	const hasJson = value.json !== undefined;
+
 	return (
-		<span className="inline-flex max-w-full flex-col gap-1 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
+		<div className="inline-flex max-w-full flex-col gap-2 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
 			<span className="flex flex-wrap items-center gap-2">
 				<span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
 					<Binary className="h-3 w-3" />
 					base64
 				</span>
 				<span className="text-muted-foreground">{value.byteLength} bytes</span>
+				{hasJson && <span className="text-[10px] font-semibold uppercase text-green-600 dark:text-green-400">decoded JSON</span>}
 			</span>
-			<span className="break-all text-green-600 dark:text-green-400">&quot;{value.original}&quot;</span>
-			{value.text ? (
+			{hasJson ? (
+				<div className="min-w-0 rounded bg-background/70 p-2 text-foreground">
+					<JsonViewer data={value.json} />
+				</div>
+			) : value.text ? (
 				<span className="break-all text-foreground">
 					<span className="text-muted-foreground">decoded text: </span>
 					&quot;{value.text}&quot;
@@ -84,7 +90,10 @@ function DecodedBinaryViewer({ value }: { value: DecodedBinaryValue }) {
 					hex: {value.hexPreview}{value.byteLength > 32 ? ' ...' : ''}
 				</span>
 			)}
-		</span>
+			<span className="break-all text-[10px] text-muted-foreground">
+				original base64: &quot;{value.original}&quot;
+			</span>
+		</div>
 	);
 }
 
@@ -100,7 +109,7 @@ function JsonViewer({ data, level = 0, path = '' }: { data: any; level?: number;
 
 	const handleCopyValue = (value: any, key: string) => {
 		const text = isDecodedBinaryValue(value)
-			? value.text || value.original
+			? value.json !== undefined ? JSON.stringify(value.json, null, 2) : value.text || value.original
 			: typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
 		navigator.clipboard.writeText(text);
 		const next = new Set(copiedKeys);

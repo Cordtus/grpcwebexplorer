@@ -5,6 +5,7 @@ export interface DecodedBinaryValue {
   byteLength: number;
   hexPreview: string;
   text?: string;
+  json?: unknown;
 }
 
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -50,6 +51,22 @@ function hexPreview(bytes: Uint8Array, limit = 32): string {
     .join(' ');
 }
 
+function parseJsonText(text: string): unknown | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+
+  const first = trimmed[0];
+  if (!['{', '[', '"', 't', 'f', 'n'].includes(first) && !/^-?\d/.test(trimmed)) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return undefined;
+  }
+}
+
 export function inspectBase64Value(value: string): DecodedBinaryValue | null {
   const normalized = value.trim();
 
@@ -82,6 +99,10 @@ export function inspectBase64Value(value: string): DecodedBinaryValue | null {
 
   if (text !== null) {
     decoded.text = text;
+    const json = parseJsonText(text);
+    if (json !== undefined) {
+      decoded.json = json;
+    }
   }
 
   return decoded;
@@ -99,7 +120,14 @@ export function decodeBinaryValuesForDisplay<T>(value: T): T | DecodedBinaryValu
   if (value === null || value === undefined) return value;
 
   if (typeof value === 'string') {
-    return inspectBase64Value(value) || value;
+    const decoded = inspectBase64Value(value);
+    if (!decoded) return value;
+
+    if (decoded.json !== undefined) {
+      decoded.json = decodeBinaryValuesForDisplay(decoded.json);
+    }
+
+    return decoded;
   }
 
   if (Array.isArray(value)) {

@@ -145,13 +145,14 @@ Response bytes are preserved as base64 in API JSON. Decoding is an explicit
 display choice in the results UI:
 
 - `lib/utils/response-decoder.ts`: Recursively annotates base64/binary-looking
-  strings for formatted display only
+  strings for formatted display only, parses decoded JSON when present, and
+  falls back to decoded text or byte metadata
 - `components/MethodDetailPanel.tsx`: Provides the "Decode" toggle in the
   Results toolbar
 - Raw response JSON, whole-response copy, and saved JSON keep original base64
   values
-- Field-level copy from a decoded formatted value copies decoded text when
-  available, otherwise the original base64 value
+- Field-level copy from a decoded formatted value copies decoded JSON when
+  available, then decoded text, otherwise the original base64 value
 
 ## Keyboard Shortcuts
 

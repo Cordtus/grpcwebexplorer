@@ -18,8 +18,8 @@ Vercel as-is or self-host via Docker / Node.js.
 - Auth: Bearer tokens, API keys, mTLS
 - Code export: grpcurl, curl/REST, TypeScript, Go, Python -- includes current
   params, metadata, and auth
-- Optional base64/binary response inspection while preserving original response
-  JSON for copy and save actions
+- Optional base64/binary response inspection that parses decoded JSON when
+  present, while preserving original response JSON for copy and save actions
 - REST path mapping from `google.api.http` annotations
 - Round-robin endpoints, DNS validation, automatic blacklisting on failure,
   TLS auto-retry

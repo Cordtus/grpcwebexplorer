@@ -18,6 +18,21 @@ describe('response decoder', () => {
 		});
 	});
 
+	it('parses decoded JSON payloads into structured values', () => {
+		const decoded = inspectBase64Value('eyJmb28iOiJiYXIiLCJjb3VudCI6M30=');
+
+		expect(decoded).toMatchObject({
+			__decodedBinary: true,
+			encoding: 'base64',
+			original: 'eyJmb28iOiJiYXIiLCJjb3VudCI6M30=',
+			text: '{"foo":"bar","count":3}',
+			json: {
+				foo: 'bar',
+				count: 3,
+			},
+		});
+	});
+
 	it('annotates binary base64 with byte metadata', () => {
 		const decoded = inspectBase64Value('AAECAwQ=');
 
@@ -45,7 +60,7 @@ describe('response decoder', () => {
 	it('recurses through arrays and objects without mutating input', () => {
 		const input = {
 			id: 'cosmoshub-4',
-			values: ['SGVsbG8=', null],
+			values: ['SGVsbG8=', 'eyJwYXlsb2FkIjoiU0dWc2JHOD0ifQ==', null],
 			nested: { payload: 'AAECAwQ=' },
 		};
 
@@ -54,6 +69,11 @@ describe('response decoder', () => {
 		expect(output).not.toBe(input);
 		expect(input.values[0]).toBe('SGVsbG8=');
 		expect(isDecodedBinaryValue((output as any).values[0])).toBe(true);
+		expect(isDecodedBinaryValue((output as any).values[1])).toBe(true);
+		expect((output as any).values[1].json.payload).toMatchObject({
+			__decodedBinary: true,
+			text: 'Hello',
+		});
 		expect(isDecodedBinaryValue((output as any).nested.payload)).toBe(true);
 		expect((output as any).id).toBe('cosmoshub-4');
 	});

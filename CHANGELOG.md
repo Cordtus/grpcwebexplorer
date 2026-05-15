@@ -3,10 +3,10 @@
 ## [1.3.1] - 2026-05-14
 
 ### Added
-- Optional response inspection for base64/binary-looking values without changing copied or saved raw response JSON.
+- Optional response inspection for base64/binary-looking values, including parsed decoded JSON when available, without changing copied or saved raw response JSON.
 
 ### Changed
-- Response bytes are preserved as base64 in API JSON; decoding is now an explicit inspection choice in the results UI.
+- Response bytes are preserved as base64 in API JSON; decoding is now an explicit inspection choice in the results UI with JSON-first rendering.
 - Mobile layout now uses viewport-safe dialogs and responsive method/detail panes.
 - Generic gRPC copy now refers to connecting sources instead of adding Cosmos networks.
 - Service discovery timeout setting is now persisted and sent with discovery and descriptor loading requests.
