@@ -51,6 +51,8 @@ export interface GrpcService {
   name: string;
   fullName: string;
   methods: GrpcMethod[];
+  /** Whether the full protobuf descriptor was loaded, rather than only a Cosmos v2alpha1 summary. */
+  descriptorStatus?: 'loaded' | 'pending';
 }
 
 /**

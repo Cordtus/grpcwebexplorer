@@ -34,7 +34,7 @@ export async function fetchServicesViaReflection(
 
   try {
     await client.initialize();
-    return client.getServices();
+    return client.getServices().map((service) => ({ ...service, descriptorStatus: 'loaded' as const }));
   } finally {
     client.close();
   }
@@ -91,7 +91,10 @@ export async function fetchServicesWithCosmosOptimization(
       // Load full descriptors for all v2alpha1 services using standard reflection
       // This ensures field definitions are always available
       await client.initialize();
-      const enrichedServices = client.getServices();
+      const enrichedServices = client.getServices().map((service) => ({
+        ...service,
+        descriptorStatus: 'loaded' as const,
+      }));
 
       // Merge: prefer enriched services (with full field definitions), keep v2alpha1-only services
       const finalServices: import('./reflection-client').GrpcService[] = [];
@@ -106,7 +109,7 @@ export async function fetchServicesWithCosmosOptimization(
       // (e.g. the Transactions service from GetTxDescriptor)
       for (const v2Service of v2alpha1Services) {
         if (!seenServices.has(v2Service.fullName)) {
-          finalServices.push(v2Service);
+          finalServices.push({ ...v2Service, descriptorStatus: 'pending' });
           seenServices.add(v2Service.fullName);
         }
       }
@@ -132,7 +135,10 @@ export async function fetchServicesWithCosmosOptimization(
     // Fallback to standard reflection if v2alpha1 not available
     console.log('[Reflection] v2alpha1 not available, using standard reflection...');
     await client.initialize();
-    const standardServices = client.getServices();
+    const standardServices = client.getServices().map((service) => ({
+      ...service,
+      descriptorStatus: 'loaded' as const,
+    }));
     console.log(`[Reflection] Got ${standardServices.length} services via standard reflection`);
     return standardServices;
 
@@ -167,7 +173,7 @@ export async function loadServiceDescriptor(
     const cached = getFromCache<import('./reflection-client').GrpcService>(cacheKey);
     if (cached) {
       console.log(`[Reflection] Using cached descriptor for ${serviceName}`);
-      return cached;
+      return { ...cached, descriptorStatus: 'loaded' };
     }
   } catch (cacheErr) {
     // Cache read failed, continue without cache
@@ -205,7 +211,7 @@ export async function loadServiceDescriptor(
           console.warn(`[Reflection] Cache write failed for ${serviceName}:`, cacheErr);
         }
         console.log(`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`);
-        return service;
+        return { ...service, descriptorStatus: 'loaded' };
       }
 
       console.warn(`[Reflection] Service ${serviceName} not found after initialization. Available services:`,

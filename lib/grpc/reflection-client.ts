@@ -130,6 +130,8 @@ export interface GrpcService {
   name: string;
   fullName: string;
   methods: GrpcMethod[];
+  /** Whether this service has a full protobuf descriptor or only a v2alpha1 summary. */
+  descriptorStatus?: 'loaded' | 'pending';
 }
 
 export interface MessageField {
