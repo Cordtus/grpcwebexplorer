@@ -264,17 +264,16 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 		debug.log(`Selected cached chain: ${cached.chainId || cached.endpoint}`);
 	};
 
-	// Validate endpoints by checking DNS resolution
+	// Qualify endpoints with DNS and a bounded reflection handshake.
 	const validateEndpoints = async (configs: EndpointConfig[]): Promise<EndpointConfig[]> => {
 		if (configs.length === 0) return configs;
 
 		setValidatingEndpoints(true);
 		try {
-			const addresses = configs.map(c => c.address);
 			const response = await fetch('/api/grpc/validate-endpoints', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ endpoints: addresses })
+				body: JSON.stringify({ endpoints: configs.map(({ address, tlsEnabled }) => ({ address, tlsEnabled })) })
 			});
 
 			if (!response.ok) {
@@ -291,7 +290,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({ onAdd, onClose, def
 					...config,
 					reachable: validation?.reachable ?? undefined,
 					validationError: validation?.error,
-					// Auto-deselect unreachable endpoints
+					reflectionStatus: validation?.reflectionStatus,
+					// Do not start a network with providers that cannot serve reflection.
 					selected: validation?.reachable !== false ? config.selected : false
 				};
 			});

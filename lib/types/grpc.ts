@@ -64,8 +64,16 @@ export interface EndpointConfig {
   tlsEnabled: boolean;
   selected: boolean;
   provider?: string;
-  reachable?: boolean; // DNS validation result (undefined = not checked yet)
-  validationError?: string; // Error message if validation failed
+  reachable?: boolean; // Reflection qualification result (undefined = not checked yet)
+  validationError?: string; // DNS or reflection qualification error
+  reflectionStatus?: 'ready' | 'incompatible' | 'transient';
+}
+
+/** Client-persisted execution result used to avoid repeatedly starting with known-bad providers. */
+export interface EndpointExecutionHealth {
+  lastSuccess?: number;
+  retryAfter?: number;
+  lastErrorKind?: 'incompatible' | 'transient';
 }
 
 export interface GrpcNetwork {
@@ -74,6 +82,7 @@ export interface GrpcNetwork {
   endpoint: string;
   endpoints?: string[]; // Additional fallback endpoints for this chain (legacy)
   endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
+  endpointHealth?: Record<string, EndpointExecutionHealth>;
   chainId?: string;
   tlsEnabled: boolean;
   services: GrpcService[];

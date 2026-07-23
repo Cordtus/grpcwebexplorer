@@ -8,6 +8,9 @@ import { normalizeRequestTimeoutMs } from '@/lib/utils/client-cache';
 import { EndpointFailoverError, executeWithEndpointFailover, type ExecutionEndpoint } from '@/lib/utils/execution-endpoints';
 import { endpointManager } from '@/lib/utils/endpoint-manager';
 
+const MAX_ROUTE_EXECUTION_WINDOW_MS = 85_000;
+const REFLECTION_ATTEMPT_TIMEOUT_MS = 8_000;
+
 export const runtime = 'nodejs';
 export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
 
@@ -17,6 +20,7 @@ export async function POST(req: Request) {
   try {
     const { endpoint, endpointAttempts, service, method, params, tlsEnabled, metadata, authConfig, timeoutMs } = await req.json();
     const requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs, 60000);
+    const deadlineAt = startTime + Math.min(MAX_ROUTE_EXECUTION_WINDOW_MS, requestTimeoutMs + 15_000);
 
     if (!endpoint || !service || !method) {
       return NextResponse.json(
@@ -41,7 +45,6 @@ export async function POST(req: Request) {
         .filter((attempt): attempt is ExecutionEndpoint =>
           typeof attempt?.address === 'string' && typeof attempt?.tlsEnabled === 'boolean'
         )
-        .slice(0, 3)
       : [];
     const attempts = configuredAttempts.length > 0
       ? configuredAttempts
@@ -64,6 +67,8 @@ export async function POST(req: Request) {
     }
 
     const execution = await executeWithEndpointFailover(attempts, async (attempt) => {
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw new Error('Execution deadline exhausted before endpoint attempt');
       let endpointWithPort = attempt.address;
       if (!endpointWithPort.includes(':')) {
         endpointWithPort = attempt.tlsEnabled ? `${endpointWithPort}:443` : `${endpointWithPort}:9090`;
@@ -71,17 +76,27 @@ export async function POST(req: Request) {
 
       console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort} (TLS: ${attempt.tlsEnabled})`);
       const invoke = async (usedTls: boolean) => {
+        const invokeRemainingMs = deadlineAt - Date.now();
+        if (invokeRemainingMs <= 0) throw new Error('Execution deadline exhausted before reflection initialization');
         const client = new ReflectionClient({
           endpoint: endpointWithPort,
           tls: usedTls,
-          timeout: requestTimeoutMs,
+          timeout: Math.min(REFLECTION_ATTEMPT_TIMEOUT_MS, invokeRemainingMs),
           clientCert,
           clientKey,
         });
 
         try {
-          await client.initializeForMethod(service);
-          return await client.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
+          try {
+            await client.initializeForMethod(service);
+          } catch (error) {
+            throw new Error(`Reflection initialization failed: ${errorMessage(error)}`);
+          }
+          try {
+            return await client.invokeMethod(service, method, params || {}, Math.min(requestTimeoutMs, Math.max(1, deadlineAt - Date.now())), enrichedMetadata);
+          } catch (error) {
+            throw new Error(`Method invocation failed: ${errorMessage(error)}`);
+          }
         } finally {
           client.close();
         }
@@ -113,6 +128,11 @@ export async function POST(req: Request) {
         endpointManager.recordFailure(endpointWithPort, msg.includes('timeout') || msg.includes('ETIMEDOUT'));
         throw err;
       }
+    }, {
+      deadlineAt,
+      // Retrying a completed method invocation can duplicate stateful RPCs.
+      // Only reflection setup is safe to replay at another provider.
+      shouldFailover: (error) => errorMessage(error).includes('Reflection initialization failed:'),
     });
 
     const executionTime = Date.now() - startTime;

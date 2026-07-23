@@ -21,8 +21,8 @@ Vercel as-is or self-host via Docker / Node.js.
 - Optional base64/binary response inspection that parses decoded JSON when
   present, while preserving original response JSON for copy and save actions
 - REST path mapping from `google.api.http` annotations
-- Round-robin endpoints, DNS validation, automatic blacklisting on failure,
-  TLS auto-retry
+- Round-robin endpoints, reflection-aware provider qualification, client-side
+  endpoint cooldowns, and automatic TLS retry
 - Search by namespace, service, or method
 - Client-side caching (configurable TTL, localStorage)
 - Execution history with timing
@@ -128,7 +128,7 @@ Browser (JSON)  -->  Next.js API Routes  -->  gRPC Server (protobuf/HTTP2)
 | `POST /api/grpc/services` | Service discovery via reflection |
 | `POST /api/grpc/execute` | RPC invocation |
 | `POST /api/grpc/descriptor` | Lazy-load service field definitions |
-| `POST /api/grpc/validate-endpoints` | DNS validation |
+| `POST /api/grpc/validate-endpoints` | DNS plus bounded gRPC reflection qualification |
 | `POST /api/grpc/test-compatibility` | Bulk method testing |
 | `GET /api/bsr/modules` | BSR module search |
 | `POST /api/bsr/descriptor` | Fetch FileDescriptorSet from BSR |
@@ -180,9 +180,11 @@ Private modules need an auth token.
 **Stale data**: Check cache TTL in settings, or clear via the menu bar cache
 indicator.
 
-**Unreachable endpoints**: DNS validation runs before connecting. If all
-endpoints fail, verify the server has outbound access to the gRPC ports
-(typically 9090, 443).
+**Unreachable endpoints**: Cosmos endpoint validation checks DNS and a bounded
+gRPC reflection handshake before selecting providers. A provider can resolve
+but still deny, omit, or time out on reflection; those endpoints are deselected
+but can be manually retried. If all endpoints fail, verify the server has
+outbound access to the gRPC ports (typically 9090, 443).
 
 ## License
 

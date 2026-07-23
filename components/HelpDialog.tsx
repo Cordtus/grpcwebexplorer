@@ -152,7 +152,7 @@ const HelpDialog: React.FC<HelpDialogProps> = ({ open, onClose }) => {
                   </li>
                   <li className="flex items-start gap-2">
                     <ChevronRight className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Unreachable endpoints are deselected during validation before use.</span>
+                    <span>Endpoints that fail DNS or reflection qualification are deselected, but can be manually reselected.</span>
                   </li>
                 </ul>
               </div>

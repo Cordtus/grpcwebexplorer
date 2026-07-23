@@ -98,17 +98,17 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 	const allSelected = selectedCount === endpoints.length && endpoints.length > 0;
 	const someSelected = selectedCount > 0 && selectedCount < endpoints.length;
 
-	// Toggle all endpoints: if any selected → deselect all, if none → select all reachable
+	// Toggle all endpoints: if any selected → deselect all, if none → select qualified endpoints.
 	const handleSelectAll = useCallback(() => {
 		const anySelected = selectedCount > 0;
 		onChange(endpoints.map(ep => ({
 			...ep,
-			// Deselect all if any selected, otherwise select all reachable
+			// Deselect all if any selected, otherwise select all qualified endpoints.
 			selected: anySelected ? false : (ep.reachable !== false)
 		})));
 	}, [endpoints, selectedCount, onChange]);
 
-	// Select only reachable endpoints
+	// Select only endpoints that passed DNS plus reflection qualification.
 	const handleSelectReachable = useCallback(() => {
 		onChange(endpoints.map(ep => ({
 			...ep,
@@ -172,7 +172,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 							onClick={handleSelectReachable}
 							className="text-xs text-primary hover:underline ml-2"
 						>
-							Select reachable only ({reachableCount})
+							Select qualified only ({reachableCount})
 						</button>
 					)}
 				</div>
@@ -263,7 +263,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 			{/* Summary */}
 			{!validating && unreachableCount > 0 && (
 				<div className="text-xs text-amber-500 text-center pt-2">
-					{unreachableCount} endpoint{unreachableCount !== 1 ? 's' : ''} unreachable (DNS resolution failed)
+					{unreachableCount} endpoint{unreachableCount !== 1 ? 's are' : ' is'} not reflection-ready; you can reselect one to try it manually.
 				</div>
 			)}
 			{selectedCount === 0 && !validating && (

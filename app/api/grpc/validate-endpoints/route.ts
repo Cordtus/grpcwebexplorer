@@ -1,13 +1,26 @@
 import { NextResponse } from 'next/server';
 import dns from 'dns';
 import { promisify } from 'util';
+import { ReflectionClient } from '@/lib/grpc/reflection-client';
+import { errorMessage } from '@/lib/utils';
+import { classifyReflectionFailure } from '@/lib/utils/reflection-probe';
 
 const dnsLookup = promisify(dns.lookup);
+const MAX_QUALIFIED_ENDPOINTS = 30;
+
+export const runtime = 'nodejs';
+export const maxDuration = 45;
 
 interface EndpointValidation {
 	address: string;
 	reachable: boolean;
 	error?: string;
+	reflectionStatus?: 'ready' | 'incompatible' | 'transient';
+}
+
+interface EndpointInput {
+	address: string;
+	tlsEnabled?: boolean;
 }
 
 /**
@@ -31,7 +44,8 @@ function extractHostname(address: string): string {
  * Validates a single endpoint by attempting DNS resolution
  * Uses a fast 1 second timeout to quickly identify unreachable endpoints
  */
-async function validateEndpoint(address: string, timeoutMs: number = 1000): Promise<EndpointValidation> {
+async function validateEndpoint(input: EndpointInput, timeoutMs: number = 1000): Promise<EndpointValidation> {
+	const { address } = input;
 	const hostname = extractHostname(address);
 
 	if (!hostname) {
@@ -50,16 +64,35 @@ async function validateEndpoint(address: string, timeoutMs: number = 1000): Prom
 			timeoutPromise
 		]);
 
-		return { address, reachable: true };
+		const client = new ReflectionClient({
+			endpoint: address,
+			tls: input.tlsEnabled ?? address.endsWith(':443'),
+			timeout: 3000,
+		});
+		try {
+			await client.probeReflection();
+			return { address, reachable: true, reflectionStatus: 'ready' };
+		} catch (error) {
+			const message = errorMessage(error);
+			return {
+				address,
+				reachable: false,
+				error: message,
+				reflectionStatus: classifyReflectionFailure(message),
+			};
+		} finally {
+			client.close();
+		}
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-		return { address, reachable: false, error: errorMsg };
+		return { address, reachable: false, error: errorMsg, reflectionStatus: 'transient' };
 	}
 }
 
 /**
  * POST /api/grpc/validate-endpoints
- * Validates multiple endpoints in parallel by checking DNS resolution
+ * Checks DNS first, then performs a bounded reflection handshake. DNS success
+ * alone is not enough to select a provider for Cosmos execution.
  *
  * Request body: { endpoints: string[] }
  * Response: { results: EndpointValidation[] }
@@ -67,7 +100,7 @@ async function validateEndpoint(address: string, timeoutMs: number = 1000): Prom
 export async function POST(request: Request) {
 	try {
 		const body = await request.json();
-		const { endpoints } = body as { endpoints: string[] };
+		const { endpoints } = body as { endpoints: Array<string | EndpointInput> };
 
 		if (!endpoints || !Array.isArray(endpoints)) {
 			return NextResponse.json(
@@ -76,10 +109,21 @@ export async function POST(request: Request) {
 			);
 		}
 
-		// Validate all endpoints concurrently with 1s timeout each (fast rejection)
-		const results = await Promise.all(
-			endpoints.map(ep => validateEndpoint(ep, 1000))
-		);
+		const normalized = endpoints.map((endpoint) =>
+			typeof endpoint === 'string' ? { address: endpoint } : endpoint
+		).filter((endpoint): endpoint is EndpointInput => typeof endpoint?.address === 'string');
+		const endpointsToQualify = normalized.slice(0, MAX_QUALIFIED_ENDPOINTS);
+		const skippedEndpoints = normalized.slice(MAX_QUALIFIED_ENDPOINTS);
+		const results: EndpointValidation[] = [];
+		for (let index = 0; index < endpointsToQualify.length; index += 3) {
+			results.push(...await Promise.all(endpointsToQualify.slice(index, index + 3).map((endpoint) => validateEndpoint(endpoint, 1000))));
+		}
+		results.push(...skippedEndpoints.map(({ address }) => ({
+			address,
+			reachable: false,
+			reflectionStatus: 'transient' as const,
+			error: `Qualification skipped after ${MAX_QUALIFIED_ENDPOINTS} endpoints; reselect manually to try this provider.`,
+		})));
 
 		const reachableCount = results.filter(r => r.reachable).length;
 		console.log(`[ValidateEndpoints] ${reachableCount}/${results.length} endpoints reachable`);
