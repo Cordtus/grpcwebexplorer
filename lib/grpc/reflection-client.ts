@@ -617,6 +617,15 @@ export class ReflectionClient {
   }
 
   /**
+   * Verify that the endpoint accepts either supported reflection protocol without
+   * loading every protobuf descriptor. Used when qualifying Cosmos providers.
+   */
+  async probeReflection(): Promise<void> {
+    await this.initializeReflectionStub();
+    await this.listServices();
+  }
+
+  /**
    * List all available services
    */
   private async listServices(): Promise<string[]> {

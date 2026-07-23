@@ -18,6 +18,7 @@ import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, 
 import { descriptorLoader } from '@/lib/utils/descriptor-loader';
 import { isServiceDescriptorReady, servicesNeedingDescriptors } from '@/lib/utils/descriptor-readiness';
 import { getExecutionEndpoints } from '@/lib/utils/execution-endpoints';
+import { classifyReflectionFailure } from '@/lib/utils/reflection-probe';
 import { toast } from 'sonner';
 
 // Color palette for networks
@@ -33,7 +34,34 @@ const NETWORK_COLORS = [
 ];
 
 // Keep persisted network state aligned with descriptor completeness metadata.
-const NETWORK_CACHE_VERSION = '2.0.0';
+const NETWORK_CACHE_VERSION = '2.1.0';
+const INCOMPATIBLE_ENDPOINT_COOLDOWN_MS = 60 * 60 * 1000;
+const TRANSIENT_ENDPOINT_COOLDOWN_MS = 60 * 1000;
+
+function updateExecutionHealth(
+  network: GrpcNetwork,
+  successfulEndpoint: string | undefined,
+  failures: Array<{ endpoint: string; error: string }>,
+  now: number
+): GrpcNetwork {
+  const endpointHealth = { ...network.endpointHealth };
+
+  for (const failure of failures) {
+    const reflectionFailure = failure.error.includes('Reflection initialization failed:');
+    const kind = reflectionFailure ? classifyReflectionFailure(failure.error) : 'transient';
+    endpointHealth[failure.endpoint] = {
+      ...endpointHealth[failure.endpoint],
+      lastErrorKind: kind,
+      retryAfter: now + (kind === 'incompatible' ? INCOMPATIBLE_ENDPOINT_COOLDOWN_MS : TRANSIENT_ENDPOINT_COOLDOWN_MS),
+    };
+  }
+
+  if (successfulEndpoint) {
+    endpointHealth[successfulEndpoint] = { lastSuccess: now };
+  }
+
+  return { ...network, endpointHealth };
+}
 
 export default function GrpcExplorerApp() {
   const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
@@ -516,6 +544,7 @@ export default function GrpcExplorerApp() {
               endpoint: actualEndpoint,
               tlsEnabled: resolvedTls,
               endpoints: availableEndpoints.filter((ep: string) => ep !== actualEndpoint), // Store others as fallbacks
+              endpointHealth: { [actualEndpoint]: { lastSuccess: now } },
               ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
               loading: false,
               cached: false,
@@ -628,6 +657,7 @@ export default function GrpcExplorerApp() {
             services: data.services || [],
             endpoint: actualEndpoint,
             chainId,
+            endpointHealth: { ...n.endpointHealth, [actualEndpoint]: { lastSuccess: now } },
             loading: false,
             cached: false,
             cacheTimestamp: now
@@ -945,6 +975,14 @@ export default function GrpcExplorerApp() {
 
       const data = await response.json();
       const duration = Date.now() - startTime;
+      const failedEndpoints = Array.isArray(data.failedEndpoints) ? data.failedEndpoints : [];
+      const usedEndpoint = typeof data.endpoint === 'string' ? data.endpoint : undefined;
+
+      setNetworks(prev => prev.map(network =>
+        network.id === instance.networkId
+          ? updateExecutionHealth(network, response.ok ? usedEndpoint : undefined, failedEndpoints, Date.now())
+          : network
+      ));
 
       const result: ExecutionResult = {
         methodId: instance.id,
@@ -953,7 +991,7 @@ export default function GrpcExplorerApp() {
         error: data.error,
         timestamp: Date.now(),
         duration,
-        endpoint: data.endpoint || selectedEndpoint
+        endpoint: usedEndpoint || selectedEndpoint
       };
 
       // Show every failed endpoint when a network-aware execution exhausts its fallbacks.
