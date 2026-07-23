@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { ReflectionClient } from '@/lib/grpc/reflection-client';
 import { errorMessage } from '@/lib/utils';
 import { normalizeRequestTimeoutMs } from '@/lib/utils/client-cache';
+import { EndpointFailoverError, executeWithEndpointFailover, type ExecutionEndpoint } from '@/lib/utils/execution-endpoints';
+import { endpointManager } from '@/lib/utils/endpoint-manager';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90; // 90 seconds to allow for 60s method timeout + overhead
@@ -13,7 +15,7 @@ export async function POST(req: Request) {
   const startTime = Date.now();
 
   try {
-    const { endpoint, service, method, params, tlsEnabled, metadata, authConfig, timeoutMs } = await req.json();
+    const { endpoint, endpointAttempts, service, method, params, tlsEnabled, metadata, authConfig, timeoutMs } = await req.json();
     const requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs, 60000);
 
     if (!endpoint || !service || !method) {
@@ -34,13 +36,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Parse endpoint to ensure it has a port
-    let endpointWithPort = endpoint;
-    if (!endpoint.includes(':')) {
-      endpointWithPort = tlsEnabled !== false ? `${endpoint}:443` : `${endpoint}:9090`;
-    }
-
-    console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort} (TLS: ${tlsEnabled !== false})`);
+    const configuredAttempts: ExecutionEndpoint[] = Array.isArray(endpointAttempts)
+      ? endpointAttempts
+        .filter((attempt): attempt is ExecutionEndpoint =>
+          typeof attempt?.address === 'string' && typeof attempt?.tlsEnabled === 'boolean'
+        )
+        .slice(0, 3)
+      : [];
+    const attempts = configuredAttempts.length > 0
+      ? configuredAttempts
+      : [{ address: endpoint, tlsEnabled: tlsEnabled !== false }];
 
     // Build enriched metadata from auth config
     const enrichedMetadata: Record<string, string> = { ...(metadata || {}) };
@@ -58,67 +63,70 @@ export async function POST(req: Request) {
       }
     }
 
-    // Try with TLS first, fallback to non-TLS if TLS fails
-    let result: any;
-    let usedTls = tlsEnabled !== false;
-
-    try {
-      // Create reflection client with TLS (and optional mTLS)
-      const client = new ReflectionClient({
-        endpoint: endpointWithPort,
-        tls: usedTls,
-        timeout: requestTimeoutMs,
-        clientCert,
-        clientKey,
-      });
-
-      try {
-        await client.initializeForMethod(service);
-        result = await client.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
-      } finally {
-        client.close();
+    const execution = await executeWithEndpointFailover(attempts, async (attempt) => {
+      let endpointWithPort = attempt.address;
+      if (!endpointWithPort.includes(':')) {
+        endpointWithPort = attempt.tlsEnabled ? `${endpointWithPort}:443` : `${endpointWithPort}:9090`;
       }
-    } catch (err: unknown) {
-      const msg = errorMessage(err);
-      const isTLSError = msg.includes('wrong version number') ||
-                        msg.includes('SSL routines') ||
-                        msg.includes('EPROTO');
 
-      if (usedTls && isTLSError) {
-        console.log(`[Execute] TLS error detected, retrying ${endpointWithPort} without TLS...`);
-        usedTls = false;
-
-        const retryClient = new ReflectionClient({
+      console.log(`[Execute] Invoking ${service}.${method} on ${endpointWithPort} (TLS: ${attempt.tlsEnabled})`);
+      const invoke = async (usedTls: boolean) => {
+        const client = new ReflectionClient({
           endpoint: endpointWithPort,
-          tls: false,
+          tls: usedTls,
           timeout: requestTimeoutMs,
           clientCert,
           clientKey,
         });
 
         try {
-          await retryClient.initializeForMethod(service);
-          result = await retryClient.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
-          console.log(`[Execute] Success without TLS`);
+          await client.initializeForMethod(service);
+          return await client.invokeMethod(service, method, params || {}, requestTimeoutMs, enrichedMetadata);
         } finally {
-          retryClient.close();
+          client.close();
         }
-      } else {
+      };
+
+      try {
+        const result = await invoke(attempt.tlsEnabled);
+        endpointManager.recordSuccess(endpointWithPort, Date.now() - startTime);
+        return { result, endpoint: endpointWithPort, usedTls: attempt.tlsEnabled };
+      } catch (err: unknown) {
+        const msg = errorMessage(err);
+        const isTLSError = msg.includes('wrong version number') ||
+                          msg.includes('SSL routines') ||
+                          msg.includes('EPROTO');
+
+        if (attempt.tlsEnabled && isTLSError) {
+          console.log(`[Execute] TLS error detected, retrying ${endpointWithPort} without TLS...`);
+          try {
+            const result = await invoke(false);
+            endpointManager.recordSuccess(endpointWithPort, Date.now() - startTime);
+            return { result, endpoint: endpointWithPort, usedTls: false };
+          } catch (retryErr: unknown) {
+            const retryMessage = errorMessage(retryErr);
+            endpointManager.recordFailure(endpointWithPort, retryMessage.includes('timeout') || retryMessage.includes('ETIMEDOUT'));
+            throw retryErr;
+          }
+        }
+
+        endpointManager.recordFailure(endpointWithPort, msg.includes('timeout') || msg.includes('ETIMEDOUT'));
         throw err;
       }
-    }
+    });
 
     const executionTime = Date.now() - startTime;
     console.log(`[Execute] ${service}.${method} completed in ${executionTime}ms`);
 
     return NextResponse.json({
       success: true,
-      result,
+      result: execution.value.result,
       executionTime,
       service,
       method,
-      endpoint: endpointWithPort,
-      tls: usedTls,
+      endpoint: execution.value.endpoint,
+      tls: execution.value.usedTls,
+      failedEndpoints: execution.failures,
     });
 
   } catch (err: unknown) {
@@ -126,11 +134,13 @@ export async function POST(req: Request) {
 
     console.error('[Execute] Error:', err);
 
+    const failedEndpoints = err instanceof EndpointFailoverError ? err.failures : undefined;
     return NextResponse.json({
       success: false,
       error: errorMessage(err),
       executionTime,
       details: err instanceof Error ? err.stack : undefined,
-    }, { status: 500 });
+      failedEndpoints,
+    }, { status: failedEndpoints ? 502 : 500 });
   }
 }

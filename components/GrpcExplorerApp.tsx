@@ -16,6 +16,8 @@ import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { debug } from '@/lib/utils/debug';
 import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig, ExplorerMode, BufBsrSource, GrpcAuthConfig } from '@/lib/types/grpc';
 import { descriptorLoader } from '@/lib/utils/descriptor-loader';
+import { isServiceDescriptorReady, servicesNeedingDescriptors } from '@/lib/utils/descriptor-readiness';
+import { getExecutionEndpoints } from '@/lib/utils/execution-endpoints';
 import { toast } from 'sonner';
 
 // Color palette for networks
@@ -29,6 +31,9 @@ const NETWORK_COLORS = [
   '#14b8a6', // teal
   '#84cc16', // lime
 ];
+
+// Keep persisted network state aligned with descriptor completeness metadata.
+const NETWORK_CACHE_VERSION = '2.0.0';
 
 export default function GrpcExplorerApp() {
   const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
@@ -94,7 +99,8 @@ export default function GrpcExplorerApp() {
         // Check if cache is still valid (use same TTL as services cache setting)
         const ttl = getCacheTTL();
         const age = Date.now() - (parsed.timestamp || 0);
-        const isValid = parsed.networks && Array.isArray(parsed.networks) &&
+        const isValid = parsed.version === NETWORK_CACHE_VERSION &&
+                       parsed.networks && Array.isArray(parsed.networks) &&
                        parsed.timestamp && (ttl === Infinity || age < ttl);
 
         if (isValid) {
@@ -119,6 +125,7 @@ export default function GrpcExplorerApp() {
           localStorage.setItem('grpc-explorer-networks', JSON.stringify({
             networks,
             timestamp: Date.now(),
+            version: NETWORK_CACHE_VERSION,
           }));
         } catch (err) {
           console.error('[NetworkCache] Failed to save networks:', err);
@@ -140,7 +147,7 @@ export default function GrpcExplorerApp() {
           const updatedServices = network.services.map((service) => {
             if (service.fullName !== result.serviceName) return service;
 
-            return result.service;
+            return { ...result.service, descriptorStatus: 'loaded' as const };
           });
 
           return { ...network, services: updatedServices };
@@ -326,7 +333,14 @@ export default function GrpcExplorerApp() {
 
         setNetworks(prev => prev.map(n =>
           n.id === id
-            ? { ...n, services: data.services || [], loading: false }
+            ? {
+                ...n,
+                services: (data.services || []).map((service: GrpcService) => ({
+                  ...service,
+                  descriptorStatus: 'loaded' as const,
+                })),
+                loading: false,
+              }
             : n
         ));
       } catch (err: unknown) {
@@ -521,22 +535,17 @@ export default function GrpcExplorerApp() {
 
   // Helper to enqueue descriptor loading jobs for a network
   const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
-    const servicesNeedingDescriptors = network.services.filter(
-      (service) =>
-        service.methods.length > 0 &&
-        (!service.methods[0].requestTypeDefinition?.fields ||
-          service.methods[0].requestTypeDefinition.fields.length === 0)
-    );
+    const pendingServices = servicesNeedingDescriptors(network.services);
 
-    if (servicesNeedingDescriptors.length === 0) {
+    if (pendingServices.length === 0) {
       debug.log(`[DescriptorLoader] No services need descriptors for ${network.name}`);
       return;
     }
 
-    debug.log(`[DescriptorLoader] Enqueuing ${servicesNeedingDescriptors.length} services for ${network.name}`);
+    debug.log(`[DescriptorLoader] Enqueuing ${pendingServices.length} services for ${network.name}`);
 
     descriptorLoader.enqueueBatch(
-      servicesNeedingDescriptors.map((service) => ({
+      pendingServices.map((service) => ({
         networkId: network.id,
         endpoint: network.endpoint,
         tlsEnabled: network.tlsEnabled,
@@ -650,14 +659,9 @@ export default function GrpcExplorerApp() {
 
       // Prioritize descriptor loading for expanded network
       if (isExpanding) {
-        const servicesNeedingDescriptors = targetNetwork.services.filter(
-          (service) =>
-            service.methods.length > 0 &&
-            (!service.methods[0].requestTypeDefinition?.fields ||
-              service.methods[0].requestTypeDefinition.fields.length === 0)
-        );
+        const pendingServices = servicesNeedingDescriptors(targetNetwork.services);
 
-        servicesNeedingDescriptors.forEach((service) => {
+        pendingServices.forEach((service) => {
           descriptorLoader.enqueue({
             networkId: targetNetwork.id,
             endpoint: targetNetwork.endpoint,
@@ -689,9 +693,7 @@ export default function GrpcExplorerApp() {
   // Add method instance to center panel
   const handleSelectMethod = useCallback(async (network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
     // Check if field definitions need to be loaded
-    const needsFieldDefinitions =
-      !method.requestTypeDefinition?.fields ||
-      method.requestTypeDefinition.fields.length === 0;
+    const needsFieldDefinitions = !isServiceDescriptorReady(service);
 
     let enrichedMethod = method;
     let enrichedService = service;
@@ -703,7 +705,7 @@ export default function GrpcExplorerApp() {
         const loadedService = currentNetwork.services.find(s => s.fullName === service.fullName);
         if (loadedService && loadedService.methods.length > 0) {
           const loadedMethod = loadedService.methods.find(m => m.name === method.name);
-          if (loadedMethod?.requestTypeDefinition?.fields && loadedMethod.requestTypeDefinition.fields.length > 0) {
+          if (loadedMethod && isServiceDescriptorReady(loadedService)) {
             enrichedMethod = loadedMethod;
             enrichedService = loadedService;
             debug.log(`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`);
@@ -754,7 +756,7 @@ export default function GrpcExplorerApp() {
                 const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
                 if (enrichedMethodData) {
                   enrichedMethod = enrichedMethodData;
-                  enrichedService = data.service;
+                  enrichedService = { ...data.service, descriptorStatus: 'loaded' };
                   debug.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
                   descriptorLoader.markLoaded(network.id, service.fullName);
 
@@ -764,11 +766,17 @@ export default function GrpcExplorerApp() {
                     return {
                       ...n,
                       services: n.services.map(s =>
-                        s.fullName === data.service.fullName ? data.service : s
+                        s.fullName === data.service.fullName
+                          ? { ...data.service, descriptorStatus: 'loaded' }
+                          : s
                       )
                     };
                   }));
+                } else {
+                  throw new Error(`Descriptor for ${service.fullName} does not contain ${method.name}`);
                 }
+              } else {
+                throw new Error(`No descriptor returned for ${service.fullName}`);
               }
               break; // Success - exit retry loop
             } catch (err) {
@@ -776,7 +784,13 @@ export default function GrpcExplorerApp() {
             }
           }
         } catch (err) {
+          const message = errorMessage(err);
           console.error(`[UI] Failed to load field definitions after ${maxAttempts} attempts:`, err);
+          toast.error(`Could not load protobuf descriptor for ${service.name}`, {
+            description: `${message}. Retry after the source endpoint recovers.`,
+            duration: 6000,
+          });
+          return;
         } finally {
           descriptorLoader.resume();
         }
@@ -898,27 +912,18 @@ export default function GrpcExplorerApp() {
       const network = networks.find(n => n.id === instance.networkId);
       if (!network) throw new Error('Network not found');
 
-      // Check if network has endpoint configs with selected endpoints
+      const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+      const executionEndpoints = getExecutionEndpoints(network, currentIndex);
       const selectedConfigs = network.endpointConfigs?.filter(ep => ep.selected) || [];
+      const primaryExecutionEndpoint = executionEndpoints[0];
 
-      if (selectedConfigs.length > 1) {
-        // Multiple endpoints selected: use round-robin load balancing
-        const currentIndex = endpointIndexRef.current.get(network.id) || 0;
-        const config = selectedConfigs[currentIndex % selectedConfigs.length];
-        selectedEndpoint = config.address;
-        selectedTls = config.tlsEnabled;
+      selectedEndpoint = primaryExecutionEndpoint.address;
+      selectedTls = primaryExecutionEndpoint.tlsEnabled;
+
+      if (network.mode === 'cosmos' && selectedConfigs.length > 1) {
         endpointIndexRef.current.set(network.id, (currentIndex + 1) % selectedConfigs.length);
-
-        debug.log(`[RoundRobin] Using endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
-      } else if (selectedConfigs.length === 1) {
-        // Single endpoint selected: use it directly
-        selectedEndpoint = selectedConfigs[0].address;
-        selectedTls = selectedConfigs[0].tlsEnabled;
-        debug.log(`[Endpoint] Using selected endpoint: ${selectedEndpoint}`);
+        debug.log(`[RoundRobin] Starting at endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
       } else {
-        // No endpoint configs or none selected: use primary endpoint
-        selectedEndpoint = network.endpoint;
-        selectedTls = network.tlsEnabled;
         debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
       }
 
@@ -928,11 +933,13 @@ export default function GrpcExplorerApp() {
         body: JSON.stringify({
           endpoint: selectedEndpoint,
           tlsEnabled: selectedTls,
+          endpointAttempts: executionEndpoints,
           service: instance.service.fullName,
           method: instance.method.name,
           params: instance.params,
           metadata: instance.metadata || {},
           ...(instance.authConfig ? { authConfig: instance.authConfig } : {}),
+          timeoutMs: requestTimeoutMs,
         })
       });
 
@@ -946,17 +953,20 @@ export default function GrpcExplorerApp() {
         error: data.error,
         timestamp: Date.now(),
         duration,
-        endpoint: selectedEndpoint
+        endpoint: data.endpoint || selectedEndpoint
       };
 
-      // Show toast for errors when using multiple endpoints (helps identify which one failed)
+      // Show every failed endpoint when a network-aware execution exhausts its fallbacks.
       if (!response.ok && selectedConfigs.length > 1) {
         const errorMsg = data.error || 'Request failed';
-        toast.error(`Request failed on ${selectedEndpoint}`, {
-          description: errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg,
+        const failedEndpoints = Array.isArray(data.failedEndpoints)
+          ? data.failedEndpoints.map((failure: { endpoint: string }) => failure.endpoint).join(', ')
+          : selectedEndpoint;
+        toast.error(`Request failed across selected endpoints`, {
+          description: `${failedEndpoints}: ${errorMsg}`.slice(0, 180),
           duration: 5000
         });
-        console.error(`[RoundRobin] Error from ${selectedEndpoint}: ${errorMsg}`);
+        console.error(`[RoundRobin] Execution failed after ${failedEndpoints}: ${errorMsg}`);
       }
 
       setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
@@ -985,7 +995,7 @@ export default function GrpcExplorerApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [networks]);
+  }, [networks, requestTimeoutMs]);
 
   // Get latest result for selected method
   const currentResult = useMemo(() => {

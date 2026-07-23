@@ -191,13 +191,12 @@ export async function POST(req: Request) {
 
     const servicesWithMethods = services.filter(s => s.methods.length > 0);
 
-    // Count methods that still have empty field definitions (need on-demand loading)
+    // Only v2alpha1-only services need on-demand protobuf descriptor loading.
+    // A loaded protobuf request may legitimately contain no fields.
     let methodsNeedingDescriptors = 0;
     for (const service of services) {
-      for (const method of service.methods) {
-        if (method.requestTypeDefinition && method.requestTypeDefinition.fields.length === 0) {
-          methodsNeedingDescriptors++;
-        }
+      if (service.descriptorStatus === 'pending') {
+        methodsNeedingDescriptors += service.methods.length;
       }
     }
     if (methodsNeedingDescriptors > 0) {
