@@ -68,7 +68,8 @@ options.
   module and version, provide an execution endpoint. Private modules supported
   with auth token.
 
-**Cosmos SDK** is the original purpose of this application, preserved as an entirely separate mode with its own wofkflow. Either search / select a chain to pull any registered gRPC endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry).
+**Cosmos SDK** preserves the original purpose of this application as an entirely separate operating mode.
+Either search / select a chain to pull any registered gRPC endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry), or enter a valid, reflection-enabled gRPC endpoint to generate the available method descriptors, make requests, and more.
 Supports multi-endpoint selection for round-robin execution.
 Endpoints are DNS-validated only.
 
