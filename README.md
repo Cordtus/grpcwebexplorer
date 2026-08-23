@@ -1,10 +1,9 @@
 # gRPC Web Explorer
 
 A web UI for gRPC servers, in the style of [Postman](https://www.postman.com/)
-or [grpcui](https://github.com/fullstorydev/grpcui). Easily self-hosted, and works with any
-gRPC servive over
-[server reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto).
-Schemas can also be imported from the [Buf Schema Registry](https://buf.build/) if reflection service is not exposed.
+or [grpcui](https://github.com/fullstorydev/grpcui). Easily self-hosted, works with any
+gRPC service that supports [reflection](https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1/reflection.proto).
+Schemas can be imported from the [Buf Schema Registry](https://buf.build/) if reflection service is not supported / exposed.
 
 Requests proxy through Next.js API routes using `@grpc/grpc-js`. Deploys to
 Vercel as-is or self-host via Docker / Node.js.
@@ -16,19 +15,13 @@ Vercel as-is or self-host via Docker / Node.js.
 - Request forms generated from protobuf definitions (nested messages, repeated
   fields, enums, maps, all scalar types)
 - Auth: Bearer tokens, API keys, mTLS
-- Code export: grpcurl, curl/REST, TypeScript, Go, Python -- includes current
+- Code stub export: grpcurl, curl/REST, TypeScript, Go, Python -- includes current
   params, metadata, and auth
 - Optional base64/binary response inspection that parses decoded JSON when
-  present, while preserving original response JSON for copy and save actions
+  present, preserving original response JSON for copy and save actions
 - REST path mapping from `google.api.http` annotations
-- Round-robin endpoints, reflection-aware provider qualification, client-side
-  endpoint cooldowns, and automatic TLS retry
 - Search by namespace, service, or method
-- Client-side caching (configurable TTL, localStorage)
-- Execution history with timing
-- Keyboard shortcuts
-- Light/Dark/Retro themes
-- Optional Cosmos SDK chain registry integration (100+ chains)
+- Cosmos SDK chain registry integration
 
 ## Installation
 
@@ -48,9 +41,9 @@ yarn build:prod
 yarn start:prod
 ```
 
-Auto-detects an available port starting at 3000.
+Runs on first available port, starting at 3000.
 
-### Development
+### Development Server
 
 ```shell
 yarn install
@@ -75,12 +68,9 @@ options.
   module and version, provide an execution endpoint. Private modules supported
   with auth token.
 
-**Cosmos SDK** is the network-oriented flow. Select a chain to pull its gRPC
-endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry).
-Supports multi-endpoint selection for round-robin execution. Endpoints are
-DNS-validated before use.
-
-Recently used chain shortcuts are shown in the Cosmos SDK flow.
+**Cosmos SDK** is the original purpose of this application, preserved as an entirely separate mode with its own wofkflow. Either search / select a chain to pull any registered gRPC endpoints from [cosmos/chain-registry](https://github.com/cosmos/chain-registry).
+Supports multi-endpoint selection for round-robin execution.
+Endpoints are DNS-validated only.
 
 ### Browsing
 
@@ -107,19 +97,14 @@ Select a method to get a generated form. Fill in fields, hit **Execute**
 
 ### Settings
 
-Gear icon in the menu bar:
-
+Basic UI / UX preferences:
 - Theme (Light, Dark, 8-bit Retro, System)
 - Default mode (Generic / Cosmos)
 - Service discovery timeout (1s--60s, default 10s)
 - Auto-collapse panels
 - Cache TTL (None / 1hr / 6hr / 24hr / 36hr / 72hr / Never)
 
-## Architecture
-
-```
-Browser (JSON)  -->  Next.js API Routes  -->  gRPC Server (protobuf/HTTP2)
-```
+## Technical Notes
 
 ### Routes
 
@@ -164,27 +149,6 @@ yarn test:coverage     # Coverage
 yarn dev               # Terminal 1
 yarn test:grpc         # Terminal 2
 ```
-
-## Troubleshooting
-
-**Connection failures**: Endpoint format is `host:port`, no protocol prefix.
-Port 443 usually needs TLS on; other ports usually need it off. The UI warns
-on mismatches and retries without TLS on SSL errors.
-
-**No services**: Server must support reflection, or import from BSR. No
-`.proto` / protoset support.
-
-**BSR issues**: Module path is `owner/repository`. Version defaults to `main`.
-Private modules need an auth token.
-
-**Stale data**: Check cache TTL in settings, or clear via the menu bar cache
-indicator.
-
-**Unreachable endpoints**: Cosmos endpoint validation checks DNS and a bounded
-gRPC reflection handshake before selecting providers. A provider can resolve
-but still deny, omit, or time out on reflection; those endpoints are deselected
-but can be manually retried. If all endpoints fail, verify the server has
-outbound access to the gRPC ports (typically 9090, 443).
 
 ## License
 
