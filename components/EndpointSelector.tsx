@@ -1,10 +1,19 @@
-'use client';
+"use client";
 
-import React, { useMemo, useCallback } from 'react';
-import { Switch } from '@/components/ui/switch';
-import { Check, Minus, Lock, Unlock, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { EndpointConfig } from '@/lib/types/grpc';
+import {
+	AlertCircle,
+	Check,
+	CheckCircle2,
+	Loader2,
+	Lock,
+	Minus,
+	Unlock,
+} from "lucide-react";
+import type React from "react";
+import { useCallback, useMemo } from "react";
+import { Switch } from "@/components/ui/switch";
+import type { EndpointConfig } from "@/lib/types/grpc";
+import { cn } from "@/lib/utils";
 
 interface EndpointSelectorProps {
 	endpoints: EndpointConfig[];
@@ -20,10 +29,10 @@ function detectTlsFromAddress(address: string): boolean {
 	const normalized = address.toLowerCase().trim();
 
 	// Protocol prefixes
-	if (normalized.startsWith('https://') || normalized.startsWith('grpcs://')) {
+	if (normalized.startsWith("https://") || normalized.startsWith("grpcs://")) {
 		return true;
 	}
-	if (normalized.startsWith('http://') || normalized.startsWith('grpc://')) {
+	if (normalized.startsWith("http://") || normalized.startsWith("grpc://")) {
 		return false;
 	}
 
@@ -32,11 +41,11 @@ function detectTlsFromAddress(address: string): boolean {
 	if (portMatch) {
 		const port = portMatch[1];
 		// Standard TLS ports
-		if (port === '443' || port === '9091') {
+		if (port === "443" || port === "9091") {
 			return true;
 		}
 		// Non-TLS ports
-		if (port === '80' || port === '9090') {
+		if (port === "80" || port === "9090") {
 			return false;
 		}
 	}
@@ -52,18 +61,18 @@ function normalizeAddress(address: string): string {
 	let normalized = address.trim();
 
 	// Remove protocol prefixes
-	if (normalized.startsWith('https://')) {
-		normalized = normalized.replace('https://', '');
-	} else if (normalized.startsWith('http://')) {
-		normalized = normalized.replace('http://', '');
-	} else if (normalized.startsWith('grpcs://')) {
-		normalized = normalized.replace('grpcs://', '');
-	} else if (normalized.startsWith('grpc://')) {
-		normalized = normalized.replace('grpc://', '');
+	if (normalized.startsWith("https://")) {
+		normalized = normalized.replace("https://", "");
+	} else if (normalized.startsWith("http://")) {
+		normalized = normalized.replace("http://", "");
+	} else if (normalized.startsWith("grpcs://")) {
+		normalized = normalized.replace("grpcs://", "");
+	} else if (normalized.startsWith("grpc://")) {
+		normalized = normalized.replace("grpc://", "");
 	}
 
 	// Add default port if missing
-	if (!normalized.includes(':')) {
+	if (!normalized.includes(":")) {
 		normalized = `${normalized}:443`;
 	}
 
@@ -78,55 +87,72 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 	endpoints,
 	onChange,
 	disabled = false,
-	validating = false
+	validating = false,
 }) => {
 	const selectedCount = useMemo(
-		() => endpoints.filter(ep => ep.selected).length,
-		[endpoints]
+		() => endpoints.filter((ep) => ep.selected).length,
+		[endpoints],
 	);
 
 	const reachableCount = useMemo(
-		() => endpoints.filter(ep => ep.reachable === true).length,
-		[endpoints]
+		() => endpoints.filter((ep) => ep.reachable === true).length,
+		[endpoints],
 	);
 
 	const unreachableCount = useMemo(
-		() => endpoints.filter(ep => ep.reachable === false).length,
-		[endpoints]
+		() => endpoints.filter((ep) => ep.reachable === false).length,
+		[endpoints],
 	);
 
-	const allSelected = selectedCount === endpoints.length && endpoints.length > 0;
+	const allSelected =
+		selectedCount === endpoints.length && endpoints.length > 0;
 	const someSelected = selectedCount > 0 && selectedCount < endpoints.length;
 
 	// Toggle all endpoints: if any selected → deselect all, if none → select qualified endpoints.
 	const handleSelectAll = useCallback(() => {
 		const anySelected = selectedCount > 0;
-		onChange(endpoints.map(ep => ({
-			...ep,
-			// Deselect all if any selected, otherwise select all qualified endpoints.
-			selected: anySelected ? false : (ep.reachable !== false)
-		})));
+		onChange(
+			endpoints.map((ep) => ({
+				...ep,
+				// Deselect all if any selected, otherwise select all qualified endpoints.
+				selected: anySelected ? false : ep.reachable !== false,
+			})),
+		);
 	}, [endpoints, selectedCount, onChange]);
 
 	// Select only endpoints that passed DNS plus reflection qualification.
 	const handleSelectReachable = useCallback(() => {
-		onChange(endpoints.map(ep => ({
-			...ep,
-			selected: ep.reachable === true
-		})));
+		onChange(
+			endpoints.map((ep) => ({
+				...ep,
+				selected: ep.reachable === true,
+			})),
+		);
 	}, [endpoints, onChange]);
 
-	const handleToggleEndpoint = useCallback((index: number) => {
-		const updated = [...endpoints];
-		updated[index] = { ...updated[index], selected: !updated[index].selected };
-		onChange(updated);
-	}, [endpoints, onChange]);
+	const handleToggleEndpoint = useCallback(
+		(index: number) => {
+			const updated = [...endpoints];
+			updated[index] = {
+				...updated[index],
+				selected: !updated[index].selected,
+			};
+			onChange(updated);
+		},
+		[endpoints, onChange],
+	);
 
-	const handleToggleTls = useCallback((index: number) => {
-		const updated = [...endpoints];
-		updated[index] = { ...updated[index], tlsEnabled: !updated[index].tlsEnabled };
-		onChange(updated);
-	}, [endpoints, onChange]);
+	const handleToggleTls = useCallback(
+		(index: number) => {
+			const updated = [...endpoints];
+			updated[index] = {
+				...updated[index],
+				tlsEnabled: !updated[index].tlsEnabled,
+			};
+			onChange(updated);
+		},
+		[endpoints, onChange],
+	);
 
 	if (endpoints.length === 0) {
 		return (
@@ -150,7 +176,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 							? "bg-primary border-primary text-primary-foreground"
 							: someSelected
 								? "bg-primary/50 border-primary text-primary-foreground"
-								: "border-muted-foreground/50 hover:border-primary"
+								: "border-muted-foreground/50 hover:border-primary",
 					)}
 				>
 					{allSelected && <Check className="h-3 w-3" />}
@@ -187,13 +213,17 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 						className={cn(
 							"flex items-center gap-2 p-2 rounded hover:bg-secondary/50 transition-colors",
 							!ep.selected && "opacity-60",
-							ep.reachable === false && "bg-red-500/5"
+							ep.reachable === false && "bg-red-500/5",
 						)}
 					>
 						{/* Reachability Status */}
 						<div
 							className="shrink-0 w-4 flex items-center justify-center"
-							title={ep.reachable === false ? (ep.validationError || 'Unreachable') : undefined}
+							title={
+								ep.reachable === false
+									? ep.validationError || "Unreachable"
+									: undefined
+							}
 						>
 							{validating && ep.reachable === undefined ? (
 								<Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
@@ -213,7 +243,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 								"w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0",
 								ep.selected
 									? "bg-primary border-primary text-primary-foreground"
-									: "border-muted-foreground/50 hover:border-primary"
+									: "border-muted-foreground/50 hover:border-primary",
 							)}
 						>
 							{ep.selected && <Check className="h-3 w-3" />}
@@ -224,9 +254,13 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 							<div
 								className={cn(
 									"text-sm font-mono truncate",
-									ep.reachable === false && "text-red-500"
+									ep.reachable === false && "text-red-500",
 								)}
-								title={ep.validationError ? `${ep.address} - ${ep.validationError}` : ep.address}
+								title={
+									ep.validationError
+										? `${ep.address} - ${ep.validationError}`
+										: ep.address
+								}
 							>
 								{normalizeAddress(ep.address)}
 							</div>
@@ -263,7 +297,8 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 			{/* Summary */}
 			{!validating && unreachableCount > 0 && (
 				<div className="text-xs text-amber-500 text-center pt-2">
-					{unreachableCount} endpoint{unreachableCount !== 1 ? 's are' : ' is'} not reflection-ready; you can reselect one to try it manually.
+					{unreachableCount} endpoint{unreachableCount !== 1 ? "s are" : " is"}{" "}
+					not reflection-ready; you can reselect one to try it manually.
 				</div>
 			)}
 			{selectedCount === 0 && !validating && (
@@ -279,13 +314,13 @@ export default EndpointSelector;
 
 // Helper to create EndpointConfig array from chain registry data
 export function createEndpointConfigs(
-	grpcEndpoints: Array<{ address: string; provider?: string }>
+	grpcEndpoints: Array<{ address: string; provider?: string }>,
 ): EndpointConfig[] {
-	return grpcEndpoints.map(ep => {
+	return grpcEndpoints.map((ep) => {
 		const config: EndpointConfig = {
 			address: normalizeAddress(ep.address),
 			tlsEnabled: detectTlsFromAddress(ep.address),
-			selected: true
+			selected: true,
 		};
 		if (ep.provider) {
 			config.provider = ep.provider;
@@ -298,21 +333,21 @@ export function createEndpointConfigs(
 export function normalizeEndpointsToConfigs(
 	primaryEndpoint: string,
 	fallbackEndpoints: string[] = [],
-	primaryTls: boolean = true
+	primaryTls: boolean = true,
 ): EndpointConfig[] {
 	const configs: EndpointConfig[] = [
 		{
 			address: primaryEndpoint,
 			tlsEnabled: primaryTls,
-			selected: true
-		}
+			selected: true,
+		},
 	];
 
 	for (const ep of fallbackEndpoints) {
 		configs.push({
 			address: ep,
 			tlsEnabled: detectTlsFromAddress(ep),
-			selected: true
+			selected: true,
 		});
 	}
 

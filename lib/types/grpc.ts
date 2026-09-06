@@ -1,12 +1,12 @@
 // Shared gRPC type definitions
-import { MessageTypeDefinition } from '@/components/ProtobufFormGenerator';
+import type { MessageTypeDefinition } from "@/components/ProtobufFormGenerator";
 
 /** Explorer mode: generic gRPC or Cosmos SDK-specific */
-export type ExplorerMode = 'generic' | 'cosmos';
+export type ExplorerMode = "generic" | "cosmos";
 
 /** Authentication configuration for gRPC connections */
 export interface GrpcAuthConfig {
-	type: 'none' | 'bearer' | 'api-key' | 'mtls';
+	type: "none" | "bearer" | "api-key" | "mtls";
 	bearerToken?: string;
 	apiKeyHeader?: string;
 	apiKeyValue?: string;
@@ -34,25 +34,25 @@ export interface HttpRule {
 }
 
 export interface GrpcMethod {
-  name: string;
-  fullName: string;
-  requestType: string;
-  responseType: string;
-  requestStreaming: boolean;
-  responseStreaming: boolean;
-  options?: any;
-  description?: string;
-  httpRule?: HttpRule; // REST API path from google.api.http annotation
-  requestTypeDefinition: MessageTypeDefinition;
-  responseTypeDefinition: MessageTypeDefinition;
+	name: string;
+	fullName: string;
+	requestType: string;
+	responseType: string;
+	requestStreaming: boolean;
+	responseStreaming: boolean;
+	options?: any;
+	description?: string;
+	httpRule?: HttpRule; // REST API path from google.api.http annotation
+	requestTypeDefinition: MessageTypeDefinition;
+	responseTypeDefinition: MessageTypeDefinition;
 }
 
 export interface GrpcService {
-  name: string;
-  fullName: string;
-  methods: GrpcMethod[];
-  /** Whether the full protobuf descriptor was loaded, rather than only a Cosmos v2alpha1 summary. */
-  descriptorStatus?: 'loaded' | 'pending';
+	name: string;
+	fullName: string;
+	methods: GrpcMethod[];
+	/** Whether the full protobuf descriptor was loaded, rather than only a Cosmos v2alpha1 summary. */
+	descriptorStatus?: "loaded" | "pending";
 }
 
 /**
@@ -60,62 +60,62 @@ export interface GrpcService {
  * Allows individual TLS settings and selection state for each endpoint
  */
 export interface EndpointConfig {
-  address: string;
-  tlsEnabled: boolean;
-  selected: boolean;
-  provider?: string;
-  reachable?: boolean; // Reflection qualification result (undefined = not checked yet)
-  validationError?: string; // DNS or reflection qualification error
-  reflectionStatus?: 'ready' | 'incompatible' | 'transient';
+	address: string;
+	tlsEnabled: boolean;
+	selected: boolean;
+	provider?: string;
+	reachable?: boolean; // Reflection qualification result (undefined = not checked yet)
+	validationError?: string; // DNS or reflection qualification error
+	reflectionStatus?: "ready" | "incompatible" | "transient";
 }
 
 /** Client-persisted execution result used to avoid repeatedly starting with known-bad providers. */
 export interface EndpointExecutionHealth {
-  lastSuccess?: number;
-  retryAfter?: number;
-  lastErrorKind?: 'incompatible' | 'transient';
+	lastSuccess?: number;
+	retryAfter?: number;
+	lastErrorKind?: "incompatible" | "transient";
 }
 
 export interface GrpcNetwork {
-  id: string;
-  name: string;
-  endpoint: string;
-  endpoints?: string[]; // Additional fallback endpoints for this chain (legacy)
-  endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
-  endpointHealth?: Record<string, EndpointExecutionHealth>;
-  chainId?: string;
-  tlsEnabled: boolean;
-  services: GrpcService[];
-  color: string;
-  loading?: boolean;
-  error?: string;
-  expanded?: boolean;
-  cached?: boolean;
-  cacheTimestamp?: number;
-  mode?: ExplorerMode;
-  bsrSource?: BufBsrSource;
-  authConfig?: GrpcAuthConfig;
+	id: string;
+	name: string;
+	endpoint: string;
+	endpoints?: string[]; // Additional fallback endpoints for this chain (legacy)
+	endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
+	endpointHealth?: Record<string, EndpointExecutionHealth>;
+	chainId?: string;
+	tlsEnabled: boolean;
+	services: GrpcService[];
+	color: string;
+	loading?: boolean;
+	error?: string;
+	expanded?: boolean;
+	cached?: boolean;
+	cacheTimestamp?: number;
+	mode?: ExplorerMode;
+	bsrSource?: BufBsrSource;
+	authConfig?: GrpcAuthConfig;
 }
 
 export interface MethodInstance {
-  id: string;
-  networkId: string;
-  method: GrpcMethod;
-  service: GrpcService;
-  color: string;
-  expanded?: boolean;
-  pinned?: boolean;
-  params?: Record<string, any>;
-  metadata?: Record<string, string>;
-  authConfig?: GrpcAuthConfig;
+	id: string;
+	networkId: string;
+	method: GrpcMethod;
+	service: GrpcService;
+	color: string;
+	expanded?: boolean;
+	pinned?: boolean;
+	params?: Record<string, any>;
+	metadata?: Record<string, string>;
+	authConfig?: GrpcAuthConfig;
 }
 
 export interface ExecutionResult {
-  methodId: string;
-  success: boolean;
-  data?: any;
-  error?: string;
-  timestamp: number;
-  duration?: number;
-  endpoint?: string; // The endpoint used for this execution (for round-robin error reporting)
+	methodId: string;
+	success: boolean;
+	data?: any;
+	error?: string;
+	timestamp: number;
+	duration?: number;
+	endpoint?: string; // The endpoint used for this execution (for round-robin error reporting)
 }

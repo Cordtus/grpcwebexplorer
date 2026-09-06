@@ -1,21 +1,21 @@
-import { NextResponse } from 'next/server';
-import dns from 'dns';
-import { promisify } from 'util';
-import { ReflectionClient } from '@/lib/grpc/reflection-client';
-import { errorMessage } from '@/lib/utils';
-import { classifyReflectionFailure } from '@/lib/utils/reflection-probe';
+import dns from "node:dns";
+import { promisify } from "node:util";
+import { NextResponse } from "next/server";
+import { ReflectionClient } from "@/lib/grpc/reflection-client";
+import { errorMessage } from "@/lib/utils";
+import { classifyReflectionFailure } from "@/lib/utils/reflection-probe";
 
 const dnsLookup = promisify(dns.lookup);
 const MAX_QUALIFIED_ENDPOINTS = 30;
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 export const maxDuration = 45;
 
 interface EndpointValidation {
 	address: string;
 	reachable: boolean;
 	error?: string;
-	reflectionStatus?: 'ready' | 'incompatible' | 'transient';
+	reflectionStatus?: "ready" | "incompatible" | "transient";
 }
 
 interface EndpointInput {
@@ -32,11 +32,11 @@ function extractHostname(address: string): string {
 
 	// Remove protocol prefixes
 	normalized = normalized
-		.replace(/^https?:\/\//, '')
-		.replace(/^grpcs?:\/\//, '');
+		.replace(/^https?:\/\//, "")
+		.replace(/^grpcs?:\/\//, "");
 
 	// Extract hostname (before port)
-	const hostPart = normalized.split(':')[0];
+	const hostPart = normalized.split(":")[0];
 	return hostPart;
 }
 
@@ -44,34 +44,34 @@ function extractHostname(address: string): string {
  * Validates a single endpoint by attempting DNS resolution
  * Uses a fast 1 second timeout to quickly identify unreachable endpoints
  */
-async function validateEndpoint(input: EndpointInput, timeoutMs: number = 1000): Promise<EndpointValidation> {
+async function validateEndpoint(
+	input: EndpointInput,
+	timeoutMs: number = 1000,
+): Promise<EndpointValidation> {
 	const { address } = input;
 	const hostname = extractHostname(address);
 
 	if (!hostname) {
-		return { address, reachable: false, error: 'Invalid hostname' };
+		return { address, reachable: false, error: "Invalid hostname" };
 	}
 
 	try {
 		// Create a promise that rejects after timeout
 		const timeoutPromise = new Promise<never>((_, reject) => {
-			setTimeout(() => reject(new Error('DNS lookup timeout')), timeoutMs);
+			setTimeout(() => reject(new Error("DNS lookup timeout")), timeoutMs);
 		});
 
 		// Race between DNS lookup and timeout
-		await Promise.race([
-			dnsLookup(hostname),
-			timeoutPromise
-		]);
+		await Promise.race([dnsLookup(hostname), timeoutPromise]);
 
 		const client = new ReflectionClient({
 			endpoint: address,
-			tls: input.tlsEnabled ?? address.endsWith(':443'),
+			tls: input.tlsEnabled ?? address.endsWith(":443"),
 			timeout: 3000,
 		});
 		try {
 			await client.probeReflection();
-			return { address, reachable: true, reflectionStatus: 'ready' };
+			return { address, reachable: true, reflectionStatus: "ready" };
 		} catch (error) {
 			const message = errorMessage(error);
 			return {
@@ -84,8 +84,13 @@ async function validateEndpoint(input: EndpointInput, timeoutMs: number = 1000):
 			client.close();
 		}
 	} catch (error) {
-		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-		return { address, reachable: false, error: errorMsg, reflectionStatus: 'transient' };
+		const errorMsg = error instanceof Error ? error.message : "Unknown error";
+		return {
+			address,
+			reachable: false,
+			error: errorMsg,
+			reflectionStatus: "transient",
+		};
 	}
 }
 
@@ -104,36 +109,51 @@ export async function POST(request: Request) {
 
 		if (!endpoints || !Array.isArray(endpoints)) {
 			return NextResponse.json(
-				{ error: 'Missing or invalid endpoints array' },
-				{ status: 400 }
+				{ error: "Missing or invalid endpoints array" },
+				{ status: 400 },
 			);
 		}
 
-		const normalized = endpoints.map((endpoint) =>
-			typeof endpoint === 'string' ? { address: endpoint } : endpoint
-		).filter((endpoint): endpoint is EndpointInput => typeof endpoint?.address === 'string');
+		const normalized = endpoints
+			.map((endpoint) =>
+				typeof endpoint === "string" ? { address: endpoint } : endpoint,
+			)
+			.filter(
+				(endpoint): endpoint is EndpointInput =>
+					typeof endpoint?.address === "string",
+			);
 		const endpointsToQualify = normalized.slice(0, MAX_QUALIFIED_ENDPOINTS);
 		const skippedEndpoints = normalized.slice(MAX_QUALIFIED_ENDPOINTS);
 		const results: EndpointValidation[] = [];
 		for (let index = 0; index < endpointsToQualify.length; index += 3) {
-			results.push(...await Promise.all(endpointsToQualify.slice(index, index + 3).map((endpoint) => validateEndpoint(endpoint, 1000))));
+			results.push(
+				...(await Promise.all(
+					endpointsToQualify
+						.slice(index, index + 3)
+						.map((endpoint) => validateEndpoint(endpoint, 1000)),
+				)),
+			);
 		}
-		results.push(...skippedEndpoints.map(({ address }) => ({
-			address,
-			reachable: false,
-			reflectionStatus: 'transient' as const,
-			error: `Qualification skipped after ${MAX_QUALIFIED_ENDPOINTS} endpoints; reselect manually to try this provider.`,
-		})));
+		results.push(
+			...skippedEndpoints.map(({ address }) => ({
+				address,
+				reachable: false,
+				reflectionStatus: "transient" as const,
+				error: `Qualification skipped after ${MAX_QUALIFIED_ENDPOINTS} endpoints; reselect manually to try this provider.`,
+			})),
+		);
 
-		const reachableCount = results.filter(r => r.reachable).length;
-		console.log(`[ValidateEndpoints] ${reachableCount}/${results.length} endpoints reachable`);
+		const reachableCount = results.filter((r) => r.reachable).length;
+		console.log(
+			`[ValidateEndpoints] ${reachableCount}/${results.length} endpoints reachable`,
+		);
 
 		return NextResponse.json({ results });
 	} catch (error) {
-		console.error('[ValidateEndpoints] Error:', error);
+		console.error("[ValidateEndpoints] Error:", error);
 		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : 'Validation failed' },
-			{ status: 500 }
+			{ error: error instanceof Error ? error.message : "Validation failed" },
+			{ status: 500 },
 		);
 	}
 }

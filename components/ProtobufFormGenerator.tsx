@@ -1,435 +1,486 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils';
-import { AlertCircle, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import {
+	AlertCircle,
+	ChevronDown,
+	ChevronRight,
+	Plus,
+	Trash2,
+} from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 export interface MessageField {
-  name: string;
-  type: string;
-  rule?: 'optional' | 'required' | 'repeated';
-  defaultValue?: any;
-  comment?: string;
-  nested?: boolean;
-  enumValues?: string[];
-  nestedFields?: MessageField[]; // Recursively populated for nested message types
+	name: string;
+	type: string;
+	rule?: "optional" | "required" | "repeated";
+	defaultValue?: any;
+	comment?: string;
+	nested?: boolean;
+	enumValues?: string[];
+	nestedFields?: MessageField[]; // Recursively populated for nested message types
 }
 
 export interface MessageTypeDefinition {
-  name: string;
-  fullName: string;
-  fields: MessageField[];
+	name: string;
+	fullName: string;
+	fields: MessageField[];
 }
 
 interface ProtobufFormGeneratorProps {
-  messageType: MessageTypeDefinition;
-  value: Record<string, any>;
-  onChange: (value: Record<string, any>) => void;
-  readonly?: boolean;
+	messageType: MessageTypeDefinition;
+	value: Record<string, any>;
+	onChange: (value: Record<string, any>) => void;
+	readonly?: boolean;
 }
 
 const ProtobufFormGenerator: React.FC<ProtobufFormGeneratorProps> = ({
-  messageType,
-  value,
-  onChange,
-  readonly = false,
+	messageType,
+	value,
+	onChange,
+	readonly = false,
 }) => {
-  // If no fields, show empty state (methods with no parameters)
-  if (!messageType.fields || messageType.fields.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-32 text-muted-foreground">
-        <div className="text-center">
-          <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No input parameters required</p>
-          <p className="text-xs mt-1">This method accepts an empty request</p>
-        </div>
-      </div>
-    );
-  }
+	// If no fields, show empty state (methods with no parameters)
+	if (!messageType.fields || messageType.fields.length === 0) {
+		return (
+			<div className="flex items-center justify-center h-32 text-muted-foreground">
+				<div className="text-center">
+					<AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+					<p className="text-sm">No input parameters required</p>
+					<p className="text-xs mt-1">This method accepts an empty request</p>
+				</div>
+			</div>
+		);
+	}
 
-  const handleFieldChange = (fieldName: string, fieldValue: any) => {
-    onChange({
-      ...value,
-      [fieldName]: fieldValue,
-    });
-  };
+	const handleFieldChange = (fieldName: string, fieldValue: any) => {
+		onChange({
+			...value,
+			[fieldName]: fieldValue,
+		});
+	};
 
-  const handleArrayAdd = (fieldName: string) => {
-    const currentArray = value[fieldName] || [];
-    onChange({
-      ...value,
-      [fieldName]: [...currentArray, ''],
-    });
-  };
+	const handleArrayAdd = (fieldName: string) => {
+		const currentArray = value[fieldName] || [];
+		onChange({
+			...value,
+			[fieldName]: [...currentArray, ""],
+		});
+	};
 
-  const handleArrayRemove = (fieldName: string, index: number) => {
-    const currentArray = value[fieldName] || [];
-    onChange({
-      ...value,
-      [fieldName]: currentArray.filter((_: any, i: number) => i !== index),
-    });
-  };
+	const handleArrayRemove = (fieldName: string, index: number) => {
+		const currentArray = value[fieldName] || [];
+		onChange({
+			...value,
+			[fieldName]: currentArray.filter((_: any, i: number) => i !== index),
+		});
+	};
 
-  const handleArrayItemChange = (fieldName: string, index: number, itemValue: any) => {
-    const currentArray = value[fieldName] || [];
-    const newArray = [...currentArray];
-    newArray[index] = itemValue;
-    onChange({
-      ...value,
-      [fieldName]: newArray,
-    });
-  };
+	const handleArrayItemChange = (
+		fieldName: string,
+		index: number,
+		itemValue: any,
+	) => {
+		const currentArray = value[fieldName] || [];
+		const newArray = [...currentArray];
+		newArray[index] = itemValue;
+		onChange({
+			...value,
+			[fieldName]: newArray,
+		});
+	};
 
-  return (
-    <div className="space-y-4">
-      {messageType.fields.map((field) => (
-        <FieldInput
-          key={field.name}
-          field={field}
-          value={value[field.name]}
-          onChange={(v) => handleFieldChange(field.name, v)}
-          onArrayAdd={() => handleArrayAdd(field.name)}
-          onArrayRemove={(index) => handleArrayRemove(field.name, index)}
-          onArrayItemChange={(index, v) => handleArrayItemChange(field.name, index, v)}
-          readonly={readonly}
-        />
-      ))}
-    </div>
-  );
+	return (
+		<div className="space-y-4">
+			{messageType.fields.map((field) => (
+				<FieldInput
+					key={field.name}
+					field={field}
+					value={value[field.name]}
+					onChange={(v) => handleFieldChange(field.name, v)}
+					onArrayAdd={() => handleArrayAdd(field.name)}
+					onArrayRemove={(index) => handleArrayRemove(field.name, index)}
+					onArrayItemChange={(index, v) =>
+						handleArrayItemChange(field.name, index, v)
+					}
+					readonly={readonly}
+				/>
+			))}
+		</div>
+	);
 };
 
 interface FieldInputProps {
-  field: MessageField;
-  value: any;
-  onChange: (value: any) => void;
-  onArrayAdd: () => void;
-  onArrayRemove: (index: number) => void;
-  onArrayItemChange: (index: number, value: any) => void;
-  readonly?: boolean;
+	field: MessageField;
+	value: any;
+	onChange: (value: any) => void;
+	onArrayAdd: () => void;
+	onArrayRemove: (index: number) => void;
+	onArrayItemChange: (index: number, value: any) => void;
+	readonly?: boolean;
 }
 
 const FieldInput: React.FC<FieldInputProps> = ({
-  field,
-  value,
-  onChange,
-  onArrayAdd,
-  onArrayRemove,
-  onArrayItemChange,
-  readonly = false,
+	field,
+	value,
+	onChange,
+	onArrayAdd,
+	onArrayRemove,
+	onArrayItemChange,
+	readonly = false,
 }) => {
-  const [expanded, setExpanded] = useState(true);
+	const [expanded, setExpanded] = useState(true);
 
-  // Repeated field (array)
-  if (field.rule === 'repeated') {
-    const arrayValue = value || [];
-    return (
-      <div className="border border-border rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="p-0.5 hover:bg-muted rounded"
-            >
-              {expanded ? (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              )}
-            </button>
-            <label className="text-sm font-medium text-foreground">
-              {field.name}
-              <span className="ml-2 text-xs text-muted-foreground">
-                ({field.type}[])
-              </span>
-            </label>
-          </div>
-          {!readonly && (
-            <button
-              onClick={onArrayAdd}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 text-primary rounded hover:bg-primary/30 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              Add
-            </button>
-          )}
-        </div>
-        {field.comment && (
-          <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
-        )}
-        {expanded && (
-          <div className="space-y-2 mt-2 max-h-96 overflow-y-auto">
-            {arrayValue.length === 0 ? (
-              <div className="text-xs text-muted-foreground italic py-2">
-                Empty array - click &quot;Add&quot; to add items
-              </div>
-            ) : (
-              arrayValue.map((item: any, index: number) => (
-                <div key={index} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <PrimitiveInput
-                      type={field.type}
-                      value={item}
-                      onChange={(v) => onArrayItemChange(index, v)}
-                      {...(field.enumValues && { enumValues: field.enumValues })}
-                      readonly={readonly}
-                      placeholder={`Item ${index + 1}`}
-                    />
-                  </div>
-                  {!readonly && (
-                    <button
-                      onClick={() => onArrayRemove(index)}
-                      className="p-1 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+	// Repeated field (array)
+	if (field.rule === "repeated") {
+		const arrayValue = value || [];
+		return (
+			<div className="border border-border rounded-lg p-3">
+				<div className="flex items-center justify-between mb-2">
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={() => setExpanded(!expanded)}
+							className="p-0.5 hover:bg-muted rounded"
+						>
+							{expanded ? (
+								<ChevronDown className="h-4 w-4 text-muted-foreground" />
+							) : (
+								<ChevronRight className="h-4 w-4 text-muted-foreground" />
+							)}
+						</button>
+						<span className="text-sm font-medium text-foreground">
+							{field.name}
+							<span className="ml-2 text-xs text-muted-foreground">
+								({field.type}[])
+							</span>
+						</span>
+					</div>
+					{!readonly && (
+						<button
+							type="button"
+							onClick={onArrayAdd}
+							className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/20 text-primary rounded hover:bg-primary/30 transition-colors"
+						>
+							<Plus className="h-3 w-3" />
+							Add
+						</button>
+					)}
+				</div>
+				{field.comment && (
+					<p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
+				)}
+				{expanded && (
+					<div className="space-y-2 mt-2 max-h-96 overflow-y-auto">
+						{arrayValue.length === 0 ? (
+							<div className="text-xs text-muted-foreground italic py-2">
+								Empty array - click &quot;Add&quot; to add items
+							</div>
+						) : (
+							arrayValue.map((item: any, index: number) => (
+								<div key={index} className="flex items-center gap-2">
+									<div className="flex-1">
+										<PrimitiveInput
+											type={field.type}
+											value={item}
+											onChange={(v) => onArrayItemChange(index, v)}
+											{...(field.enumValues && {
+												enumValues: field.enumValues,
+											})}
+											readonly={readonly}
+											placeholder={`Item ${index + 1}`}
+										/>
+									</div>
+									{!readonly && (
+										<button
+											type="button"
+											onClick={() => onArrayRemove(index)}
+											className="p-1 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+										>
+											<Trash2 className="h-4 w-4" />
+										</button>
+									)}
+								</div>
+							))
+						)}
+					</div>
+				)}
+			</div>
+		);
+	}
 
-  // Nested message field
-  if (field.nested) {
-    // If we have nested field definitions, render them as expandable fields
-    if (field.nestedFields && field.nestedFields.length > 0) {
-      const nestedValue = value || {};
+	// Nested message field
+	if (field.nested) {
+		// If we have nested field definitions, render them as expandable fields
+		if (field.nestedFields && field.nestedFields.length > 0) {
+			const nestedValue = value || {};
 
-      return (
-        <div className="border border-border rounded-lg p-3 bg-muted/30">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setExpanded(!expanded)}
-                className="p-0.5 hover:bg-muted rounded"
-              >
-                {expanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-              </button>
-              <label className="text-sm font-medium text-foreground">
-                {field.name}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({field.type})
-                </span>
-              </label>
-            </div>
-          </div>
-          {field.comment && (
-            <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
-          )}
-          {expanded && (
-            <div className="space-y-3 mt-2 pl-4 border-l-2 border-border">
-              {field.nestedFields.map((nestedField) => (
-                <FieldInput
-                  key={nestedField.name}
-                  field={nestedField}
-                  value={nestedValue[nestedField.name]}
-                  onChange={(v) => {
-                    const updated = { ...nestedValue, [nestedField.name]: v };
-                    onChange(updated);
-                  }}
-                  onArrayAdd={() => {}}
-                  onArrayRemove={() => {}}
-                  onArrayItemChange={() => {}}
-                  readonly={readonly}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
+			return (
+				<div className="border border-border rounded-lg p-3 bg-muted/30">
+					<div className="flex items-center justify-between mb-2">
+						<div className="flex items-center gap-2">
+							<button
+								type="button"
+								onClick={() => setExpanded(!expanded)}
+								className="p-0.5 hover:bg-muted rounded"
+							>
+								{expanded ? (
+									<ChevronDown className="h-4 w-4 text-muted-foreground" />
+								) : (
+									<ChevronRight className="h-4 w-4 text-muted-foreground" />
+								)}
+							</button>
+							<span className="text-sm font-medium text-foreground">
+								{field.name}
+								<span className="ml-2 text-xs text-muted-foreground">
+									({field.type})
+								</span>
+							</span>
+						</div>
+					</div>
+					{field.comment && (
+						<p className="text-xs text-muted-foreground mb-2">
+							{field.comment}
+						</p>
+					)}
+					{expanded && (
+						<div className="space-y-3 mt-2 pl-4 border-l-2 border-border">
+							{field.nestedFields.map((nestedField) => (
+								<FieldInput
+									key={nestedField.name}
+									field={nestedField}
+									value={nestedValue[nestedField.name]}
+									onChange={(v) => {
+										const updated = { ...nestedValue, [nestedField.name]: v };
+										onChange(updated);
+									}}
+									onArrayAdd={() => {}}
+									onArrayRemove={() => {}}
+									onArrayItemChange={() => {}}
+									readonly={readonly}
+								/>
+							))}
+						</div>
+					)}
+				</div>
+			);
+		}
 
-    // Fallback: if no nested fields available, use JSON editor
-    return (
-      <div className="border border-border rounded-lg p-3 bg-muted/30">
-        <label className="text-sm font-medium text-foreground mb-2 block">
-          {field.name}
-          <span className="ml-2 text-xs text-muted-foreground">
-            ({field.type})
-          </span>
-        </label>
-        {field.comment && (
-          <p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
-        )}
-        <div className="text-xs text-muted-foreground italic py-2">
-          Nested message - use JSON editor for complex types
-        </div>
-        <textarea
-          value={typeof value === 'object' ? JSON.stringify(value, null, 2) : value || ''}
-          onChange={(e) => {
-            try {
-              const parsed = JSON.parse(e.target.value);
-              onChange(parsed);
-            } catch {
-              // Invalid JSON, don't update
-            }
-          }}
-          readOnly={readonly}
-          placeholder={`{"field": "value"}`}
-          className={cn(
-            "w-full px-3 py-2 rounded text-sm font-mono",
-            "bg-input border border-border",
-            "focus:outline-none focus:ring-2 focus:ring-primary",
-            readonly && "bg-muted cursor-not-allowed"
-          )}
-          rows={4}
-        />
-      </div>
-    );
-  }
+		// Fallback: if no nested fields available, use JSON editor
+		return (
+			<div className="border border-border rounded-lg p-3 bg-muted/30">
+				<span className="text-sm font-medium text-foreground mb-2 block">
+					{field.name}
+					<span className="ml-2 text-xs text-muted-foreground">
+						({field.type})
+					</span>
+				</span>
+				{field.comment && (
+					<p className="text-xs text-muted-foreground mb-2">{field.comment}</p>
+				)}
+				<div className="text-xs text-muted-foreground italic py-2">
+					Nested message - use JSON editor for complex types
+				</div>
+				<textarea
+					value={
+						typeof value === "object"
+							? JSON.stringify(value, null, 2)
+							: value || ""
+					}
+					onChange={(e) => {
+						try {
+							const parsed = JSON.parse(e.target.value);
+							onChange(parsed);
+						} catch {
+							// Invalid JSON, don't update
+						}
+					}}
+					readOnly={readonly}
+					placeholder={`{"field": "value"}`}
+					className={cn(
+						"w-full px-3 py-2 rounded text-sm font-mono",
+						"bg-input border border-border",
+						"focus:outline-none focus:ring-2 focus:ring-primary",
+						readonly && "bg-muted cursor-not-allowed",
+					)}
+					rows={4}
+				/>
+			</div>
+		);
+	}
 
-  // Regular field
-  return (
-    <div>
-      <label className="text-sm font-medium text-foreground mb-1.5 block">
-        {field.name}
-        {field.rule === 'required' && (
-          <span className="ml-1 text-destructive">*</span>
-        )}
-        <span className="ml-2 text-xs text-muted-foreground">
-          ({field.type})
-        </span>
-      </label>
-      {field.comment && (
-        <p className="text-xs text-muted-foreground mb-1.5">{field.comment}</p>
-      )}
-      <PrimitiveInput
-        type={field.type}
-        value={value}
-        onChange={onChange}
-        {...(field.enumValues && { enumValues: field.enumValues })}
-        readonly={readonly}
-        placeholder={`Enter ${field.name}`}
-      />
-    </div>
-  );
+	// Regular field
+	return (
+		<div>
+			<label
+				htmlFor={`field-${field.name}`}
+				className="text-sm font-medium text-foreground mb-1.5 block"
+			>
+				{field.name}
+				{field.rule === "required" && (
+					<span className="ml-1 text-destructive">*</span>
+				)}
+				<span className="ml-2 text-xs text-muted-foreground">
+					({field.type})
+				</span>
+			</label>
+			{field.comment && (
+				<p className="text-xs text-muted-foreground mb-1.5">{field.comment}</p>
+			)}
+			<PrimitiveInput
+				id={`field-${field.name}`}
+				type={field.type}
+				value={value}
+				onChange={onChange}
+				{...(field.enumValues && { enumValues: field.enumValues })}
+				readonly={readonly}
+				placeholder={`Enter ${field.name}`}
+			/>
+		</div>
+	);
 };
 
 interface PrimitiveInputProps {
-  type: string;
-  value: any;
-  onChange: (value: any) => void;
-  enumValues?: string[];
-  readonly?: boolean;
-  placeholder?: string;
+	id?: string;
+	type: string;
+	value: any;
+	onChange: (value: any) => void;
+	enumValues?: string[];
+	readonly?: boolean;
+	placeholder?: string;
 }
 
 const PrimitiveInput: React.FC<PrimitiveInputProps> = ({
-  type,
-  value,
-  onChange,
-  enumValues,
-  readonly = false,
-  placeholder,
+	id,
+	type,
+	value,
+	onChange,
+	enumValues,
+	readonly = false,
+	placeholder,
 }) => {
-  // Enum select
-  if (enumValues && enumValues.length > 0) {
-    return (
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={readonly}
-        className={cn(
-          "w-full px-3 py-2 rounded text-sm",
-          "bg-input border border-border",
-          "focus:outline-none focus:ring-2 focus:ring-primary",
-          readonly && "bg-muted cursor-not-allowed"
-        )}
-      >
-        <option value="">Select value...</option>
-        {enumValues.map((enumValue) => (
-          <option key={enumValue} value={enumValue}>
-            {enumValue}
-          </option>
-        ))}
-      </select>
-    );
-  }
+	// Enum select
+	if (enumValues && enumValues.length > 0) {
+		return (
+			<select
+				id={id}
+				value={value || ""}
+				onChange={(e) => onChange(e.target.value)}
+				disabled={readonly}
+				className={cn(
+					"w-full px-3 py-2 rounded text-sm",
+					"bg-input border border-border",
+					"focus:outline-none focus:ring-2 focus:ring-primary",
+					readonly && "bg-muted cursor-not-allowed",
+				)}
+			>
+				<option value="">Select value...</option>
+				{enumValues.map((enumValue) => (
+					<option key={enumValue} value={enumValue}>
+						{enumValue}
+					</option>
+				))}
+			</select>
+		);
+	}
 
-  // Boolean checkbox
-  if (type === 'bool') {
-    return (
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value || false}
-          onChange={(e) => onChange(e.target.checked)}
-          disabled={readonly}
-          className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-        />
-        <span className="text-sm text-muted-foreground">
-          {value ? 'true' : 'false'}
-        </span>
-      </label>
-    );
-  }
+	// Boolean checkbox
+	if (type === "bool") {
+		return (
+			<label className="flex items-center gap-2 cursor-pointer">
+				<input
+					type="checkbox"
+					checked={value || false}
+					onChange={(e) => onChange(e.target.checked)}
+					disabled={readonly}
+					className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+				/>
+				<span className="text-sm text-muted-foreground">
+					{value ? "true" : "false"}
+				</span>
+			</label>
+		);
+	}
 
-  // Number input for numeric types
-  if (['int32', 'int64', 'uint32', 'uint64', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64', 'double', 'float'].includes(type)) {
-    return (
-      <input
-        type="number"
-        value={value || ''}
-        onChange={(e) => {
-          const numValue = type.includes('float') || type === 'double'
-            ? parseFloat(e.target.value)
-            : parseInt(e.target.value);
-          onChange(isNaN(numValue) ? '' : numValue);
-        }}
-        readOnly={readonly}
-        placeholder={placeholder || 'Enter number'}
-        className={cn(
-          "w-full px-3 py-2 rounded text-sm",
-          "bg-input border border-border",
-          "focus:outline-none focus:ring-2 focus:ring-primary",
-          readonly && "bg-muted cursor-not-allowed"
-        )}
-      />
-    );
-  }
+	// Number input for numeric types
+	if (
+		[
+			"int32",
+			"int64",
+			"uint32",
+			"uint64",
+			"sint32",
+			"sint64",
+			"fixed32",
+			"fixed64",
+			"sfixed32",
+			"sfixed64",
+			"double",
+			"float",
+		].includes(type)
+	) {
+		return (
+			<input
+				id={id}
+				type="number"
+				value={value || ""}
+				onChange={(e) => {
+					const numValue =
+						type.includes("float") || type === "double"
+							? parseFloat(e.target.value)
+							: parseInt(e.target.value, 10);
+					onChange(Number.isNaN(numValue) ? "" : numValue);
+				}}
+				readOnly={readonly}
+				placeholder={placeholder || "Enter number"}
+				className={cn(
+					"w-full px-3 py-2 rounded text-sm",
+					"bg-input border border-border",
+					"focus:outline-none focus:ring-2 focus:ring-primary",
+					readonly && "bg-muted cursor-not-allowed",
+				)}
+			/>
+		);
+	}
 
-  // Bytes as base64 textarea
-  if (type === 'bytes') {
-    return (
-      <textarea
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        readOnly={readonly}
-        placeholder={placeholder || 'Enter base64 encoded bytes'}
-        className={cn(
-          "w-full px-3 py-2 rounded text-sm font-mono",
-          "bg-input border border-border",
-          "focus:outline-none focus:ring-2 focus:ring-primary",
-          readonly && "bg-muted cursor-not-allowed"
-        )}
-        rows={3}
-      />
-    );
-  }
+	// Bytes as base64 textarea
+	if (type === "bytes") {
+		return (
+			<textarea
+				id={id}
+				value={value || ""}
+				onChange={(e) => onChange(e.target.value)}
+				readOnly={readonly}
+				placeholder={placeholder || "Enter base64 encoded bytes"}
+				className={cn(
+					"w-full px-3 py-2 rounded text-sm font-mono",
+					"bg-input border border-border",
+					"focus:outline-none focus:ring-2 focus:ring-primary",
+					readonly && "bg-muted cursor-not-allowed",
+				)}
+				rows={3}
+			/>
+		);
+	}
 
-  // String input (default)
-  return (
-    <input
-      type="text"
-      value={value || ''}
-      onChange={(e) => onChange(e.target.value)}
-      readOnly={readonly}
-      placeholder={placeholder || 'Enter text'}
-      className={cn(
-        "w-full px-3 py-2 rounded text-sm",
-        "bg-input border border-border",
-        "focus:outline-none focus:ring-2 focus:ring-primary",
-        readonly && "bg-muted cursor-not-allowed"
-      )}
-    />
-  );
+	// String input (default)
+	return (
+		<input
+			id={id}
+			type="text"
+			value={value || ""}
+			onChange={(e) => onChange(e.target.value)}
+			readOnly={readonly}
+			placeholder={placeholder || "Enter text"}
+			className={cn(
+				"w-full px-3 py-2 rounded text-sm",
+				"bg-input border border-border",
+				"focus:outline-none focus:ring-2 focus:ring-primary",
+				readonly && "bg-muted cursor-not-allowed",
+			)}
+		/>
+	);
 };
 
 export default ProtobufFormGenerator;

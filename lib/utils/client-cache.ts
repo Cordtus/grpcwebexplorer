@@ -2,127 +2,127 @@
 // Each user's data is stored locally in their browser
 
 export interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-  version: string;
+	data: T;
+	timestamp: number;
+	version: string;
 }
 
-const CACHE_VERSION = '2.0.0';
-const CACHE_PREFIX = 'grpc-explorer:';
-const SETTINGS_KEY = 'grpc-explorer:settings';
+const CACHE_VERSION = "2.0.0";
+const CACHE_PREFIX = "grpc-explorer:";
+const SETTINGS_KEY = "grpc-explorer:settings";
 
 export const REQUEST_TIMEOUT_MS = {
-  DEFAULT: 10000,
-  MIN: 1000,
-  MAX: 60000,
+	DEFAULT: 10000,
+	MIN: 1000,
+	MAX: 60000,
 } as const;
 
 // Cache TTL options (in milliseconds)
 export const CACHE_TTL_OPTIONS = {
-  NONE: 0,
-  ONE_HOUR: 3600000,
-  SIX_HOURS: 21600000,
-  ONE_DAY: 86400000,
-  THIRTY_SIX_HOURS: 129600000,
-  SEVENTY_TWO_HOURS: 259200000,
-  MAX: Infinity,
+	NONE: 0,
+	ONE_HOUR: 3600000,
+	SIX_HOURS: 21600000,
+	ONE_DAY: 86400000,
+	THIRTY_SIX_HOURS: 129600000,
+	SEVENTY_TWO_HOURS: 259200000,
+	MAX: Infinity,
 } as const;
 
 export type CacheTTLOption = keyof typeof CACHE_TTL_OPTIONS;
 
 export const CACHE_TTL_LABELS: Record<CacheTTLOption, string> = {
-  NONE: 'None (always fresh)',
-  ONE_HOUR: '1 hour',
-  SIX_HOURS: '6 hours',
-  ONE_DAY: '24 hours',
-  THIRTY_SIX_HOURS: '36 hours',
-  SEVENTY_TWO_HOURS: '72 hours',
-  MAX: 'Never expire',
+	NONE: "None (always fresh)",
+	ONE_HOUR: "1 hour",
+	SIX_HOURS: "6 hours",
+	ONE_DAY: "24 hours",
+	THIRTY_SIX_HOURS: "36 hours",
+	SEVENTY_TWO_HOURS: "72 hours",
+	MAX: "Never expire",
 };
 
 export function normalizeRequestTimeoutMs(
-  value: unknown,
-  defaultValue: number = REQUEST_TIMEOUT_MS.DEFAULT
+	value: unknown,
+	defaultValue: number = REQUEST_TIMEOUT_MS.DEFAULT,
 ): number {
-  if (value === null || value === '' || typeof value === 'boolean') {
-    return defaultValue;
-  }
+	if (value === null || value === "" || typeof value === "boolean") {
+		return defaultValue;
+	}
 
-  const parsed = typeof value === 'number' ? value : Number(value);
+	const parsed = typeof value === "number" ? value : Number(value);
 
-  if (!Number.isFinite(parsed)) {
-    return defaultValue;
-  }
+	if (!Number.isFinite(parsed)) {
+		return defaultValue;
+	}
 
-  const rounded = Math.round(parsed);
-  return Math.min(
-    REQUEST_TIMEOUT_MS.MAX,
-    Math.max(REQUEST_TIMEOUT_MS.MIN, rounded)
-  );
+	const rounded = Math.round(parsed);
+	return Math.min(
+		REQUEST_TIMEOUT_MS.MAX,
+		Math.max(REQUEST_TIMEOUT_MS.MIN, rounded),
+	);
 }
 
 export function getRequestTimeoutMs(): number {
-  if (typeof window === 'undefined') return REQUEST_TIMEOUT_MS.DEFAULT;
+	if (typeof window === "undefined") return REQUEST_TIMEOUT_MS.DEFAULT;
 
-  try {
-    const settings = localStorage.getItem(SETTINGS_KEY);
-    if (!settings) return REQUEST_TIMEOUT_MS.DEFAULT;
+	try {
+		const settings = localStorage.getItem(SETTINGS_KEY);
+		if (!settings) return REQUEST_TIMEOUT_MS.DEFAULT;
 
-    const parsed = JSON.parse(settings);
-    return normalizeRequestTimeoutMs(parsed.requestTimeoutMs);
-  } catch {
-    return REQUEST_TIMEOUT_MS.DEFAULT;
-  }
+		const parsed = JSON.parse(settings);
+		return normalizeRequestTimeoutMs(parsed.requestTimeoutMs);
+	} catch {
+		return REQUEST_TIMEOUT_MS.DEFAULT;
+	}
 }
 
 export function setRequestTimeoutMs(timeoutMs: number): void {
-  if (typeof window === 'undefined') return;
+	if (typeof window === "undefined") return;
 
-  try {
-    const settings = localStorage.getItem(SETTINGS_KEY);
-    const parsed = settings ? JSON.parse(settings) : {};
+	try {
+		const settings = localStorage.getItem(SETTINGS_KEY);
+		const parsed = settings ? JSON.parse(settings) : {};
 
-    parsed.requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
-  } catch (error) {
-    console.warn('Failed to save request timeout setting:', error);
-  }
+		parsed.requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
+		localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+	} catch (error) {
+		console.warn("Failed to save request timeout setting:", error);
+	}
 }
 
 /**
  * Get user's preferred cache TTL setting
  */
 export function getCacheTTL(): number {
-  if (typeof window === 'undefined') return CACHE_TTL_OPTIONS.MAX;
+	if (typeof window === "undefined") return CACHE_TTL_OPTIONS.MAX;
 
-  try {
-    const settings = localStorage.getItem(SETTINGS_KEY);
-    if (!settings) return CACHE_TTL_OPTIONS.MAX;
+	try {
+		const settings = localStorage.getItem(SETTINGS_KEY);
+		if (!settings) return CACHE_TTL_OPTIONS.MAX;
 
-    const parsed = JSON.parse(settings);
-    const ttlOption = parsed.cacheTTL as CacheTTLOption;
+		const parsed = JSON.parse(settings);
+		const ttlOption = parsed.cacheTTL as CacheTTLOption;
 
-    return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.MAX;
-  } catch (error) {
-    return CACHE_TTL_OPTIONS.MAX;
-  }
+		return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.MAX;
+	} catch (_error) {
+		return CACHE_TTL_OPTIONS.MAX;
+	}
 }
 
 /**
  * Set user's preferred cache TTL setting
  */
 export function setCacheTTL(option: CacheTTLOption): void {
-  if (typeof window === 'undefined') return;
+	if (typeof window === "undefined") return;
 
-  try {
-    const settings = localStorage.getItem(SETTINGS_KEY);
-    const parsed = settings ? JSON.parse(settings) : {};
+	try {
+		const settings = localStorage.getItem(SETTINGS_KEY);
+		const parsed = settings ? JSON.parse(settings) : {};
 
-    parsed.cacheTTL = option;
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
-  } catch (error) {
-    console.warn('Failed to save cache TTL setting:', error);
-  }
+		parsed.cacheTTL = option;
+		localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+	} catch (error) {
+		console.warn("Failed to save cache TTL setting:", error);
+	}
 }
 
 /**
@@ -131,47 +131,47 @@ export function setCacheTTL(option: CacheTTLOption): void {
  * @param ttlMs Time-to-live in milliseconds (default: uses user preference)
  */
 export function getFromCache<T>(key: string, ttlMs?: number): T | null {
-  if (typeof window === 'undefined') return null; // SSR safety
+	if (typeof window === "undefined") return null; // SSR safety
 
-  try {
-    const cacheKey = `${CACHE_PREFIX}${key}`;
-    const raw = localStorage.getItem(cacheKey);
+	try {
+		const cacheKey = `${CACHE_PREFIX}${key}`;
+		const raw = localStorage.getItem(cacheKey);
 
-    if (!raw) return null;
+		if (!raw) return null;
 
-    const entry: CacheEntry<T> = JSON.parse(raw);
+		const entry: CacheEntry<T> = JSON.parse(raw);
 
-    // Check version
-    if (entry.version !== CACHE_VERSION) {
-      localStorage.removeItem(cacheKey);
-      return null;
-    }
+		// Check version
+		if (entry.version !== CACHE_VERSION) {
+			localStorage.removeItem(cacheKey);
+			return null;
+		}
 
-    // Get TTL (use provided or user preference)
-    const effectiveTTL = ttlMs !== undefined ? ttlMs : getCacheTTL();
+		// Get TTL (use provided or user preference)
+		const effectiveTTL = ttlMs !== undefined ? ttlMs : getCacheTTL();
 
-    // If TTL is 0 (NONE), don't use cache
-    if (effectiveTTL === 0) {
-      return null;
-    }
+		// If TTL is 0 (NONE), don't use cache
+		if (effectiveTTL === 0) {
+			return null;
+		}
 
-    // If TTL is Infinity (MAX), never expire
-    if (effectiveTTL === Infinity) {
-      return entry.data;
-    }
+		// If TTL is Infinity (MAX), never expire
+		if (effectiveTTL === Infinity) {
+			return entry.data;
+		}
 
-    // Check TTL
-    const age = Date.now() - entry.timestamp;
-    if (age > effectiveTTL) {
-      localStorage.removeItem(cacheKey);
-      return null;
-    }
+		// Check TTL
+		const age = Date.now() - entry.timestamp;
+		if (age > effectiveTTL) {
+			localStorage.removeItem(cacheKey);
+			return null;
+		}
 
-    return entry.data;
-  } catch (error) {
-    console.warn('Cache read error:', error);
-    return null;
-  }
+		return entry.data;
+	} catch (error) {
+		console.warn("Cache read error:", error);
+		return null;
+	}
 }
 
 /**
@@ -180,99 +180,102 @@ export function getFromCache<T>(key: string, ttlMs?: number): T | null {
  * @param data Data to cache
  */
 export function saveToCache<T>(key: string, data: T): void {
-  if (typeof window === 'undefined') return; // SSR safety
+	if (typeof window === "undefined") return; // SSR safety
 
-  try {
-    const cacheKey = `${CACHE_PREFIX}${key}`;
-    const entry: CacheEntry<T> = {
-      data,
-      timestamp: Date.now(),
-      version: CACHE_VERSION,
-    };
+	try {
+		const cacheKey = `${CACHE_PREFIX}${key}`;
+		const entry: CacheEntry<T> = {
+			data,
+			timestamp: Date.now(),
+			version: CACHE_VERSION,
+		};
 
-    localStorage.setItem(cacheKey, JSON.stringify(entry));
-  } catch (error) {
-    console.warn('Cache write error:', error);
-    // Fail silently - might be quota exceeded
-  }
+		localStorage.setItem(cacheKey, JSON.stringify(entry));
+	} catch (error) {
+		console.warn("Cache write error:", error);
+		// Fail silently - might be quota exceeded
+	}
 }
 
 /**
  * Remove specific cache entry
  */
 export function removeFromCache(key: string): void {
-  if (typeof window === 'undefined') return;
+	if (typeof window === "undefined") return;
 
-  try {
-    const cacheKey = `${CACHE_PREFIX}${key}`;
-    localStorage.removeItem(cacheKey);
-  } catch (error) {
-    console.warn('Cache remove error:', error);
-  }
+	try {
+		const cacheKey = `${CACHE_PREFIX}${key}`;
+		localStorage.removeItem(cacheKey);
+	} catch (error) {
+		console.warn("Cache remove error:", error);
+	}
 }
 
 /**
  * Clear all cache entries for this app
  */
 export function clearAllCache(): void {
-  if (typeof window === 'undefined') return;
+	if (typeof window === "undefined") return;
 
-  try {
-    const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-      if (key.startsWith(CACHE_PREFIX)) {
-        localStorage.removeItem(key);
-      }
-    });
-  } catch (error) {
-    console.warn('Cache clear error:', error);
-  }
+	try {
+		const keys = Object.keys(localStorage);
+		keys.forEach((key) => {
+			if (key.startsWith(CACHE_PREFIX)) {
+				localStorage.removeItem(key);
+			}
+		});
+	} catch (error) {
+		console.warn("Cache clear error:", error);
+	}
 }
 
 /**
  * Get cache statistics
  */
 export function getCacheStats(): { count: number; sizeKB: number } {
-  if (typeof window === 'undefined') return { count: 0, sizeKB: 0 };
+	if (typeof window === "undefined") return { count: 0, sizeKB: 0 };
 
-  try {
-    const keys = Object.keys(localStorage);
-    const cacheKeys = keys.filter(key => key.startsWith(CACHE_PREFIX));
+	try {
+		const keys = Object.keys(localStorage);
+		const cacheKeys = keys.filter((key) => key.startsWith(CACHE_PREFIX));
 
-    let totalSize = 0;
-    cacheKeys.forEach(key => {
-      const value = localStorage.getItem(key);
-      if (value) {
-        totalSize += value.length;
-      }
-    });
+		let totalSize = 0;
+		cacheKeys.forEach((key) => {
+			const value = localStorage.getItem(key);
+			if (value) {
+				totalSize += value.length;
+			}
+		});
 
-    return {
-      count: cacheKeys.length,
-      sizeKB: Math.round(totalSize / 1024),
-    };
-  } catch (error) {
-    return { count: 0, sizeKB: 0 };
-  }
+		return {
+			count: cacheKeys.length,
+			sizeKB: Math.round(totalSize / 1024),
+		};
+	} catch (_error) {
+		return { count: 0, sizeKB: 0 };
+	}
 }
 
 /**
  * Generate cache key for service discovery
  */
-export function getServicesCacheKey(endpoint: string, tlsEnabled: boolean): string {
-  return `services:${endpoint}:${tlsEnabled}`;
+export function getServicesCacheKey(
+	endpoint: string,
+	tlsEnabled: boolean,
+): string {
+	return `services:${endpoint}:${tlsEnabled}`;
 }
 
 /**
  * Cached chain info for display purposes
  */
 export interface CachedChainInfo {
-  endpoint: string;
-  chainId?: string;
-  tlsEnabled: boolean;
-  serviceCount: number;
-  cachedAt: number;
-  age: string;
+	endpoint: string;
+	chainId?: string;
+	tlsEnabled: boolean;
+	serviceCount: number;
+	cachedAt: number;
+	age: string;
 }
 
 /**
@@ -280,73 +283,70 @@ export interface CachedChainInfo {
  * Returns information about each cached chain for display in UI
  */
 export function listCachedChains(): CachedChainInfo[] {
-  if (typeof window === 'undefined') return [];
+	if (typeof window === "undefined") return [];
 
-  try {
-    const keys = Object.keys(localStorage);
-    const servicesCacheKeys = keys.filter(key =>
-      key.startsWith(`${CACHE_PREFIX}services:`)
-    );
+	try {
+		const keys = Object.keys(localStorage);
+		const servicesCacheKeys = keys.filter((key) =>
+			key.startsWith(`${CACHE_PREFIX}services:`),
+		);
 
-    const cachedChains: CachedChainInfo[] = [];
-    const now = Date.now();
+		const cachedChains: CachedChainInfo[] = [];
+		const now = Date.now();
 
-    for (const key of servicesCacheKeys) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
+		for (const key of servicesCacheKeys) {
+			try {
+				const raw = localStorage.getItem(key);
+				if (!raw) continue;
 
-        const entry: CacheEntry<any> = JSON.parse(raw);
+				const entry: CacheEntry<any> = JSON.parse(raw);
 
-        // Check version
-        if (entry.version !== CACHE_VERSION) continue;
+				// Check version
+				if (entry.version !== CACHE_VERSION) continue;
 
-        // Parse the key to get endpoint and TLS info
-        // Key format: grpc-explorer:services:{endpoint}:{tls}
-        const keyParts = key.replace(`${CACHE_PREFIX}services:`, '').split(':');
-        const tlsEnabled = keyParts.pop() === 'true';
-        const endpoint = keyParts.join(':'); // Handle ports in endpoint
+				// Parse the key to get endpoint and TLS info
+				// Key format: grpc-explorer:services:{endpoint}:{tls}
+				const keyParts = key.replace(`${CACHE_PREFIX}services:`, "").split(":");
+				const tlsEnabled = keyParts.pop() === "true";
+				const endpoint = keyParts.join(":"); // Handle ports in endpoint
 
-        const data = entry.data;
-        const chainId = data?.chainId || data?.status?.chainId;
-        const serviceCount = data?.services?.length || 0;
-        const cachedAt = entry.timestamp;
+				const data = entry.data;
+				const chainId = data?.chainId || data?.status?.chainId;
+				const serviceCount = data?.services?.length || 0;
+				const cachedAt = entry.timestamp;
 
-        // Calculate human-readable age
-        const ageMs = now - cachedAt;
-        const ageMinutes = Math.floor(ageMs / 60000);
-        const ageHours = Math.floor(ageMs / 3600000);
-        const ageDays = Math.floor(ageMs / 86400000);
+				// Calculate human-readable age
+				const ageMs = now - cachedAt;
+				const ageMinutes = Math.floor(ageMs / 60000);
+				const ageHours = Math.floor(ageMs / 3600000);
+				const ageDays = Math.floor(ageMs / 86400000);
 
-        let age: string;
-        if (ageDays > 0) {
-          age = `${ageDays}d ago`;
-        } else if (ageHours > 0) {
-          age = `${ageHours}h ago`;
-        } else if (ageMinutes > 0) {
-          age = `${ageMinutes}m ago`;
-        } else {
-          age = 'just now';
-        }
+				let age: string;
+				if (ageDays > 0) {
+					age = `${ageDays}d ago`;
+				} else if (ageHours > 0) {
+					age = `${ageHours}h ago`;
+				} else if (ageMinutes > 0) {
+					age = `${ageMinutes}m ago`;
+				} else {
+					age = "just now";
+				}
 
-        cachedChains.push({
-          endpoint,
-          chainId,
-          tlsEnabled,
-          serviceCount,
-          cachedAt,
-          age,
-        });
-      } catch (e) {
-        // Skip invalid entries
-        continue;
-      }
-    }
+				cachedChains.push({
+					endpoint,
+					chainId,
+					tlsEnabled,
+					serviceCount,
+					cachedAt,
+					age,
+				});
+			} catch (_e) {}
+		}
 
-    // Sort by most recently cached
-    return cachedChains.sort((a, b) => b.cachedAt - a.cachedAt);
-  } catch (error) {
-    console.warn('Failed to list cached chains:', error);
-    return [];
-  }
+		// Sort by most recently cached
+		return cachedChains.sort((a, b) => b.cachedAt - a.cachedAt);
+	} catch (error) {
+		console.warn("Failed to list cached chains:", error);
+		return [];
+	}
 }

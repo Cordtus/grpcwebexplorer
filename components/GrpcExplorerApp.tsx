@@ -1,1289 +1,1589 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, Plus, Network, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn, errorMessage } from '@/lib/utils';
-import NetworkBlock from './NetworkBlock';
-import MethodBlock from './MethodBlock';
-import MethodDetailPanel, { MethodDetailPanelEmpty } from './MethodDetailPanel';
-import AddNetworkDialog from './AddNetworkDialog';
-import MenuBar from './MenuBar';
-import HelpDialog from './HelpDialog';
-import SettingsDialog from './SettingsDialog';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { getFromCache, saveToCache, getServicesCacheKey, getCacheTTL, getRequestTimeoutMs } from '@/lib/utils/client-cache';
-import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { debug } from '@/lib/utils/debug';
-import { GrpcNetwork, GrpcService, GrpcMethod, MethodInstance, ExecutionResult, EndpointConfig, ExplorerMode, BufBsrSource, GrpcAuthConfig } from '@/lib/types/grpc';
-import { descriptorLoader } from '@/lib/utils/descriptor-loader';
-import { isServiceDescriptorReady, servicesNeedingDescriptors } from '@/lib/utils/descriptor-readiness';
-import { getExecutionEndpoints } from '@/lib/utils/execution-endpoints';
-import { classifyReflectionFailure } from '@/lib/utils/reflection-probe';
-import { toast } from 'sonner';
+import {
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	Network,
+	Plus,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import type {
+	BufBsrSource,
+	EndpointConfig,
+	ExecutionResult,
+	ExplorerMode,
+	GrpcAuthConfig,
+	GrpcMethod,
+	GrpcNetwork,
+	GrpcService,
+	MethodInstance,
+} from "@/lib/types/grpc";
+import { cn, errorMessage } from "@/lib/utils";
+import {
+	getCacheTTL,
+	getFromCache,
+	getRequestTimeoutMs,
+	getServicesCacheKey,
+	saveToCache,
+} from "@/lib/utils/client-cache";
+import { debug } from "@/lib/utils/debug";
+import { descriptorLoader } from "@/lib/utils/descriptor-loader";
+import {
+	isServiceDescriptorReady,
+	servicesNeedingDescriptors,
+} from "@/lib/utils/descriptor-readiness";
+import {
+	getExecutionEndpoints,
+	INCOMPATIBLE_ENDPOINT_COOLDOWN_MS,
+	TRANSIENT_ENDPOINT_COOLDOWN_MS,
+} from "@/lib/utils/execution-endpoints";
+import { classifyReflectionFailure } from "@/lib/utils/reflection-probe";
+import AddNetworkDialog from "./AddNetworkDialog";
+import HelpDialog from "./HelpDialog";
+import MenuBar from "./MenuBar";
+import MethodBlock from "./MethodBlock";
+import MethodDetailPanel, { MethodDetailPanelEmpty } from "./MethodDetailPanel";
+import NetworkBlock from "./NetworkBlock";
+import SettingsDialog from "./SettingsDialog";
 
 // Color palette for networks
 const NETWORK_COLORS = [
-  '#3b82f6', // blue
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#a855f7', // purple
-  '#ec4899', // pink
-  '#14b8a6', // teal
-  '#84cc16', // lime
+	"#3b82f6", // blue
+	"#10b981", // emerald
+	"#f59e0b", // amber
+	"#ef4444", // red
+	"#a855f7", // purple
+	"#ec4899", // pink
+	"#14b8a6", // teal
+	"#84cc16", // lime
 ];
 
 // Keep persisted network state aligned with descriptor completeness metadata.
-const NETWORK_CACHE_VERSION = '2.1.0';
-const INCOMPATIBLE_ENDPOINT_COOLDOWN_MS = 60 * 60 * 1000;
-const TRANSIENT_ENDPOINT_COOLDOWN_MS = 60 * 1000;
+const NETWORK_CACHE_VERSION = "2.1.0";
 
 function updateExecutionHealth(
-  network: GrpcNetwork,
-  successfulEndpoint: string | undefined,
-  failures: Array<{ endpoint: string; error: string }>,
-  now: number
+	network: GrpcNetwork,
+	successfulEndpoint: string | undefined,
+	failures: Array<{ endpoint: string; error: string }>,
+	now: number,
 ): GrpcNetwork {
-  const endpointHealth = { ...network.endpointHealth };
+	const endpointHealth = { ...network.endpointHealth };
 
-  for (const failure of failures) {
-    const reflectionFailure = failure.error.includes('Reflection initialization failed:');
-    const kind = reflectionFailure ? classifyReflectionFailure(failure.error) : 'transient';
-    endpointHealth[failure.endpoint] = {
-      ...endpointHealth[failure.endpoint],
-      lastErrorKind: kind,
-      retryAfter: now + (kind === 'incompatible' ? INCOMPATIBLE_ENDPOINT_COOLDOWN_MS : TRANSIENT_ENDPOINT_COOLDOWN_MS),
-    };
-  }
+	for (const failure of failures) {
+		const reflectionFailure = failure.error.includes(
+			"Reflection initialization failed:",
+		);
+		const kind = reflectionFailure
+			? classifyReflectionFailure(failure.error)
+			: "transient";
+		endpointHealth[failure.endpoint] = {
+			...endpointHealth[failure.endpoint],
+			lastErrorKind: kind,
+			retryAfter:
+				now +
+				(kind === "incompatible"
+					? INCOMPATIBLE_ENDPOINT_COOLDOWN_MS
+					: TRANSIENT_ENDPOINT_COOLDOWN_MS),
+		};
+	}
 
-  if (successfulEndpoint) {
-    endpointHealth[successfulEndpoint] = { lastSuccess: now };
-  }
+	if (successfulEndpoint) {
+		endpointHealth[successfulEndpoint] = { lastSuccess: now };
+	}
 
-  return { ...network, endpointHealth };
+	return { ...network, endpointHealth };
 }
 
 export default function GrpcExplorerApp() {
-  const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
-  const [methodInstances, setMethodInstances] = useState<MethodInstance[]>([]);
-  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
-  const [executionResults, setExecutionResults] = useState<ExecutionResult[]>([]);
-  const [showAddNetwork, setShowAddNetwork] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
-  );
-  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
-  const [isOverlayMode, setIsOverlayMode] = useState(false);
-  const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
-  const [defaultMode, setDefaultMode] = useState<ExplorerMode>('generic');
-  const [requestTimeoutMs, setRequestTimeoutMs] = useState(10000);
-
-  // Round-robin endpoint index tracker per network (for load distribution)
-  const endpointIndexRef = useRef<Map<string, number>>(new Map());
-  const leftPanelCollapsedRef = useRef(leftPanelCollapsed);
-  const isOverlayModeRef = useRef(isOverlayMode);
-  const userCollapsedPanelRef = useRef(userCollapsedPanel);
-
-  useEffect(() => {
-    leftPanelCollapsedRef.current = leftPanelCollapsed;
-  }, [leftPanelCollapsed]);
-
-  useEffect(() => {
-    isOverlayModeRef.current = isOverlayMode;
-  }, [isOverlayMode]);
-
-  useEffect(() => {
-    userCollapsedPanelRef.current = userCollapsedPanel;
-  }, [userCollapsedPanel]);
-
-  // Derive selectedMethod from methodInstances to ensure it updates with params changes
-  const selectedMethod = useMemo(() => {
-    if (!selectedMethodId) return null;
-    return methodInstances.find(m => m.id === selectedMethodId) || null;
-  }, [selectedMethodId, methodInstances]);
-
-  // Load defaultMode from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('grpc-explorer-default-mode');
-      if (saved === 'generic' || saved === 'cosmos') {
-        setDefaultMode(saved);
-      }
-      setRequestTimeoutMs(getRequestTimeoutMs());
-    } catch { /* ignore */ }
-  }, []);
-
-  // Load persisted networks from localStorage on mount
-  useEffect(() => {
-    try {
-      // Load networks
-      const cached = localStorage.getItem('grpc-explorer-networks');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        // Check if cache is still valid (use same TTL as services cache setting)
-        const ttl = getCacheTTL();
-        const age = Date.now() - (parsed.timestamp || 0);
-        const isValid = parsed.version === NETWORK_CACHE_VERSION &&
-                       parsed.networks && Array.isArray(parsed.networks) &&
-                       parsed.timestamp && (ttl === Infinity || age < ttl);
-
-        if (isValid) {
-          setNetworks(parsed.networks);
-        } else {
-          localStorage.removeItem('grpc-explorer-networks');
-        }
-      }
-    } catch (err) {
-      console.error('[NetworkCache] Failed to restore networks:', err);
-    }
-  }, []);
-
-  // Persist networks to localStorage whenever they change (debounced to avoid
-  // overwhelming the browser during rapid descriptor loads)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (networks.length > 0) {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        try {
-          localStorage.setItem('grpc-explorer-networks', JSON.stringify({
-            networks,
-            timestamp: Date.now(),
-            version: NETWORK_CACHE_VERSION,
-          }));
-        } catch (err) {
-          console.error('[NetworkCache] Failed to save networks:', err);
-        }
-      }, 1000);
-    }
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, [networks]);
-
-  // Listen for background-loaded descriptors and update network state
-  useEffect(() => {
-    const unsubscribe = descriptorLoader.onDescriptorLoaded((result) => {
-      setNetworks((prev) =>
-        prev.map((network) => {
-          if (network.id !== result.networkId) return network;
-
-          const updatedServices = network.services.map((service) => {
-            if (service.fullName !== result.serviceName) return service;
-
-            return { ...result.service, descriptorStatus: 'loaded' as const };
-          });
-
-          return { ...network, services: updatedServices };
-        })
-      );
-    });
-
-    return unsubscribe;
-  }, []);
-
-  // Generate unique ID
-  const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-  // Window resize handler for responsive left panel
-  useEffect(() => {
-    const handleResize = () => {
-      const width = window.innerWidth;
-      setWindowWidth(width);
-
-      // Auto-collapse threshold: 1024px
-      const collapseThreshold = 1024;
-
-      if (width < collapseThreshold) {
-        // Narrow windows start collapsed, but an intentionally opened overlay
-        // must stay open until the user closes it.
-        if (!isOverlayModeRef.current && !leftPanelCollapsedRef.current) {
-          setLeftPanelCollapsed(true);
-          setUserCollapsedPanel(false);
-        }
-      } else if (isOverlayModeRef.current) {
-        setLeftPanelCollapsed(false);
-        setIsOverlayMode(false);
-        setUserCollapsedPanel(false);
-      } else if (leftPanelCollapsedRef.current && !userCollapsedPanelRef.current) {
-        setLeftPanelCollapsed(false);
-      }
-    };
-
-    handleResize(); // Initial check
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const isMobileLayout = windowWidth < 768;
-
-  // Calculate responsive left panel width
-  const getLeftPanelWidth = () => {
-    // Base width: 420px for comfortable method name reading
-    // As window narrows from 1600px to 1024px, shrink from 420px to 320px
-    if (windowWidth >= 1600) return 420;
-    if (windowWidth < 1024) return 320;
-
-    // Linear interpolation between 1600px and 1024px window width
-    const ratio = (windowWidth - 1024) / (1600 - 1024);
-    return Math.round(320 + (100 * ratio));
-  };
-
-  // Handle left panel toggle
-  const handleLeftPanelToggle = () => {
-    const collapseThreshold = 1024;
-
-    if (windowWidth < collapseThreshold) {
-      // Narrow window: use overlay mode
-      if (leftPanelCollapsed) {
-        setLeftPanelCollapsed(false);
-        setIsOverlayMode(true);
-        setUserCollapsedPanel(false);
-      } else {
-        setLeftPanelCollapsed(true);
-        setIsOverlayMode(false);
-        setUserCollapsedPanel(true);
-      }
-    } else {
-      // Wide window: normal toggle
-      const isCollapsing = !leftPanelCollapsed;
-      setLeftPanelCollapsed(isCollapsing);
-      setIsOverlayMode(false);
-      setUserCollapsedPanel(isCollapsing);
-    }
-  };
-
-  // Register keyboard shortcuts
-  useKeyboardShortcuts([
-    {
-      key: 'n',
-      ctrl: true,
-      handler: () => setShowAddNetwork(true),
-      description: 'Open connection dialog'
-    },
-    {
-      key: 'w',
-      ctrl: true,
-      handler: () => {
-        if (selectedMethod) {
-          handleRemoveMethodInstance(selectedMethod.id);
-        }
-      },
-      description: 'Close current tab'
-    },
-    {
-      key: 'Enter',
-      ctrl: true,
-      handler: () => {
-        if (selectedMethod && !isExecuting) {
-          handleExecuteMethod(selectedMethod);
-        }
-      },
-      description: 'Execute method'
-    },
-    {
-      key: '?',
-      ctrl: true,
-      shift: true,
-      handler: () => setShowHelp(true),
-      description: 'Show help and shortcuts'
-    }
-  ]);
-
-  // Get next color for network
-  const getNextColor = useCallback(() => {
-    const usedColors = networks.map(n => n.color);
-    const availableColor = NETWORK_COLORS.find(c => !usedColors.includes(c));
-    return availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length];
-  }, [networks]);
-
-  // Add network
-  const handleAddNetwork = useCallback(async (
-    endpoint: string,
-    tlsEnabled: boolean,
-    endpointConfigs?: EndpointConfig[],
-    mode?: ExplorerMode,
-    bsrSource?: BufBsrSource,
-    authConfig?: GrpcAuthConfig
-  ) => {
-    const networkMode = mode || defaultMode;
-
-    // BSR source: fetch services from BSR route
-    if (bsrSource) {
-      const id = generateId();
-      const color = getNextColor();
-      const name = bsrSource.module;
-
-      const newNetwork: GrpcNetwork = {
-        id,
-        name,
-        endpoint: endpoint || '',
-        tlsEnabled,
-        services: [],
-        color,
-        loading: true,
-        expanded: true,
-        mode: networkMode,
-        bsrSource,
-        ...(authConfig ? { authConfig } : {}),
-      };
-
-      setNetworks(prev => {
-        if (autoCollapseEnabled) {
-          return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
-        }
-        return [...prev, newNetwork];
-      });
-
-      try {
-        const response = await fetch('/api/bsr/descriptor', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            module: bsrSource.module,
-            version: bsrSource.version,
-            symbols: bsrSource.symbols,
-            authToken: bsrSource.authToken,
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Failed to fetch BSR descriptor');
-        }
-
-        const data = await response.json();
-        debug.log(`Loaded ${data.services?.length || 0} services from BSR ${bsrSource.module}`);
-
-        setNetworks(prev => prev.map(n =>
-          n.id === id
-            ? {
-                ...n,
-                services: (data.services || []).map((service: GrpcService) => ({
-                  ...service,
-                  descriptorStatus: 'loaded' as const,
-                })),
-                loading: false,
-              }
-            : n
-        ));
-      } catch (err: unknown) {
-        setNetworks(prev => prev.map(n =>
-          n.id === id
-            ? { ...n, loading: false, error: errorMessage(err) }
-            : n
-        ));
-      }
-
-      return;
-    }
-
-    // Check client-side cache first to get chain-id for deduplication
-    const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
-    const cached = getFromCache<any>(cacheKey);
-    const cachedChainId = cached?.chainId || cached?.status?.chainId;
-
-    // If we have cached data, use it immediately
-    if (cached) {
-      debug.log(`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`);
-
-      const actualEndpoint = cached.status?.endpoint || endpoint;
-      const existingNetwork = cachedChainId
-        ? networks.find(n => n.chainId === cachedChainId)
-        : null;
-
-      if (existingNetwork && cachedChainId) {
-        // Same chain detected - add endpoint to existing network instead of duplicating
-        debug.log(`⚠️  Chain ${cachedChainId} already exists, adding ${actualEndpoint} as fallback endpoint`);
-
-        setNetworks(prev => prev.map(n =>
-          n.id === existingNetwork.id
-            ? {
-                ...n,
-                endpoints: [...(n.endpoints || []), actualEndpoint],
-                expanded: true // Expand to show user we recognized the duplicate
-              }
-            : autoCollapseEnabled ? { ...n, expanded: false } : n
-        ));
-
-        return;
-      }
-
-      // New chain with cached data - add immediately
-      const id = generateId();
-      const color = getNextColor();
-      const name = actualEndpoint.split('//').pop()?.split(':')[0] || actualEndpoint;
-
-      // Get cached endpoints for round-robin distribution
-      const cachedEndpoints = cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
-      const fallbackEndpoints = cachedEndpoints.filter((ep: string) => ep !== actualEndpoint);
-
-      // Use the actual TLS setting from the cached response (services route may have
-      // retried without TLS on a TLS error, so the resolved value can differ from the input)
-      const resolvedTls = typeof cached.status?.tls === 'boolean' ? cached.status.tls : tlsEnabled;
-
-      const newNetwork: GrpcNetwork = {
-        id,
-        name,
-        endpoint: actualEndpoint,
-        endpoints: fallbackEndpoints,
-        ...(endpointConfigs ? { endpointConfigs } : {}),
-        ...(cachedChainId ? { chainId: cachedChainId } : {}),
-        tlsEnabled: resolvedTls,
-        services: cached.services || [],
-        color,
-        loading: false,
-        cached: true,
-        cacheTimestamp: cached.timestamp || Date.now(),
-        expanded: true,
-        mode: networkMode,
-        ...(authConfig ? { authConfig } : {}),
-      };
-
-      setNetworks(prev => {
-        if (autoCollapseEnabled) {
-          return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
-        }
-        return [...prev, newNetwork];
-      });
-      return;
-    }
-
-    // No cache - add network with loading state, then fetch
-    debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
-
-    const id = generateId();
-    const color = getNextColor();
-    const name = endpoint.split('//').pop()?.split(':')[0] || endpoint;
-
-    const newNetwork: GrpcNetwork = {
-      id,
-      name,
-      endpoint,
-      endpoints: [],
-      ...(endpointConfigs ? { endpointConfigs } : {}),
-      tlsEnabled,
-      services: [],
-      color,
-      loading: true,
-      cached: false,
-      cacheTimestamp: Date.now(),
-      expanded: true,
-      mode: networkMode,
-      ...(authConfig ? { authConfig } : {}),
-    };
-
-    // Add network to UI immediately with loading state
-    setNetworks(prev => {
-      if (autoCollapseEnabled) {
-        return [...prev.map(n => ({ ...n, expanded: false })), newNetwork];
-      }
-      return [...prev, newNetwork];
-    });
-
-    // Fetch data in background
-    try {
-      const response = await fetch('/api/grpc/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, tlsEnabled, mode: networkMode, timeoutMs: requestTimeoutMs })
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch services');
-
-      const data = await response.json();
-      const now = Date.now();
-
-      // Save to client-side cache with timestamp
-      saveToCache(cacheKey, { ...data, timestamp: now });
-
-      const actualEndpoint = data.status?.endpoint || endpoint;
-      const fetchedChainId = data.chainId || data.status?.chainId;
-
-      debug.log(`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`);
-
-      // Check if this chain already exists (might have been added while we were fetching)
-      const existingNetwork = fetchedChainId
-        ? networks.find(n => n.chainId === fetchedChainId && n.id !== id)
-        : null;
-
-      if (existingNetwork && fetchedChainId) {
-        // Same chain detected - remove the loading network and add as fallback instead
-        debug.log(`⚠️  Chain ${fetchedChainId} already exists, converting to fallback endpoint`);
-
-        setNetworks(prev => prev.map(n =>
-          n.id === existingNetwork.id
-            ? {
-                ...n,
-                endpoints: [...(n.endpoints || []), actualEndpoint],
-                expanded: true
-              }
-            : n.id === id
-              ? null // Remove the loading network
-              : autoCollapseEnabled ? { ...n, expanded: false } : n
-        ).filter((n): n is GrpcNetwork => n !== null));
-
-        return;
-      }
-
-      // Update network with fetched data
-      // Store all available endpoints for round-robin distribution
-      const availableEndpoints = data.availableEndpoints?.map((ep: any) => ep.address) || [];
-      // Use the actual TLS setting from the server response (may differ from input after TLS retry)
-      const resolvedTls = typeof data.status?.tls === 'boolean' ? data.status.tls : tlsEnabled;
-
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? {
-              ...n,
-              services: data.services || [],
-              endpoint: actualEndpoint,
-              tlsEnabled: resolvedTls,
-              endpoints: availableEndpoints.filter((ep: string) => ep !== actualEndpoint), // Store others as fallbacks
-              endpointHealth: { [actualEndpoint]: { lastSuccess: now } },
-              ...(fetchedChainId ? { chainId: fetchedChainId } : {}),
-              loading: false,
-              cached: false,
-              cacheTimestamp: now
-            }
-          : n
-      ));
-    } catch (error) {
-      debug.error(`Failed to fetch from ${endpoint}:`, error);
-      setNetworks(prev => prev.map(n =>
-        n.id === id
-          ? { ...n, error: error instanceof Error ? error.message : 'Unknown error', loading: false }
-          : n
-      ));
-    }
-  }, [networks, getNextColor, autoCollapseEnabled, defaultMode, requestTimeoutMs]);
-
-  // Helper to enqueue descriptor loading jobs for a network
-  const enqueueDescriptorLoading = useCallback((network: GrpcNetwork) => {
-    const pendingServices = servicesNeedingDescriptors(network.services);
-
-    if (pendingServices.length === 0) {
-      debug.log(`[DescriptorLoader] No services need descriptors for ${network.name}`);
-      return;
-    }
-
-    debug.log(`[DescriptorLoader] Enqueuing ${pendingServices.length} services for ${network.name}`);
-
-    descriptorLoader.enqueueBatch(
-      pendingServices.map((service) => ({
-        networkId: network.id,
-        endpoint: network.endpoint,
-        tlsEnabled: network.tlsEnabled,
-        serviceName: service.fullName,
-        timeoutMs: requestTimeoutMs,
-        priority: 'normal' as const,
-        timestamp: Date.now(),
-      }))
-    );
-  }, [requestTimeoutMs]);
-
-  // Start background descriptor loading when networks are added or updated
-  useEffect(() => {
-    networks.forEach((network) => {
-      if (!network.loading && network.services.length > 0) {
-        enqueueDescriptorLoading(network);
-      }
-    });
-  }, [networks, enqueueDescriptorLoading]);
-
-  // Remove network
-  const handleRemoveNetwork = useCallback((networkId: string) => {
-    setNetworks(prev => prev.filter(n => n.id !== networkId));
-    setMethodInstances(prev => prev.filter(m => m.networkId !== networkId));
-    descriptorLoader.clear(networkId);
-  }, []);
-
-  // Refresh network (force fetch from server, bypass cache)
-  const handleRefreshNetwork = useCallback(async (networkId: string) => {
-    const network = networks.find(n => n.id === networkId);
-    if (!network) return;
-
-    // Clear cache for this endpoint
-    const cacheKey = getServicesCacheKey(network.endpoint, network.tlsEnabled);
-    const { removeFromCache } = await import('@/lib/utils/client-cache');
-    removeFromCache(cacheKey);
-
-    debug.log(`🔄 Force refreshing ${network.endpoint}...`);
-
-    // Set loading state
-    setNetworks(prev => prev.map(n => {
-      if (n.id === networkId) {
-        const { error, ...rest } = n;
-        return { ...rest, loading: true };
-      }
-      return n;
-    }));
-
-    // Fetch fresh data
-    try {
-      const response = await fetch('/api/grpc/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: network.endpoint,
-          tlsEnabled: network.tlsEnabled,
-          forceRefresh: true,
-          timeoutMs: requestTimeoutMs
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch services');
-
-      const data = await response.json();
-      const now = Date.now();
-
-      // Save to cache
-      const { saveToCache } = await import('@/lib/utils/client-cache');
-      saveToCache(cacheKey, { ...data, timestamp: now });
-
-      const actualEndpoint = data.status?.endpoint || network.endpoint;
-      const chainId = data.chainId || data.status?.chainId;
-      debug.log(`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`);
-
-      setNetworks(prev => prev.map(n => {
-        if (n.id === networkId) {
-          const { error, ...rest } = n;
-          return {
-            ...rest,
-            services: data.services || [],
-            endpoint: actualEndpoint,
-            chainId,
-            endpointHealth: { ...n.endpointHealth, [actualEndpoint]: { lastSuccess: now } },
-            loading: false,
-            cached: false,
-            cacheTimestamp: now
-          };
-        }
-        return n;
-      }));
-    } catch (error) {
-      console.error(`✗ Refresh failed for ${network.endpoint}:`, error);
-      setNetworks(prev => prev.map(n =>
-        n.id === networkId
-          ? {
-              ...n,
-              error: error instanceof Error ? error.message : 'Refresh failed',
-              loading: false
-            }
-          : n
-      ));
-    }
-  }, [networks, requestTimeoutMs]);
-
-  // Toggle network expansion
-  const toggleNetworkExpanded = useCallback((networkId: string) => {
-    setNetworks(prev => {
-      const targetNetwork = prev.find(n => n.id === networkId);
-      if (!targetNetwork) return prev;
-
-      const isExpanding = !targetNetwork.expanded;
-
-      // Prioritize descriptor loading for expanded network
-      if (isExpanding) {
-        const pendingServices = servicesNeedingDescriptors(targetNetwork.services);
-
-        pendingServices.forEach((service) => {
-          descriptorLoader.enqueue({
-            networkId: targetNetwork.id,
-            endpoint: targetNetwork.endpoint,
-            tlsEnabled: targetNetwork.tlsEnabled,
-            serviceName: service.fullName,
-            timeoutMs: requestTimeoutMs,
-            priority: 'high',
-            timestamp: Date.now(),
-          });
-        });
-      }
-
-      // If expanding and auto-collapse is enabled, collapse other networks
-      if (isExpanding && autoCollapseEnabled) {
-        return prev.map(n =>
-          n.id === networkId
-            ? { ...n, expanded: true }
-            : { ...n, expanded: false }
-        );
-      }
-
-      // Otherwise, just toggle this network
-      return prev.map(n =>
-        n.id === networkId ? { ...n, expanded: !n.expanded } : n
-      );
-    });
-  }, [autoCollapseEnabled, requestTimeoutMs]);
-
-  // Add method instance to center panel
-  const handleSelectMethod = useCallback(async (network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
-    // Check if field definitions need to be loaded
-    const needsFieldDefinitions = !isServiceDescriptorReady(service);
-
-    let enrichedMethod = method;
-    let enrichedService = service;
-
-    if (needsFieldDefinitions) {
-      // First check if descriptors were already loaded in network state
-      const currentNetwork = networks.find(n => n.id === network.id);
-      if (currentNetwork) {
-        const loadedService = currentNetwork.services.find(s => s.fullName === service.fullName);
-        if (loadedService && loadedService.methods.length > 0) {
-          const loadedMethod = loadedService.methods.find(m => m.name === method.name);
-          if (loadedMethod && isServiceDescriptorReady(loadedService)) {
-            enrichedMethod = loadedMethod;
-            enrichedService = loadedService;
-            debug.log(`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`);
-          }
-        }
-      }
-
-      // If still not loaded, fetch on-demand with priority over background loading
-      if (enrichedMethod === method) {
-        debug.log(`[UI] Loading field definitions for ${service.fullName}...`);
-
-        // Pause background loading to prioritize user-initiated fetch
-        descriptorLoader.pause();
-
-        // Retry with backoff for rate-limiting resilience
-        const maxAttempts = 3;
-        const retryDelays = [0, 1500, 3000];
-
-        try {
-          for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (attempt > 0) {
-              debug.log(`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`);
-              await new Promise(r => setTimeout(r, retryDelays[attempt]));
-            }
-
-            try {
-              const response = await fetch('/api/grpc/descriptor', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  endpoint: network.endpoint,
-                  tlsEnabled: network.tlsEnabled,
-                  serviceName: service.fullName,
-                  timeoutMs: requestTimeoutMs
-                })
-              });
-
-              if (!response.ok) {
-                if (attempt < maxAttempts - 1) {
-                  console.warn(`[UI] Descriptor fetch failed (${response.status}), will retry...`);
-                  continue;
-                }
-                throw new Error(`Failed to load descriptor: ${response.statusText}`);
-              }
-
-              const data = await response.json();
-              if (data.service) {
-                const enrichedMethodData = data.service.methods.find((m: GrpcMethod) => m.name === method.name);
-                if (enrichedMethodData) {
-                  enrichedMethod = enrichedMethodData;
-                  enrichedService = { ...data.service, descriptorStatus: 'loaded' };
-                  debug.log(`[UI] Loaded field definitions for ${service.fullName}.${method.name}`);
-                  descriptorLoader.markLoaded(network.id, service.fullName);
-
-                  // Update the network state so other methods from this service also get enriched data
-                  setNetworks(prev => prev.map(n => {
-                    if (n.id !== network.id) return n;
-                    return {
-                      ...n,
-                      services: n.services.map(s =>
-                        s.fullName === data.service.fullName
-                          ? { ...data.service, descriptorStatus: 'loaded' }
-                          : s
-                      )
-                    };
-                  }));
-                } else {
-                  throw new Error(`Descriptor for ${service.fullName} does not contain ${method.name}`);
-                }
-              } else {
-                throw new Error(`No descriptor returned for ${service.fullName}`);
-              }
-              break; // Success - exit retry loop
-            } catch (err) {
-              if (attempt === maxAttempts - 1) throw err;
-            }
-          }
-        } catch (err) {
-          const message = errorMessage(err);
-          console.error(`[UI] Failed to load field definitions after ${maxAttempts} attempts:`, err);
-          toast.error(`Could not load protobuf descriptor for ${service.name}`, {
-            description: `${message}. Retry after the source endpoint recovers.`,
-            duration: 6000,
-          });
-          return;
-        } finally {
-          descriptorLoader.resume();
-        }
-      }
-    }
-
-    // Check if method already exists
-    const existingIndex = methodInstances.findIndex(
-      m => m.networkId === network.id &&
-           m.method.fullName === enrichedMethod.fullName &&
-           m.service.fullName === enrichedService.fullName
-    );
-
-    if (existingIndex >= 0) {
-      // Method exists, select it and auto-collapse others if enabled
-      const existingInstance = methodInstances[existingIndex];
-
-      // Always update with enriched data and selection
-      setMethodInstances(prev => prev.map(m =>
-        m.id === existingInstance.id
-          ? { ...m, method: enrichedMethod, service: enrichedService, expanded: true }
-          : (autoCollapseEnabled && !m.pinned ? { ...m, expanded: false } : m)
-      ));
-
-      setSelectedMethodId(existingInstance.id);
-    } else {
-      // Add new method expanded
-      const newInstance: MethodInstance = {
-        id: generateId(),
-        networkId: network.id,
-        method: enrichedMethod,
-        service: enrichedService,
-        color: network.color,
-        expanded: true,
-        params: {}
-      };
-
-      // Auto-collapse unpinned methods if enabled
-      setMethodInstances(prev => {
-        if (autoCollapseEnabled) {
-          return [...prev.map(m => m.pinned ? m : { ...m, expanded: false }), newInstance];
-        }
-        return [...prev, newInstance];
-      });
-
-      setSelectedMethodId(newInstance.id);
-    }
-  }, [methodInstances, autoCollapseEnabled, networks, requestTimeoutMs]);
-
-  // Remove method instance
-  const handleRemoveMethodInstance = useCallback((instanceId: string) => {
-    setMethodInstances(prev => prev.filter(m => m.id !== instanceId));
-    if (selectedMethodId === instanceId) {
-      setSelectedMethodId(null);
-    }
-  }, [selectedMethodId]);
-
-  // Clear all method instances
-  const handleClearAllMethods = useCallback(() => {
-    setMethodInstances([]);
-    setSelectedMethodId(null);
-  }, []);
-
-  // Toggle method instance expansion
-  const toggleMethodExpanded = useCallback((instanceId: string) => {
-    setMethodInstances(prev => {
-      const targetMethod = prev.find(m => m.id === instanceId);
-      if (!targetMethod) return prev;
-
-      const isExpanding = !targetMethod.expanded;
-
-      // If expanding and auto-collapse is enabled, collapse other unpinned methods
-      if (isExpanding && autoCollapseEnabled) {
-        return prev.map(m =>
-          m.id === instanceId
-            ? { ...m, expanded: true }
-            : (m.pinned ? m : { ...m, expanded: false })
-        );
-      }
-
-      // Otherwise, just toggle this method
-      return prev.map(m =>
-        m.id === instanceId ? { ...m, expanded: !m.expanded } : m
-      );
-    });
-  }, [autoCollapseEnabled]);
-
-  // Toggle method pin status
-  const toggleMethodPin = useCallback((instanceId: string) => {
-    setMethodInstances(prev => prev.map(m =>
-      m.id === instanceId ? { ...m, pinned: !m.pinned } : m
-    ));
-  }, []);
-
-  // Update method parameters
-  const handleUpdateParams = useCallback((instanceId: string, params: Record<string, any>) => {
-    setMethodInstances(prev => prev.map(m =>
-      m.id === instanceId ? { ...m, params } : m
-    ));
-  }, []);
-
-  const handleUpdateMetadata = useCallback((instanceId: string, metadata: Record<string, string>) => {
-    setMethodInstances(prev => prev.map(m =>
-      m.id === instanceId ? { ...m, metadata } : m
-    ));
-  }, []);
-
-  // Execute method with optional round-robin endpoint distribution
-  const handleExecuteMethod = useCallback(async (instance: MethodInstance) => {
-    setIsExecuting(true);
-    setSelectedMethodId(instance.id);
-
-    const startTime = Date.now();
-
-    let selectedEndpoint: string = '';
-    let selectedTls: boolean = true;
-
-    try {
-      const network = networks.find(n => n.id === instance.networkId);
-      if (!network) throw new Error('Network not found');
-
-      const currentIndex = endpointIndexRef.current.get(network.id) || 0;
-      const executionEndpoints = getExecutionEndpoints(network, currentIndex);
-      const selectedConfigs = network.endpointConfigs?.filter(ep => ep.selected) || [];
-      const primaryExecutionEndpoint = executionEndpoints[0];
-
-      selectedEndpoint = primaryExecutionEndpoint.address;
-      selectedTls = primaryExecutionEndpoint.tlsEnabled;
-
-      if (network.mode === 'cosmos' && selectedConfigs.length > 1) {
-        endpointIndexRef.current.set(network.id, (currentIndex + 1) % selectedConfigs.length);
-        debug.log(`[RoundRobin] Starting at endpoint ${currentIndex % selectedConfigs.length + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`);
-      } else {
-        debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
-      }
-
-      const response = await fetch('/api/grpc/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: selectedEndpoint,
-          tlsEnabled: selectedTls,
-          endpointAttempts: executionEndpoints,
-          service: instance.service.fullName,
-          method: instance.method.name,
-          params: instance.params,
-          metadata: instance.metadata || {},
-          ...(instance.authConfig ? { authConfig: instance.authConfig } : {}),
-          timeoutMs: requestTimeoutMs,
-        })
-      });
-
-      const data = await response.json();
-      const duration = Date.now() - startTime;
-      const failedEndpoints = Array.isArray(data.failedEndpoints) ? data.failedEndpoints : [];
-      const usedEndpoint = typeof data.endpoint === 'string' ? data.endpoint : undefined;
-
-      setNetworks(prev => prev.map(network =>
-        network.id === instance.networkId
-          ? updateExecutionHealth(network, response.ok ? usedEndpoint : undefined, failedEndpoints, Date.now())
-          : network
-      ));
-
-      const result: ExecutionResult = {
-        methodId: instance.id,
-        success: response.ok,
-        data: data.result || data,
-        error: data.error,
-        timestamp: Date.now(),
-        duration,
-        endpoint: usedEndpoint || selectedEndpoint
-      };
-
-      // Show every failed endpoint when a network-aware execution exhausts its fallbacks.
-      if (!response.ok && selectedConfigs.length > 1) {
-        const errorMsg = data.error || 'Request failed';
-        const failedEndpoints = Array.isArray(data.failedEndpoints)
-          ? data.failedEndpoints.map((failure: { endpoint: string }) => failure.endpoint).join(', ')
-          : selectedEndpoint;
-        toast.error(`Request failed across selected endpoints`, {
-          description: `${failedEndpoints}: ${errorMsg}`.slice(0, 180),
-          duration: 5000
-        });
-        console.error(`[RoundRobin] Execution failed after ${failedEndpoints}: ${errorMsg}`);
-      }
-
-      setExecutionResults(prev => [result, ...prev].slice(0, 50)); // Keep last 50 results
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      const result: ExecutionResult = {
-        methodId: instance.id,
-        success: false,
-        error: errorMessage,
-        timestamp: Date.now(),
-        duration: Date.now() - startTime,
-        ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {})
-      };
-
-      // Show toast for errors when endpoint is identified
-      if (selectedEndpoint) {
-        toast.error(`Request failed on ${selectedEndpoint}`, {
-          description: errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage,
-          duration: 5000
-        });
-        console.error(`[Endpoint] Error from ${selectedEndpoint}: ${errorMessage}`);
-      }
-
-      setExecutionResults(prev => [result, ...prev].slice(0, 50));
-    } finally {
-      setIsExecuting(false);
-    }
-  }, [networks, requestTimeoutMs]);
-
-  // Get latest result for selected method
-  const currentResult = useMemo(() => {
-    if (!selectedMethod) return null;
-    return executionResults.find(r => r.methodId === selectedMethod.id);
-  }, [selectedMethod, executionResults]);
-
-  const sourcePanelTitle = defaultMode === 'cosmos' ? 'Networks' : 'Sources';
-  const emptySourceTitle = defaultMode === 'cosmos' ? 'No networks added' : 'No sources connected';
-  const emptySourceAction = defaultMode === 'cosmos' ? 'Add your first network' : 'Connect a gRPC source';
-  const sourcePanelToggleLabel = leftPanelCollapsed
-    ? `Show ${sourcePanelTitle.toLowerCase()} panel`
-    : `Hide ${sourcePanelTitle.toLowerCase()} panel`;
-
-  return (
-    <div className="h-screen w-screen bg-background flex relative overflow-hidden">
-      {/* Left Panel - Networks (Full Height) - Collapsible */}
-      <div
-        className={cn(
-          "border-r border-border bg-card flex flex-col transition-all duration-300",
-          leftPanelCollapsed ? "w-12" : "",
-          isOverlayMode && !leftPanelCollapsed && "absolute top-0 left-0 h-full z-50 shadow-2xl"
-        )}
-        style={
-          !leftPanelCollapsed && !isOverlayMode
-            ? { width: `${getLeftPanelWidth()}px` }
-            : isOverlayMode && !leftPanelCollapsed
-            ? { width: 'min(420px, calc(100vw - 24px))' }
-            : undefined
-        }
-      >
-        <div className="sticky top-0 z-10 bg-card border-b border-border">
-          <div className="flex items-center justify-between p-4">
-            {!leftPanelCollapsed && (
-              <h2 className="text-sm font-semibold text-foreground">{sourcePanelTitle}</h2>
-            )}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleLeftPanelToggle}
-                className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
-                title={sourcePanelToggleLabel}
-                aria-label={sourcePanelToggleLabel}
-              >
-                {leftPanelCollapsed ? (
-                  <ChevronRight className="h-5 w-5 text-foreground" />
-                ) : (
-                  <ChevronLeft className="h-5 w-5 text-foreground" />
-                )}
-              </button>
-              {!leftPanelCollapsed && (
-                <button
-                  onClick={() => setShowAddNetwork(true)}
-                  className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
-                  title={defaultMode === 'cosmos' ? 'Add network' : 'Connect gRPC source'}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {!leftPanelCollapsed && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {networks.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">{emptySourceTitle}</p>
-                <button
-                  onClick={() => setShowAddNetwork(true)}
-                  className="mt-3 text-xs text-primary hover:underline"
-                >
-                  {emptySourceAction}
-                </button>
-              </div>
-            ) : (
-              networks.map(network => (
-                <NetworkBlock
-                  key={network.id}
-                  network={network}
-                  onToggle={() => toggleNetworkExpanded(network.id)}
-                  onRemove={() => handleRemoveNetwork(network.id)}
-                  onRefresh={() => handleRefreshNetwork(network.id)}
-                  onSelectMethod={(service, method) => handleSelectMethod(network, service, method)}
-                />
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Backdrop for overlay mode */}
-      {isOverlayMode && !leftPanelCollapsed && (
-        <div
-          className="fixed inset-0 bg-black/50 dark:bg-black/50 light:bg-black/30 z-40 transition-opacity duration-300"
-          onClick={handleLeftPanelToggle}
-        />
-      )}
-
-      {/* Right Column - Menu + Method Instances / Detail Panel */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
-        {/* Menu Bar */}
-        <MenuBar
-          mode={defaultMode}
-          onPrimaryAction={() => setShowAddNetwork(true)}
-          onShowHelp={() => setShowHelp(true)}
-          onShowSettings={() => setShowSettings(true)}
-        />
-
-        {/* Method Instances (left) + Detail Panel (right) */}
-        <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
-          <ResizablePanelGroup direction={isMobileLayout ? "vertical" : "horizontal"} className="h-full w-full">
-            {/* Left: Method Instances */}
-            <ResizablePanel
-              defaultSize={isMobileLayout ? 42 : 33}
-              minSize={isMobileLayout ? 24 : 20}
-              id="methods-panel"
-              order={1}
-              collapsible={false}
-            >
-              <div className="h-full border-r border-border bg-background overflow-y-auto">
-                <div className="sticky top-0 z-10 bg-background border-b border-border">
-                  <div className="flex items-center justify-between p-4">
-                    <h2 className="text-sm font-semibold text-foreground">Method Instances</h2>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {methodInstances.length} active
-                      </span>
-                      {methodInstances.length > 0 && (
-                        <button
-                          onClick={handleClearAllMethods}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          Clear All
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 space-y-3">
-                  {methodInstances.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No methods selected</p>
-                      <p className="text-xs mt-1">
-                        Select methods from the {sourcePanelTitle.toLowerCase()} panel
-                      </p>
-                    </div>
-                  ) : (
-                    methodInstances.map(instance => {
-                      const network = networks.find(n => n.id === instance.networkId);
-                      return (
-                        <MethodBlock
-                          key={instance.id}
-                          instance={instance}
-                          isSelected={selectedMethod?.id === instance.id}
-                          onToggle={() => toggleMethodExpanded(instance.id)}
-                          onRemove={() => handleRemoveMethodInstance(instance.id)}
-                          onSelect={() => setSelectedMethodId(instance.id)}
-                          onUpdateParams={(params) => handleUpdateParams(instance.id, params)}
-                          onUpdateMetadata={(metadata) => handleUpdateMetadata(instance.id, metadata)}
-                          onExecute={() => handleExecuteMethod(instance)}
-                          onTogglePin={() => toggleMethodPin(instance.id)}
-                          isExecuting={isExecuting && selectedMethod?.id === instance.id}
-                          mode={network?.mode}
-                          networkAuthConfig={network?.authConfig}
-                          onUpdateAuth={(auth) => {
-                            setMethodInstances(prev => prev.map(m =>
-                              m.id === instance.id ? { ...m, authConfig: auth } : m
-                            ));
-                          }}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </ResizablePanel>
-
-            <ResizableHandle
-              withHandle
-              className={cn(
-                "bg-border hover:bg-primary transition-colors",
-                isMobileLayout ? "h-2 w-full" : "w-2"
-              )}
-            />
-
-            {/* Right: Proto / Code / Results (tabbed) */}
-            <ResizablePanel
-              defaultSize={isMobileLayout ? 58 : 67}
-              minSize={isMobileLayout ? 32 : 30}
-              maxSize={isMobileLayout ? 76 : 80}
-              id="detail-panel"
-              order={2}
-              collapsible={false}
-            >
-              {selectedMethod ? (() => {
-                const network = networks.find(n => n.id === selectedMethod.networkId);
-                return (
-                  <MethodDetailPanel
-                    key={selectedMethod.id}
-                    method={selectedMethod.method}
-                    service={selectedMethod.service}
-                    color={selectedMethod.color}
-                    params={selectedMethod.params || {}}
-                    metadata={selectedMethod.metadata || {}}
-                    authConfig={selectedMethod.authConfig}
-                    result={currentResult || null}
-                    isExecuting={isExecuting}
-                    {...(network?.endpoint ? { endpoint: network.endpoint } : {})}
-                    {...(network?.tlsEnabled !== undefined ? { tlsEnabled: network.tlsEnabled } : {})}
-                    mode={network?.mode}
-                  />
-                );
-              })() : (
-                <MethodDetailPanelEmpty />
-              )}
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
-      </div>
-
-      {/* Dialogs */}
-      {showAddNetwork && (
-        <AddNetworkDialog
-          onAdd={handleAddNetwork}
-          onClose={() => setShowAddNetwork(false)}
-          defaultMode={defaultMode}
-        />
-      )}
-
-      <HelpDialog
-        open={showHelp}
-        onClose={() => setShowHelp(false)}
-      />
-
-      <SettingsDialog
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
-        autoCollapseEnabled={autoCollapseEnabled}
-        onAutoCollapseChange={setAutoCollapseEnabled}
-        defaultMode={defaultMode}
-        requestTimeoutMs={requestTimeoutMs}
-        onRequestTimeoutChange={setRequestTimeoutMs}
-        onDefaultModeChange={(mode) => {
-          setDefaultMode(mode);
-          localStorage.setItem('grpc-explorer-default-mode', mode);
-        }}
-      />
-    </div>
-  );
+	const [networks, setNetworks] = useState<GrpcNetwork[]>([]);
+	const [methodInstances, setMethodInstances] = useState<MethodInstance[]>([]);
+	const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+	const [executionResults, setExecutionResults] = useState<ExecutionResult[]>(
+		[],
+	);
+	const [showAddNetwork, setShowAddNetwork] = useState(false);
+	const [isExecuting, setIsExecuting] = useState(false);
+	const [showHelp, setShowHelp] = useState(false);
+	const [showSettings, setShowSettings] = useState(false);
+	const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(
+		typeof window !== "undefined" ? window.innerWidth < 1024 : false,
+	);
+	const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true);
+	const [windowWidth, setWindowWidth] = useState(
+		typeof window !== "undefined" ? window.innerWidth : 1920,
+	);
+	const [isOverlayMode, setIsOverlayMode] = useState(false);
+	const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
+	const [defaultMode, setDefaultMode] = useState<ExplorerMode>("generic");
+	const [requestTimeoutMs, setRequestTimeoutMs] = useState(10000);
+
+	// Round-robin endpoint index tracker per network (for load distribution)
+	const endpointIndexRef = useRef<Map<string, number>>(new Map());
+	const leftPanelCollapsedRef = useRef(leftPanelCollapsed);
+	const isOverlayModeRef = useRef(isOverlayMode);
+	const userCollapsedPanelRef = useRef(userCollapsedPanel);
+
+	useEffect(() => {
+		leftPanelCollapsedRef.current = leftPanelCollapsed;
+	}, [leftPanelCollapsed]);
+
+	useEffect(() => {
+		isOverlayModeRef.current = isOverlayMode;
+	}, [isOverlayMode]);
+
+	useEffect(() => {
+		userCollapsedPanelRef.current = userCollapsedPanel;
+	}, [userCollapsedPanel]);
+
+	// Derive selectedMethod from methodInstances to ensure it updates with params changes
+	const selectedMethod = useMemo(() => {
+		if (!selectedMethodId) return null;
+		return methodInstances.find((m) => m.id === selectedMethodId) || null;
+	}, [selectedMethodId, methodInstances]);
+
+	// Load defaultMode from localStorage on mount
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem("grpc-explorer-default-mode");
+			if (saved === "generic" || saved === "cosmos") {
+				setDefaultMode(saved);
+			}
+			setRequestTimeoutMs(getRequestTimeoutMs());
+		} catch {
+			/* ignore */
+		}
+	}, []);
+
+	// Load persisted networks from localStorage on mount
+	useEffect(() => {
+		try {
+			// Load networks
+			const cached = localStorage.getItem("grpc-explorer-networks");
+			if (cached) {
+				const parsed = JSON.parse(cached);
+				// Check if cache is still valid (use same TTL as services cache setting)
+				const ttl = getCacheTTL();
+				const age = Date.now() - (parsed.timestamp || 0);
+				const isValid =
+					parsed.version === NETWORK_CACHE_VERSION &&
+					parsed.networks &&
+					Array.isArray(parsed.networks) &&
+					parsed.timestamp &&
+					(ttl === Infinity || age < ttl);
+
+				if (isValid) {
+					setNetworks(parsed.networks);
+				} else {
+					localStorage.removeItem("grpc-explorer-networks");
+				}
+			}
+		} catch (err) {
+			console.error("[NetworkCache] Failed to restore networks:", err);
+		}
+	}, []);
+
+	// Persist networks to localStorage whenever they change (debounced to avoid
+	// overwhelming the browser during rapid descriptor loads)
+	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		if (networks.length > 0) {
+			if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+			saveTimerRef.current = setTimeout(() => {
+				try {
+					localStorage.setItem(
+						"grpc-explorer-networks",
+						JSON.stringify({
+							networks,
+							timestamp: Date.now(),
+							version: NETWORK_CACHE_VERSION,
+						}),
+					);
+				} catch (err) {
+					console.error("[NetworkCache] Failed to save networks:", err);
+				}
+			}, 1000);
+		}
+		return () => {
+			if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+		};
+	}, [networks]);
+
+	// Listen for background-loaded descriptors and update network state
+	useEffect(() => {
+		const unsubscribe = descriptorLoader.onDescriptorLoaded((result) => {
+			setNetworks((prev) =>
+				prev.map((network) => {
+					if (network.id !== result.networkId) return network;
+
+					const updatedServices = network.services.map((service) => {
+						if (service.fullName !== result.serviceName) return service;
+
+						return { ...result.service, descriptorStatus: "loaded" as const };
+					});
+
+					return { ...network, services: updatedServices };
+				}),
+			);
+		});
+
+		return unsubscribe;
+	}, []);
+
+	// Generate unique ID
+	const generateId = useCallback(
+		() => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+		[],
+	);
+
+	// Window resize handler for responsive left panel
+	useEffect(() => {
+		const handleResize = () => {
+			const width = window.innerWidth;
+			setWindowWidth(width);
+
+			// Auto-collapse threshold: 1024px
+			const collapseThreshold = 1024;
+
+			if (width < collapseThreshold) {
+				// Narrow windows start collapsed, but an intentionally opened overlay
+				// must stay open until the user closes it.
+				if (!isOverlayModeRef.current && !leftPanelCollapsedRef.current) {
+					setLeftPanelCollapsed(true);
+					setUserCollapsedPanel(false);
+				}
+			} else if (isOverlayModeRef.current) {
+				setLeftPanelCollapsed(false);
+				setIsOverlayMode(false);
+				setUserCollapsedPanel(false);
+			} else if (
+				leftPanelCollapsedRef.current &&
+				!userCollapsedPanelRef.current
+			) {
+				setLeftPanelCollapsed(false);
+			}
+		};
+
+		handleResize(); // Initial check
+		window.addEventListener("resize", handleResize);
+		return () => window.removeEventListener("resize", handleResize);
+	}, []);
+
+	const isMobileLayout = windowWidth < 768;
+
+	// Calculate responsive left panel width
+	const getLeftPanelWidth = () => {
+		// Base width: 420px for comfortable method name reading
+		// As window narrows from 1600px to 1024px, shrink from 420px to 320px
+		if (windowWidth >= 1600) return 420;
+		if (windowWidth < 1024) return 320;
+
+		// Linear interpolation between 1600px and 1024px window width
+		const ratio = (windowWidth - 1024) / (1600 - 1024);
+		return Math.round(320 + 100 * ratio);
+	};
+
+	// Handle left panel toggle
+	const handleLeftPanelToggle = () => {
+		const collapseThreshold = 1024;
+
+		if (windowWidth < collapseThreshold) {
+			// Narrow window: use overlay mode
+			if (leftPanelCollapsed) {
+				setLeftPanelCollapsed(false);
+				setIsOverlayMode(true);
+				setUserCollapsedPanel(false);
+			} else {
+				setLeftPanelCollapsed(true);
+				setIsOverlayMode(false);
+				setUserCollapsedPanel(true);
+			}
+		} else {
+			// Wide window: normal toggle
+			const isCollapsing = !leftPanelCollapsed;
+			setLeftPanelCollapsed(isCollapsing);
+			setIsOverlayMode(false);
+			setUserCollapsedPanel(isCollapsing);
+		}
+	};
+
+	// Register keyboard shortcuts
+	useKeyboardShortcuts([
+		{
+			key: "n",
+			ctrl: true,
+			handler: () => setShowAddNetwork(true),
+			description: "Open connection dialog",
+		},
+		{
+			key: "w",
+			ctrl: true,
+			handler: () => {
+				if (selectedMethod) {
+					handleRemoveMethodInstance(selectedMethod.id);
+				}
+			},
+			description: "Close current tab",
+		},
+		{
+			key: "Enter",
+			ctrl: true,
+			handler: () => {
+				if (selectedMethod && !isExecuting) {
+					handleExecuteMethod(selectedMethod);
+				}
+			},
+			description: "Execute method",
+		},
+		{
+			key: "?",
+			ctrl: true,
+			shift: true,
+			handler: () => setShowHelp(true),
+			description: "Show help and shortcuts",
+		},
+	]);
+
+	// Get next color for network
+	const getNextColor = useCallback(() => {
+		const usedColors = networks.map((n) => n.color);
+		const availableColor = NETWORK_COLORS.find((c) => !usedColors.includes(c));
+		return (
+			availableColor || NETWORK_COLORS[networks.length % NETWORK_COLORS.length]
+		);
+	}, [networks]);
+
+	// Add network
+	const handleAddNetwork = useCallback(
+		async (
+			endpoint: string,
+			tlsEnabled: boolean,
+			endpointConfigs?: EndpointConfig[],
+			mode?: ExplorerMode,
+			bsrSource?: BufBsrSource,
+			authConfig?: GrpcAuthConfig,
+		) => {
+			const networkMode = mode || defaultMode;
+
+			// BSR source: fetch services from BSR route
+			if (bsrSource) {
+				const id = generateId();
+				const color = getNextColor();
+				const name = bsrSource.module;
+
+				const newNetwork: GrpcNetwork = {
+					id,
+					name,
+					endpoint: endpoint || "",
+					tlsEnabled,
+					services: [],
+					color,
+					loading: true,
+					expanded: true,
+					mode: networkMode,
+					bsrSource,
+					...(authConfig ? { authConfig } : {}),
+				};
+
+				setNetworks((prev) => {
+					if (autoCollapseEnabled) {
+						return [
+							...prev.map((n) => ({ ...n, expanded: false })),
+							newNetwork,
+						];
+					}
+					return [...prev, newNetwork];
+				});
+
+				try {
+					const response = await fetch("/api/bsr/descriptor", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							module: bsrSource.module,
+							version: bsrSource.version,
+							symbols: bsrSource.symbols,
+							authToken: bsrSource.authToken,
+						}),
+					});
+
+					if (!response.ok) {
+						const errData = await response.json();
+						throw new Error(errData.error || "Failed to fetch BSR descriptor");
+					}
+
+					const data = await response.json();
+					debug.log(
+						`Loaded ${data.services?.length || 0} services from BSR ${bsrSource.module}`,
+					);
+
+					setNetworks((prev) =>
+						prev.map((n) =>
+							n.id === id
+								? {
+										...n,
+										services: (data.services || []).map(
+											(service: GrpcService) => ({
+												...service,
+												descriptorStatus: "loaded" as const,
+											}),
+										),
+										loading: false,
+									}
+								: n,
+						),
+					);
+				} catch (err: unknown) {
+					setNetworks((prev) =>
+						prev.map((n) =>
+							n.id === id
+								? { ...n, loading: false, error: errorMessage(err) }
+								: n,
+						),
+					);
+				}
+
+				return;
+			}
+
+			// Check client-side cache first to get chain-id for deduplication
+			const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
+			const cached = getFromCache<any>(cacheKey);
+			const cachedChainId = cached?.chainId || cached?.status?.chainId;
+
+			// If we have cached data, use it immediately
+			if (cached) {
+				debug.log(
+					`✓ Using cached services for ${endpoint} (cached ${Math.round((Date.now() - (cached.timestamp || 0)) / 1000 / 60)} mins ago)`,
+				);
+
+				const actualEndpoint = cached.status?.endpoint || endpoint;
+				const existingNetwork = cachedChainId
+					? networks.find((n) => n.chainId === cachedChainId)
+					: null;
+
+				if (existingNetwork && cachedChainId) {
+					// Same chain detected - add endpoint to existing network instead of duplicating
+					debug.log(
+						`⚠️  Chain ${cachedChainId} already exists, adding ${actualEndpoint} as fallback endpoint`,
+					);
+
+					setNetworks((prev) =>
+						prev.map((n) =>
+							n.id === existingNetwork.id
+								? {
+										...n,
+										endpoints: [...(n.endpoints || []), actualEndpoint],
+										expanded: true, // Expand to show user we recognized the duplicate
+									}
+								: autoCollapseEnabled
+									? { ...n, expanded: false }
+									: n,
+						),
+					);
+
+					return;
+				}
+
+				// New chain with cached data - add immediately
+				const id = generateId();
+				const color = getNextColor();
+				const name =
+					actualEndpoint.split("//").pop()?.split(":")[0] || actualEndpoint;
+
+				// Get cached endpoints for round-robin distribution
+				const cachedEndpoints =
+					cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
+				const fallbackEndpoints = cachedEndpoints.filter(
+					(ep: string) => ep !== actualEndpoint,
+				);
+
+				// Use the actual TLS setting from the cached response (services route may have
+				// retried without TLS on a TLS error, so the resolved value can differ from the input)
+				const resolvedTls =
+					typeof cached.status?.tls === "boolean"
+						? cached.status.tls
+						: tlsEnabled;
+
+				const newNetwork: GrpcNetwork = {
+					id,
+					name,
+					endpoint: actualEndpoint,
+					endpoints: fallbackEndpoints,
+					...(endpointConfigs ? { endpointConfigs } : {}),
+					...(cachedChainId ? { chainId: cachedChainId } : {}),
+					tlsEnabled: resolvedTls,
+					services: cached.services || [],
+					color,
+					loading: false,
+					cached: true,
+					cacheTimestamp: cached.timestamp || Date.now(),
+					expanded: true,
+					mode: networkMode,
+					...(authConfig ? { authConfig } : {}),
+				};
+
+				setNetworks((prev) => {
+					if (autoCollapseEnabled) {
+						return [
+							...prev.map((n) => ({ ...n, expanded: false })),
+							newNetwork,
+						];
+					}
+					return [...prev, newNetwork];
+				});
+				return;
+			}
+
+			// No cache - add network with loading state, then fetch
+			debug.log(`⟳ Fetching fresh services from ${endpoint}...`);
+
+			const id = generateId();
+			const color = getNextColor();
+			const name = endpoint.split("//").pop()?.split(":")[0] || endpoint;
+
+			const newNetwork: GrpcNetwork = {
+				id,
+				name,
+				endpoint,
+				endpoints: [],
+				...(endpointConfigs ? { endpointConfigs } : {}),
+				tlsEnabled,
+				services: [],
+				color,
+				loading: true,
+				cached: false,
+				cacheTimestamp: Date.now(),
+				expanded: true,
+				mode: networkMode,
+				...(authConfig ? { authConfig } : {}),
+			};
+
+			// Add network to UI immediately with loading state
+			setNetworks((prev) => {
+				if (autoCollapseEnabled) {
+					return [...prev.map((n) => ({ ...n, expanded: false })), newNetwork];
+				}
+				return [...prev, newNetwork];
+			});
+
+			// Fetch data in background
+			try {
+				const response = await fetch("/api/grpc/services", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						endpoint,
+						tlsEnabled,
+						mode: networkMode,
+						timeoutMs: requestTimeoutMs,
+					}),
+				});
+
+				if (!response.ok) throw new Error("Failed to fetch services");
+
+				const data = await response.json();
+				const now = Date.now();
+
+				// Save to client-side cache with timestamp
+				saveToCache(cacheKey, { ...data, timestamp: now });
+
+				const actualEndpoint = data.status?.endpoint || endpoint;
+				const fetchedChainId = data.chainId || data.status?.chainId;
+
+				debug.log(
+					`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`,
+				);
+
+				// Check if this chain already exists (might have been added while we were fetching)
+				const existingNetwork = fetchedChainId
+					? networks.find((n) => n.chainId === fetchedChainId && n.id !== id)
+					: null;
+
+				if (existingNetwork && fetchedChainId) {
+					// Same chain detected - remove the loading network and add as fallback instead
+					debug.log(
+						`⚠️  Chain ${fetchedChainId} already exists, converting to fallback endpoint`,
+					);
+
+					setNetworks((prev) =>
+						prev
+							.map((n) =>
+								n.id === existingNetwork.id
+									? {
+											...n,
+											endpoints: [...(n.endpoints || []), actualEndpoint],
+											expanded: true,
+										}
+									: n.id === id
+										? null // Remove the loading network
+										: autoCollapseEnabled
+											? { ...n, expanded: false }
+											: n,
+							)
+							.filter((n): n is GrpcNetwork => n !== null),
+					);
+
+					return;
+				}
+
+				// Update network with fetched data
+				// Store all available endpoints for round-robin distribution
+				const availableEndpoints =
+					data.availableEndpoints?.map((ep: any) => ep.address) || [];
+				// Use the actual TLS setting from the server response (may differ from input after TLS retry)
+				const resolvedTls =
+					typeof data.status?.tls === "boolean" ? data.status.tls : tlsEnabled;
+
+				setNetworks((prev) =>
+					prev.map((n) =>
+						n.id === id
+							? {
+									...n,
+									services: data.services || [],
+									endpoint: actualEndpoint,
+									tlsEnabled: resolvedTls,
+									endpoints: availableEndpoints.filter(
+										(ep: string) => ep !== actualEndpoint,
+									), // Store others as fallbacks
+									endpointHealth: { [actualEndpoint]: { lastSuccess: now } },
+									...(fetchedChainId ? { chainId: fetchedChainId } : {}),
+									loading: false,
+									cached: false,
+									cacheTimestamp: now,
+								}
+							: n,
+					),
+				);
+			} catch (error) {
+				debug.error(`Failed to fetch from ${endpoint}:`, error);
+				setNetworks((prev) =>
+					prev.map((n) =>
+						n.id === id
+							? {
+									...n,
+									error:
+										error instanceof Error ? error.message : "Unknown error",
+									loading: false,
+								}
+							: n,
+					),
+				);
+			}
+		},
+		[
+			networks,
+			getNextColor,
+			autoCollapseEnabled,
+			defaultMode,
+			requestTimeoutMs,
+			generateId,
+		],
+	);
+
+	// Helper to enqueue descriptor loading jobs for a network
+	const enqueueDescriptorLoading = useCallback(
+		(network: GrpcNetwork) => {
+			const pendingServices = servicesNeedingDescriptors(network.services);
+
+			if (pendingServices.length === 0) {
+				debug.log(
+					`[DescriptorLoader] No services need descriptors for ${network.name}`,
+				);
+				return;
+			}
+
+			debug.log(
+				`[DescriptorLoader] Enqueuing ${pendingServices.length} services for ${network.name}`,
+			);
+
+			descriptorLoader.enqueueBatch(
+				pendingServices.map((service) => ({
+					networkId: network.id,
+					endpoint: network.endpoint,
+					tlsEnabled: network.tlsEnabled,
+					serviceName: service.fullName,
+					timeoutMs: requestTimeoutMs,
+					priority: "normal" as const,
+					timestamp: Date.now(),
+				})),
+			);
+		},
+		[requestTimeoutMs],
+	);
+
+	// Start background descriptor loading when networks are added or updated
+	useEffect(() => {
+		networks.forEach((network) => {
+			if (!network.loading && network.services.length > 0) {
+				enqueueDescriptorLoading(network);
+			}
+		});
+	}, [networks, enqueueDescriptorLoading]);
+
+	// Remove network
+	const handleRemoveNetwork = useCallback((networkId: string) => {
+		setNetworks((prev) => prev.filter((n) => n.id !== networkId));
+		setMethodInstances((prev) => prev.filter((m) => m.networkId !== networkId));
+		descriptorLoader.clear(networkId);
+	}, []);
+
+	// Refresh network (force fetch from server, bypass cache)
+	const handleRefreshNetwork = useCallback(
+		async (networkId: string) => {
+			const network = networks.find((n) => n.id === networkId);
+			if (!network) return;
+
+			// Clear cache for this endpoint
+			const cacheKey = getServicesCacheKey(
+				network.endpoint,
+				network.tlsEnabled,
+			);
+			const { removeFromCache } = await import("@/lib/utils/client-cache");
+			removeFromCache(cacheKey);
+
+			debug.log(`🔄 Force refreshing ${network.endpoint}...`);
+
+			// Set loading state
+			setNetworks((prev) =>
+				prev.map((n) => {
+					if (n.id === networkId) {
+						const { error, ...rest } = n;
+						return { ...rest, loading: true };
+					}
+					return n;
+				}),
+			);
+
+			// Fetch fresh data
+			try {
+				const response = await fetch("/api/grpc/services", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						endpoint: network.endpoint,
+						tlsEnabled: network.tlsEnabled,
+						forceRefresh: true,
+						timeoutMs: requestTimeoutMs,
+					}),
+				});
+
+				if (!response.ok) throw new Error("Failed to fetch services");
+
+				const data = await response.json();
+				const now = Date.now();
+
+				// Save to cache
+				const { saveToCache } = await import("@/lib/utils/client-cache");
+				saveToCache(cacheKey, { ...data, timestamp: now });
+
+				const actualEndpoint = data.status?.endpoint || network.endpoint;
+				const chainId = data.chainId || data.status?.chainId;
+				debug.log(
+					`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`,
+				);
+
+				setNetworks((prev) =>
+					prev.map((n) => {
+						if (n.id === networkId) {
+							const { error, ...rest } = n;
+							return {
+								...rest,
+								services: data.services || [],
+								endpoint: actualEndpoint,
+								chainId,
+								endpointHealth: {
+									...n.endpointHealth,
+									[actualEndpoint]: { lastSuccess: now },
+								},
+								loading: false,
+								cached: false,
+								cacheTimestamp: now,
+							};
+						}
+						return n;
+					}),
+				);
+			} catch (error) {
+				console.error(`✗ Refresh failed for ${network.endpoint}:`, error);
+				setNetworks((prev) =>
+					prev.map((n) =>
+						n.id === networkId
+							? {
+									...n,
+									error:
+										error instanceof Error ? error.message : "Refresh failed",
+									loading: false,
+								}
+							: n,
+					),
+				);
+			}
+		},
+		[networks, requestTimeoutMs],
+	);
+
+	// Toggle network expansion
+	const toggleNetworkExpanded = useCallback(
+		(networkId: string) => {
+			setNetworks((prev) => {
+				const targetNetwork = prev.find((n) => n.id === networkId);
+				if (!targetNetwork) return prev;
+
+				const isExpanding = !targetNetwork.expanded;
+
+				// Prioritize descriptor loading for expanded network
+				if (isExpanding) {
+					const pendingServices = servicesNeedingDescriptors(
+						targetNetwork.services,
+					);
+
+					pendingServices.forEach((service) => {
+						descriptorLoader.enqueue({
+							networkId: targetNetwork.id,
+							endpoint: targetNetwork.endpoint,
+							tlsEnabled: targetNetwork.tlsEnabled,
+							serviceName: service.fullName,
+							timeoutMs: requestTimeoutMs,
+							priority: "high",
+							timestamp: Date.now(),
+						});
+					});
+				}
+
+				// If expanding and auto-collapse is enabled, collapse other networks
+				if (isExpanding && autoCollapseEnabled) {
+					return prev.map((n) =>
+						n.id === networkId
+							? { ...n, expanded: true }
+							: { ...n, expanded: false },
+					);
+				}
+
+				// Otherwise, just toggle this network
+				return prev.map((n) =>
+					n.id === networkId ? { ...n, expanded: !n.expanded } : n,
+				);
+			});
+		},
+		[autoCollapseEnabled, requestTimeoutMs],
+	);
+
+	// Add method instance to center panel
+	const handleSelectMethod = useCallback(
+		async (network: GrpcNetwork, service: GrpcService, method: GrpcMethod) => {
+			// Check if field definitions need to be loaded
+			const needsFieldDefinitions = !isServiceDescriptorReady(service);
+
+			let enrichedMethod = method;
+			let enrichedService = service;
+
+			if (needsFieldDefinitions) {
+				// First check if descriptors were already loaded in network state
+				const currentNetwork = networks.find((n) => n.id === network.id);
+				if (currentNetwork) {
+					const loadedService = currentNetwork.services.find(
+						(s) => s.fullName === service.fullName,
+					);
+					if (loadedService && loadedService.methods.length > 0) {
+						const loadedMethod = loadedService.methods.find(
+							(m) => m.name === method.name,
+						);
+						if (loadedMethod && isServiceDescriptorReady(loadedService)) {
+							enrichedMethod = loadedMethod;
+							enrichedService = loadedService;
+							debug.log(
+								`[UI] Using background-loaded descriptors for ${service.fullName}.${method.name}`,
+							);
+						}
+					}
+				}
+
+				// If still not loaded, fetch on-demand with priority over background loading
+				if (enrichedMethod === method) {
+					debug.log(
+						`[UI] Loading field definitions for ${service.fullName}...`,
+					);
+
+					// Pause background loading to prioritize user-initiated fetch
+					descriptorLoader.pause();
+
+					// Retry with backoff for rate-limiting resilience
+					const maxAttempts = 3;
+					const retryDelays = [0, 1500, 3000];
+
+					try {
+						for (let attempt = 0; attempt < maxAttempts; attempt++) {
+							if (attempt > 0) {
+								debug.log(
+									`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`,
+								);
+								await new Promise((r) => setTimeout(r, retryDelays[attempt]));
+							}
+
+							try {
+								const response = await fetch("/api/grpc/descriptor", {
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										endpoint: network.endpoint,
+										tlsEnabled: network.tlsEnabled,
+										serviceName: service.fullName,
+										timeoutMs: requestTimeoutMs,
+									}),
+								});
+
+								if (!response.ok) {
+									if (attempt < maxAttempts - 1) {
+										console.warn(
+											`[UI] Descriptor fetch failed (${response.status}), will retry...`,
+										);
+										continue;
+									}
+									throw new Error(
+										`Failed to load descriptor: ${response.statusText}`,
+									);
+								}
+
+								const data = await response.json();
+								if (data.service) {
+									const enrichedMethodData = data.service.methods.find(
+										(m: GrpcMethod) => m.name === method.name,
+									);
+									if (enrichedMethodData) {
+										enrichedMethod = enrichedMethodData;
+										enrichedService = {
+											...data.service,
+											descriptorStatus: "loaded",
+										};
+										debug.log(
+											`[UI] Loaded field definitions for ${service.fullName}.${method.name}`,
+										);
+										descriptorLoader.markLoaded(network.id, service.fullName);
+
+										// Update the network state so other methods from this service also get enriched data
+										setNetworks((prev) =>
+											prev.map((n) => {
+												if (n.id !== network.id) return n;
+												return {
+													...n,
+													services: n.services.map((s) =>
+														s.fullName === data.service.fullName
+															? { ...data.service, descriptorStatus: "loaded" }
+															: s,
+													),
+												};
+											}),
+										);
+									} else {
+										throw new Error(
+											`Descriptor for ${service.fullName} does not contain ${method.name}`,
+										);
+									}
+								} else {
+									throw new Error(
+										`No descriptor returned for ${service.fullName}`,
+									);
+								}
+								break; // Success - exit retry loop
+							} catch (err) {
+								if (attempt === maxAttempts - 1) throw err;
+							}
+						}
+					} catch (err) {
+						const message = errorMessage(err);
+						console.error(
+							`[UI] Failed to load field definitions after ${maxAttempts} attempts:`,
+							err,
+						);
+						toast.error(
+							`Could not load protobuf descriptor for ${service.name}`,
+							{
+								description: `${message}. Retry after the source endpoint recovers.`,
+								duration: 6000,
+							},
+						);
+						return;
+					} finally {
+						descriptorLoader.resume();
+					}
+				}
+			}
+
+			// Check if method already exists
+			const existingIndex = methodInstances.findIndex(
+				(m) =>
+					m.networkId === network.id &&
+					m.method.fullName === enrichedMethod.fullName &&
+					m.service.fullName === enrichedService.fullName,
+			);
+
+			if (existingIndex >= 0) {
+				// Method exists, select it and auto-collapse others if enabled
+				const existingInstance = methodInstances[existingIndex];
+
+				// Always update with enriched data and selection
+				setMethodInstances((prev) =>
+					prev.map((m) =>
+						m.id === existingInstance.id
+							? {
+									...m,
+									method: enrichedMethod,
+									service: enrichedService,
+									expanded: true,
+								}
+							: autoCollapseEnabled && !m.pinned
+								? { ...m, expanded: false }
+								: m,
+					),
+				);
+
+				setSelectedMethodId(existingInstance.id);
+			} else {
+				// Add new method expanded
+				const newInstance: MethodInstance = {
+					id: generateId(),
+					networkId: network.id,
+					method: enrichedMethod,
+					service: enrichedService,
+					color: network.color,
+					expanded: true,
+					params: {},
+				};
+
+				// Auto-collapse unpinned methods if enabled
+				setMethodInstances((prev) => {
+					if (autoCollapseEnabled) {
+						return [
+							...prev.map((m) => (m.pinned ? m : { ...m, expanded: false })),
+							newInstance,
+						];
+					}
+					return [...prev, newInstance];
+				});
+
+				setSelectedMethodId(newInstance.id);
+			}
+		},
+		[
+			methodInstances,
+			autoCollapseEnabled,
+			networks,
+			requestTimeoutMs,
+			generateId,
+		],
+	);
+
+	// Remove method instance
+	const handleRemoveMethodInstance = useCallback(
+		(instanceId: string) => {
+			setMethodInstances((prev) => prev.filter((m) => m.id !== instanceId));
+			if (selectedMethodId === instanceId) {
+				setSelectedMethodId(null);
+			}
+		},
+		[selectedMethodId],
+	);
+
+	// Clear all method instances
+	const handleClearAllMethods = useCallback(() => {
+		setMethodInstances([]);
+		setSelectedMethodId(null);
+	}, []);
+
+	// Toggle method instance expansion
+	const toggleMethodExpanded = useCallback(
+		(instanceId: string) => {
+			setMethodInstances((prev) => {
+				const targetMethod = prev.find((m) => m.id === instanceId);
+				if (!targetMethod) return prev;
+
+				const isExpanding = !targetMethod.expanded;
+
+				// If expanding and auto-collapse is enabled, collapse other unpinned methods
+				if (isExpanding && autoCollapseEnabled) {
+					return prev.map((m) =>
+						m.id === instanceId
+							? { ...m, expanded: true }
+							: m.pinned
+								? m
+								: { ...m, expanded: false },
+					);
+				}
+
+				// Otherwise, just toggle this method
+				return prev.map((m) =>
+					m.id === instanceId ? { ...m, expanded: !m.expanded } : m,
+				);
+			});
+		},
+		[autoCollapseEnabled],
+	);
+
+	// Toggle method pin status
+	const toggleMethodPin = useCallback((instanceId: string) => {
+		setMethodInstances((prev) =>
+			prev.map((m) => (m.id === instanceId ? { ...m, pinned: !m.pinned } : m)),
+		);
+	}, []);
+
+	// Update method parameters
+	const handleUpdateParams = useCallback(
+		(instanceId: string, params: Record<string, any>) => {
+			setMethodInstances((prev) =>
+				prev.map((m) => (m.id === instanceId ? { ...m, params } : m)),
+			);
+		},
+		[],
+	);
+
+	const handleUpdateMetadata = useCallback(
+		(instanceId: string, metadata: Record<string, string>) => {
+			setMethodInstances((prev) =>
+				prev.map((m) => (m.id === instanceId ? { ...m, metadata } : m)),
+			);
+		},
+		[],
+	);
+
+	// Execute method with optional round-robin endpoint distribution
+	const handleExecuteMethod = useCallback(
+		async (instance: MethodInstance) => {
+			setIsExecuting(true);
+			setSelectedMethodId(instance.id);
+
+			const startTime = Date.now();
+
+			let selectedEndpoint: string = "";
+			let selectedTls: boolean = true;
+
+			try {
+				const network = networks.find((n) => n.id === instance.networkId);
+				if (!network) throw new Error("Network not found");
+
+				const currentIndex = endpointIndexRef.current.get(network.id) || 0;
+				const executionEndpoints = getExecutionEndpoints(network, currentIndex);
+				const selectedConfigs =
+					network.endpointConfigs?.filter((ep) => ep.selected) || [];
+				const primaryExecutionEndpoint = executionEndpoints[0];
+
+				selectedEndpoint = primaryExecutionEndpoint.address;
+				selectedTls = primaryExecutionEndpoint.tlsEnabled;
+
+				if (network.mode === "cosmos" && selectedConfigs.length > 1) {
+					endpointIndexRef.current.set(
+						network.id,
+						(currentIndex + 1) % selectedConfigs.length,
+					);
+					debug.log(
+						`[RoundRobin] Starting at endpoint ${(currentIndex % selectedConfigs.length) + 1}/${selectedConfigs.length}: ${selectedEndpoint} (TLS: ${selectedTls})`,
+					);
+				} else {
+					debug.log(`[Endpoint] Using primary endpoint: ${selectedEndpoint}`);
+				}
+
+				const response = await fetch("/api/grpc/execute", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						endpoint: selectedEndpoint,
+						tlsEnabled: selectedTls,
+						endpointAttempts: executionEndpoints,
+						service: instance.service.fullName,
+						method: instance.method.name,
+						params: instance.params,
+						metadata: instance.metadata || {},
+						...(instance.authConfig ? { authConfig: instance.authConfig } : {}),
+						timeoutMs: requestTimeoutMs,
+					}),
+				});
+
+				const data = await response.json();
+				const duration = Date.now() - startTime;
+				const failedEndpoints = Array.isArray(data.failedEndpoints)
+					? data.failedEndpoints
+					: [];
+				const usedEndpoint =
+					typeof data.endpoint === "string" ? data.endpoint : undefined;
+
+				setNetworks((prev) =>
+					prev.map((network) =>
+						network.id === instance.networkId
+							? updateExecutionHealth(
+									network,
+									response.ok ? usedEndpoint : undefined,
+									failedEndpoints,
+									Date.now(),
+								)
+							: network,
+					),
+				);
+
+				const result: ExecutionResult = {
+					methodId: instance.id,
+					success: response.ok,
+					data: data.result || data,
+					error: data.error,
+					timestamp: Date.now(),
+					duration,
+					endpoint: usedEndpoint || selectedEndpoint,
+				};
+
+				// Show every failed endpoint when a network-aware execution exhausts its fallbacks.
+				if (!response.ok && selectedConfigs.length > 1) {
+					const errorMsg = data.error || "Request failed";
+					const failedEndpoints = Array.isArray(data.failedEndpoints)
+						? data.failedEndpoints
+								.map((failure: { endpoint: string }) => failure.endpoint)
+								.join(", ")
+						: selectedEndpoint;
+					toast.error(`Request failed across selected endpoints`, {
+						description: `${failedEndpoints}: ${errorMsg}`.slice(0, 180),
+						duration: 5000,
+					});
+					console.error(
+						`[RoundRobin] Execution failed after ${failedEndpoints}: ${errorMsg}`,
+					);
+				}
+
+				setExecutionResults((prev) => [result, ...prev].slice(0, 50)); // Keep last 50 results
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : "Unknown error";
+
+				const result: ExecutionResult = {
+					methodId: instance.id,
+					success: false,
+					error: errorMessage,
+					timestamp: Date.now(),
+					duration: Date.now() - startTime,
+					...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
+				};
+
+				// Show toast for errors when endpoint is identified
+				if (selectedEndpoint) {
+					toast.error(`Request failed on ${selectedEndpoint}`, {
+						description:
+							errorMessage.length > 100
+								? `${errorMessage.substring(0, 100)}...`
+								: errorMessage,
+						duration: 5000,
+					});
+					console.error(
+						`[Endpoint] Error from ${selectedEndpoint}: ${errorMessage}`,
+					);
+				}
+
+				setExecutionResults((prev) => [result, ...prev].slice(0, 50));
+			} finally {
+				setIsExecuting(false);
+			}
+		},
+		[networks, requestTimeoutMs],
+	);
+
+	// Get latest result for selected method
+	const currentResult = useMemo(() => {
+		if (!selectedMethod) return null;
+		return executionResults.find((r) => r.methodId === selectedMethod.id);
+	}, [selectedMethod, executionResults]);
+
+	const sourcePanelTitle = defaultMode === "cosmos" ? "Networks" : "Sources";
+	const emptySourceTitle =
+		defaultMode === "cosmos" ? "No networks added" : "No sources connected";
+	const emptySourceAction =
+		defaultMode === "cosmos"
+			? "Add your first network"
+			: "Connect a gRPC source";
+	const sourcePanelToggleLabel = leftPanelCollapsed
+		? `Show ${sourcePanelTitle.toLowerCase()} panel`
+		: `Hide ${sourcePanelTitle.toLowerCase()} panel`;
+
+	return (
+		<div className="h-screen w-screen bg-background flex relative overflow-hidden">
+			{/* Left Panel - Networks (Full Height) - Collapsible */}
+			<div
+				className={cn(
+					"border-r border-border bg-card flex flex-col transition-all duration-300",
+					leftPanelCollapsed ? "w-12" : "",
+					isOverlayMode &&
+						!leftPanelCollapsed &&
+						"absolute top-0 left-0 h-full z-50 shadow-2xl",
+				)}
+				style={
+					!leftPanelCollapsed && !isOverlayMode
+						? { width: `${getLeftPanelWidth()}px` }
+						: isOverlayMode && !leftPanelCollapsed
+							? { width: "min(420px, calc(100vw - 24px))" }
+							: undefined
+				}
+			>
+				<div className="sticky top-0 z-10 bg-card border-b border-border">
+					<div className="flex items-center justify-between p-4">
+						{!leftPanelCollapsed && (
+							<h2 className="text-sm font-semibold text-foreground">
+								{sourcePanelTitle}
+							</h2>
+						)}
+						<div className="flex items-center gap-1">
+							<button
+								type="button"
+								onClick={handleLeftPanelToggle}
+								className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
+								title={sourcePanelToggleLabel}
+								aria-label={sourcePanelToggleLabel}
+							>
+								{leftPanelCollapsed ? (
+									<ChevronRight className="h-5 w-5 text-foreground" />
+								) : (
+									<ChevronLeft className="h-5 w-5 text-foreground" />
+								)}
+							</button>
+							{!leftPanelCollapsed && (
+								<button
+									type="button"
+									onClick={() => setShowAddNetwork(true)}
+									className="p-1.5 hover:bg-secondary/50 rounded-lg transition-colors"
+									title={
+										defaultMode === "cosmos"
+											? "Add network"
+											: "Connect gRPC source"
+									}
+								>
+									<Plus className="h-4 w-4" />
+								</button>
+							)}
+						</div>
+					</div>
+				</div>
+
+				{!leftPanelCollapsed && (
+					<div className="flex-1 overflow-y-auto p-4 space-y-3">
+						{networks.length === 0 ? (
+							<div className="text-center py-8 text-muted-foreground">
+								<Network className="h-8 w-8 mx-auto mb-3 opacity-30" />
+								<p className="text-sm">{emptySourceTitle}</p>
+								<button
+									type="button"
+									onClick={() => setShowAddNetwork(true)}
+									className="mt-3 text-xs text-primary hover:underline"
+								>
+									{emptySourceAction}
+								</button>
+							</div>
+						) : (
+							networks.map((network) => (
+								<NetworkBlock
+									key={network.id}
+									network={network}
+									onToggle={() => toggleNetworkExpanded(network.id)}
+									onRemove={() => handleRemoveNetwork(network.id)}
+									onRefresh={() => handleRefreshNetwork(network.id)}
+									onSelectMethod={(service, method) =>
+										handleSelectMethod(network, service, method)
+									}
+								/>
+							))
+						)}
+					</div>
+				)}
+			</div>
+
+			{/* Backdrop for overlay mode */}
+			{isOverlayMode && !leftPanelCollapsed && (
+				// biome-ignore lint/a11y/useKeyWithClickEvents: click-catcher backdrop overlay, not a focusable control.
+				// biome-ignore lint/a11y/noStaticElementInteractions: see above — decorative full-screen click target.
+				<div
+					aria-hidden="true"
+					className="fixed inset-0 bg-black/50 dark:bg-black/50 light:bg-black/30 z-40 transition-opacity duration-300"
+					onClick={handleLeftPanelToggle}
+				/>
+			)}
+
+			{/* Right Column - Menu + Method Instances / Detail Panel */}
+			<div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+				{/* Menu Bar */}
+				<MenuBar
+					mode={defaultMode}
+					onPrimaryAction={() => setShowAddNetwork(true)}
+					onShowHelp={() => setShowHelp(true)}
+					onShowSettings={() => setShowSettings(true)}
+				/>
+
+				{/* Method Instances (left) + Detail Panel (right) */}
+				<div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+					<ResizablePanelGroup
+						direction={isMobileLayout ? "vertical" : "horizontal"}
+						className="h-full w-full"
+					>
+						{/* Left: Method Instances */}
+						<ResizablePanel
+							defaultSize={isMobileLayout ? 42 : 33}
+							minSize={isMobileLayout ? 24 : 20}
+							id="methods-panel"
+							order={1}
+							collapsible={false}
+						>
+							<div className="h-full border-r border-border bg-background overflow-y-auto">
+								<div className="sticky top-0 z-10 bg-background border-b border-border">
+									<div className="flex items-center justify-between p-4">
+										<h2 className="text-sm font-semibold text-foreground">
+											Method Instances
+										</h2>
+										<div className="flex items-center gap-2">
+											<span className="text-xs text-muted-foreground">
+												{methodInstances.length} active
+											</span>
+											{methodInstances.length > 0 && (
+												<button
+													type="button"
+													onClick={handleClearAllMethods}
+													className="text-xs text-destructive hover:underline"
+												>
+													Clear All
+												</button>
+											)}
+										</div>
+									</div>
+								</div>
+
+								<div className="p-4 space-y-3">
+									{methodInstances.length === 0 ? (
+										<div className="text-center py-8 text-muted-foreground">
+											<ChevronDown className="h-8 w-8 mx-auto mb-3 opacity-30" />
+											<p className="text-sm">No methods selected</p>
+											<p className="text-xs mt-1">
+												Select methods from the {sourcePanelTitle.toLowerCase()}{" "}
+												panel
+											</p>
+										</div>
+									) : (
+										methodInstances.map((instance) => {
+											const network = networks.find(
+												(n) => n.id === instance.networkId,
+											);
+											return (
+												<MethodBlock
+													key={instance.id}
+													instance={instance}
+													isSelected={selectedMethod?.id === instance.id}
+													onToggle={() => toggleMethodExpanded(instance.id)}
+													onRemove={() =>
+														handleRemoveMethodInstance(instance.id)
+													}
+													onSelect={() => setSelectedMethodId(instance.id)}
+													onUpdateParams={(params) =>
+														handleUpdateParams(instance.id, params)
+													}
+													onUpdateMetadata={(metadata) =>
+														handleUpdateMetadata(instance.id, metadata)
+													}
+													onExecute={() => handleExecuteMethod(instance)}
+													onTogglePin={() => toggleMethodPin(instance.id)}
+													isExecuting={
+														isExecuting && selectedMethod?.id === instance.id
+													}
+													mode={network?.mode}
+													networkAuthConfig={network?.authConfig}
+													onUpdateAuth={(auth) => {
+														setMethodInstances((prev) =>
+															prev.map((m) =>
+																m.id === instance.id
+																	? { ...m, authConfig: auth }
+																	: m,
+															),
+														);
+													}}
+												/>
+											);
+										})
+									)}
+								</div>
+							</div>
+						</ResizablePanel>
+
+						<ResizableHandle
+							withHandle
+							className={cn(
+								"bg-border hover:bg-primary transition-colors",
+								isMobileLayout ? "h-2 w-full" : "w-2",
+							)}
+						/>
+
+						{/* Right: Proto / Code / Results (tabbed) */}
+						<ResizablePanel
+							defaultSize={isMobileLayout ? 58 : 67}
+							minSize={isMobileLayout ? 32 : 30}
+							maxSize={isMobileLayout ? 76 : 80}
+							id="detail-panel"
+							order={2}
+							collapsible={false}
+						>
+							{selectedMethod ? (
+								(() => {
+									const network = networks.find(
+										(n) => n.id === selectedMethod.networkId,
+									);
+									return (
+										<MethodDetailPanel
+											key={selectedMethod.id}
+											method={selectedMethod.method}
+											service={selectedMethod.service}
+											color={selectedMethod.color}
+											params={selectedMethod.params || {}}
+											metadata={selectedMethod.metadata || {}}
+											authConfig={selectedMethod.authConfig}
+											result={currentResult || null}
+											isExecuting={isExecuting}
+											{...(network?.endpoint
+												? { endpoint: network.endpoint }
+												: {})}
+											{...(network?.tlsEnabled !== undefined
+												? { tlsEnabled: network.tlsEnabled }
+												: {})}
+											mode={network?.mode}
+										/>
+									);
+								})()
+							) : (
+								<MethodDetailPanelEmpty />
+							)}
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</div>
+			</div>
+
+			{/* Dialogs */}
+			{showAddNetwork && (
+				<AddNetworkDialog
+					onAdd={handleAddNetwork}
+					onClose={() => setShowAddNetwork(false)}
+					defaultMode={defaultMode}
+				/>
+			)}
+
+			<HelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
+
+			<SettingsDialog
+				open={showSettings}
+				onClose={() => setShowSettings(false)}
+				autoCollapseEnabled={autoCollapseEnabled}
+				onAutoCollapseChange={setAutoCollapseEnabled}
+				defaultMode={defaultMode}
+				requestTimeoutMs={requestTimeoutMs}
+				onRequestTimeoutChange={setRequestTimeoutMs}
+				onDefaultModeChange={(mode) => {
+					setDefaultMode(mode);
+					localStorage.setItem("grpc-explorer-default-mode", mode);
+				}}
+			/>
+		</div>
+	);
 }

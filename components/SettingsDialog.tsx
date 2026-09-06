@@ -1,30 +1,31 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import { Settings } from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { useTheme } from "@/components/ThemeProvider";
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
-import { Settings } from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import type { ExplorerMode } from "@/lib/types/grpc";
+import { cn } from "@/lib/utils";
 import {
-	getCacheTTL,
-	setCacheTTL,
-	setRequestTimeoutMs,
-	CACHE_TTL_OPTIONS,
 	CACHE_TTL_LABELS,
-	REQUEST_TIMEOUT_MS,
-	normalizeRequestTimeoutMs,
+	CACHE_TTL_OPTIONS,
 	type CacheTTLOption,
 	clearAllCache,
 	getCacheStats,
-} from '@/lib/utils/client-cache';
-import { useTheme, type Theme } from '@/components/ThemeProvider';
-import type { ExplorerMode } from '@/lib/types/grpc';
+	getCacheTTL,
+	normalizeRequestTimeoutMs,
+	REQUEST_TIMEOUT_MS,
+	setCacheTTL,
+	setRequestTimeoutMs,
+} from "@/lib/utils/client-cache";
 
 interface SettingsDialogProps {
 	open: boolean;
@@ -48,19 +49,25 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 	onRequestTimeoutChange,
 }) => {
 	const { theme, setTheme } = useTheme();
-	const [defaultTimeout, setDefaultTimeout] = useState(String(requestTimeoutMs));
-	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>('ONE_HOUR');
+	const [defaultTimeout, setDefaultTimeout] = useState(
+		String(requestTimeoutMs),
+	);
+	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>("ONE_HOUR");
 	const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
-	const [localAutoCollapse, setLocalAutoCollapse] = useState(autoCollapseEnabled);
-	const [localDefaultMode, setLocalDefaultMode] = useState<ExplorerMode>(defaultMode || 'generic');
+	const [localAutoCollapse, setLocalAutoCollapse] =
+		useState(autoCollapseEnabled);
+	const [localDefaultMode, setLocalDefaultMode] = useState<ExplorerMode>(
+		defaultMode || "generic",
+	);
 
 	// Load current settings when dialog opens
 	useEffect(() => {
 		if (open) {
 			const currentTTL = getCacheTTL();
-			const option = Object.entries(CACHE_TTL_OPTIONS).find(
-				([_, value]) => value === currentTTL
-			)?.[0] as CacheTTLOption || 'ONE_HOUR';
+			const option =
+				(Object.entries(CACHE_TTL_OPTIONS).find(
+					([_, value]) => value === currentTTL,
+				)?.[0] as CacheTTLOption) || "ONE_HOUR";
 			setCacheTTLState(option);
 
 			// Load cache stats
@@ -70,7 +77,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 			setLocalAutoCollapse(autoCollapseEnabled);
 
 			// Load default mode setting
-			setLocalDefaultMode(defaultMode || 'generic');
+			setLocalDefaultMode(defaultMode || "generic");
 
 			setDefaultTimeout(String(normalizeRequestTimeoutMs(requestTimeoutMs)));
 		}
@@ -91,24 +98,29 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
 				<div className="space-y-6 mt-4">
 					<div>
-						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Appearance</h3>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">
+							Appearance
+						</h3>
 						<div className="space-y-2">
-							<label className="text-sm">Theme</label>
+							<span className="text-sm">Theme</span>
 							<div className="flex gap-2 flex-wrap">
-								{([
-									{ value: 'system', label: 'System' },
-									{ value: 'light', label: 'Light' },
-									{ value: 'dark', label: 'Dark' },
-									{ value: 'retro', label: '8-bit' }
-								] as const).map((t) => (
+								{(
+									[
+										{ value: "system", label: "System" },
+										{ value: "light", label: "Light" },
+										{ value: "dark", label: "Dark" },
+										{ value: "retro", label: "8-bit" },
+									] as const
+								).map((t) => (
 									<button
+										type="button"
 										key={t.value}
 										onClick={() => setTheme(t.value)}
 										className={cn(
 											"px-4 py-2 rounded text-sm font-medium transition-colors",
 											theme === t.value
 												? "bg-primary text-primary-foreground"
-												: "bg-secondary hover:bg-secondary/80"
+												: "bg-secondary hover:bg-secondary/80",
 										)}
 									>
 										{t.label}
@@ -119,20 +131,23 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 					</div>
 
 					<div>
-						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Default Mode</h3>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">
+							Default Mode
+						</h3>
 						<div className="flex gap-2">
-							{([
-								{ value: 'generic' as ExplorerMode, label: 'Generic gRPC' },
-								{ value: 'cosmos' as ExplorerMode, label: 'Cosmos SDK' },
-							]).map((m) => (
+							{[
+								{ value: "generic" as ExplorerMode, label: "Generic gRPC" },
+								{ value: "cosmos" as ExplorerMode, label: "Cosmos SDK" },
+							].map((m) => (
 								<button
+									type="button"
 									key={m.value}
 									onClick={() => setLocalDefaultMode(m.value)}
 									className={cn(
 										"px-4 py-2 rounded text-sm font-medium transition-colors",
 										localDefaultMode === m.value
 											? "bg-primary text-primary-foreground"
-											: "bg-secondary hover:bg-secondary/80"
+											: "bg-secondary hover:bg-secondary/80",
 									)}
 								>
 									{m.label}
@@ -145,19 +160,28 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 					</div>
 
 					<div>
-						<h3 className="text-sm font-semibold text-muted-foreground mb-3">gRPC Options</h3>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">
+							gRPC Options
+						</h3>
 						<div className="space-y-3">
 							<div>
-								<label className="text-sm block mb-1">Service Discovery Timeout (ms)</label>
+								<label htmlFor="default-timeout" className="text-sm block mb-1">
+									Service Discovery Timeout (ms)
+								</label>
 								<input
+									id="default-timeout"
 									type="number"
 									value={defaultTimeout}
 									onChange={(e) => setDefaultTimeout(e.target.value)}
-									onBlur={() => setDefaultTimeout(String(normalizeRequestTimeoutMs(defaultTimeout)))}
+									onBlur={() =>
+										setDefaultTimeout(
+											String(normalizeRequestTimeoutMs(defaultTimeout)),
+										)
+									}
 									className={cn(
 										"w-full px-3 py-2 rounded text-sm",
 										"bg-background border border-border",
-										"focus:outline-none focus:ring-2 focus:ring-primary"
+										"focus:outline-none focus:ring-2 focus:ring-primary",
 									)}
 									min={REQUEST_TIMEOUT_MS.MIN}
 									max={REQUEST_TIMEOUT_MS.MAX}
@@ -171,16 +195,24 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 					</div>
 
 					<div>
-						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Panel Behavior</h3>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">
+							Panel Behavior
+						</h3>
 						<div className="space-y-3">
 							<div className="flex items-center justify-between">
 								<div className="space-y-0.5">
-									<label className="text-sm font-medium">Auto-collapse panels</label>
+									<label
+										htmlFor="auto-collapse"
+										className="text-sm font-medium"
+									>
+										Auto-collapse panels
+									</label>
 									<p className="text-xs text-muted-foreground">
 										Automatically collapse other panels when opening a new one
 									</p>
 								</div>
 								<Switch
+									id="auto-collapse"
 									checked={localAutoCollapse}
 									onCheckedChange={setLocalAutoCollapse}
 								/>
@@ -189,18 +221,25 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 					</div>
 
 					<div>
-						<h3 className="text-sm font-semibold text-muted-foreground mb-3">Cache</h3>
+						<h3 className="text-sm font-semibold text-muted-foreground mb-3">
+							Cache
+						</h3>
 						<div className="space-y-4">
 							<div>
-								<label className="text-sm block mb-2">Cache Duration</label>
+								<label htmlFor="cache-duration" className="text-sm block mb-2">
+									Cache Duration
+								</label>
 								<select
+									id="cache-duration"
 									value={cacheTTL}
-									onChange={(e) => setCacheTTLState(e.target.value as CacheTTLOption)}
+									onChange={(e) =>
+										setCacheTTLState(e.target.value as CacheTTLOption)
+									}
 									className={cn(
 										"w-full px-3 py-2 rounded text-sm",
 										"bg-background border border-border",
 										"focus:outline-none focus:ring-2 focus:ring-primary",
-										"cursor-pointer"
+										"cursor-pointer",
 									)}
 								>
 									{Object.entries(CACHE_TTL_LABELS).map(([key, label]) => (
@@ -216,8 +255,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
 							<div>
 								<div className="flex items-center justify-between mb-2">
-									<label className="text-sm">Cache Statistics</label>
+									<span className="text-sm">Cache Statistics</span>
 									<button
+										type="button"
 										onClick={() => {
 											clearAllCache();
 											setCacheStatsState(getCacheStats());
@@ -238,20 +278,23 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
 				<div className="mt-6 pt-4 border-t border-border flex justify-end gap-2">
 					<button
+						type="button"
 						onClick={onClose}
 						className={cn(
 							"px-4 py-2 rounded text-sm transition-colors",
-							"bg-secondary hover:bg-secondary/80"
+							"bg-secondary hover:bg-secondary/80",
 						)}
 					>
 						Cancel
 					</button>
 					<button
+						type="button"
 						onClick={() => {
 							// Save cache TTL setting
 							setCacheTTL(cacheTTL);
 
-							const normalizedTimeout = normalizeRequestTimeoutMs(defaultTimeout);
+							const normalizedTimeout =
+								normalizeRequestTimeoutMs(defaultTimeout);
 							setRequestTimeoutMs(normalizedTimeout);
 							if (onRequestTimeoutChange) {
 								onRequestTimeoutChange(normalizedTimeout);
@@ -271,7 +314,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 						}}
 						className={cn(
 							"px-4 py-2 rounded text-sm transition-colors",
-							"bg-primary text-primary-foreground hover:bg-primary/90"
+							"bg-primary text-primary-foreground hover:bg-primary/90",
 						)}
 					>
 						Save

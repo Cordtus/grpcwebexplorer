@@ -195,7 +195,7 @@ UI components follow shadcn/ui patterns:
 
 ## Execution History
 
-`lib/hooks/useExecutionHistory.ts` manages method execution history:
+Method execution history is managed inside `components/GrpcExplorerApp.tsx`:
 - Stores last 50 executions per method in localStorage
 - Tracks timing data, success/failure, and response payloads
 - Used by MethodBlock for re-executing previous requests

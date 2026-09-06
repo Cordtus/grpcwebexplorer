@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0] - 2026-09-06
+
+### Changed
+- Replaced ESLint with Biome for linting and formatting (standard default config; eslint deps, `.eslintrc.json`, and the next.config eslint block removed).
+- Refactored the gRPC reflection client: v1/v1alpha proto schema and stub construction now share a single parameterized implementation; removed a dead `descriptorRoot` field.
+- Extracted shared `isTLSError()` helper; reused across execute and services routes instead of duplicating the TLS-error check.
+- GrpcExplorerApp now imports endpoint-cooldown constants instead of redefining them.
+- Converted the `while` regex loop in REST path mapping to a typed `for` loop.
+
+### Fixed
+- Added `type="button"` to 45 buttons that defaulted to submit.
+- Wired labels to controls (`htmlFor`/`id`) and corrected a11y keyboard handling on clickable elements.
+- Fixed ThemeProvider `applyTheme` declaration-order (useCallback) and the shadowed `errorMessage` parameter in the reflection client.
+
 ## [1.3.1] - 2026-05-14
 
 ### Added
