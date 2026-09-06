@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
-import { fetchChainList, fetchChainData } from '@/lib/services/chainRegistry';
-import { errorMessage } from '@/lib/utils';
+import { NextResponse } from "next/server";
+import { fetchChainData, fetchChainList } from "@/lib/services/chainRegistry";
+import { errorMessage } from "@/lib/utils";
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // Allow Next.js to cache this route (uses fetch cache internally)
 // Revalidate every hour
@@ -16,43 +16,45 @@ export const revalidate = 3600;
  * Chain list is cached at CDN level for 1 hour to avoid GitHub API rate limits
  */
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const chainName = searchParams.get('name');
+	try {
+		const { searchParams } = new URL(req.url);
+		const chainName = searchParams.get("name");
 
-    if (chainName) {
-      // Fetch specific chain data (uses raw.githubusercontent.com, less rate limited)
-      const chainData = await fetchChainData(chainName);
+		if (chainName) {
+			// Fetch specific chain data (uses raw.githubusercontent.com, less rate limited)
+			const chainData = await fetchChainData(chainName);
 
-      if (!chainData) {
-        return NextResponse.json(
-          { error: `Chain '${chainName}' not found` },
-          { status: 404 }
-        );
-      }
+			if (!chainData) {
+				return NextResponse.json(
+					{ error: `Chain '${chainName}' not found` },
+					{ status: 404 },
+				);
+			}
 
-      // Cache individual chain data for 1 hour
-      return NextResponse.json(chainData, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-        },
-      });
-    } else {
-      // Fetch list of all chains
-      const chains = await fetchChainList();
+			// Cache individual chain data for 1 hour
+			return NextResponse.json(chainData, {
+				headers: {
+					"Cache-Control":
+						"public, s-maxage=3600, stale-while-revalidate=86400",
+				},
+			});
+		} else {
+			// Fetch list of all chains
+			const chains = await fetchChainList();
 
-      // Cache chain list for 1 hour, allow stale for 24 hours while revalidating
-      return NextResponse.json({ chains }, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-        },
-      });
-    }
-  } catch (error: unknown) {
-    console.error('Error in /api/chains:', error);
-    return NextResponse.json(
-      { error: errorMessage(error) },
-      { status: 500 }
-    );
-  }
+			// Cache chain list for 1 hour, allow stale for 24 hours while revalidating
+			return NextResponse.json(
+				{ chains },
+				{
+					headers: {
+						"Cache-Control":
+							"public, s-maxage=3600, stale-while-revalidate=86400",
+					},
+				},
+			);
+		}
+	} catch (error: unknown) {
+		console.error("Error in /api/chains:", error);
+		return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+	}
 }

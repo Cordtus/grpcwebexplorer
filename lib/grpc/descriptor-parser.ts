@@ -1,13 +1,13 @@
 // lib/grpc/descriptor-parser.ts
 // Extracted FileDescriptorSet parsing logic, shared by ReflectionClient and BSR routes
 
-import * as protobuf from 'protobufjs';
-import descriptorJson from 'protobufjs/google/protobuf/descriptor.json';
+import * as protobuf from "protobufjs";
+import descriptorJson from "protobufjs/google/protobuf/descriptor.json";
 
 export interface MessageField {
 	name: string;
 	type: string;
-	rule?: 'optional' | 'required' | 'repeated';
+	rule?: "optional" | "required" | "repeated";
 	defaultValue?: any;
 	comment?: string;
 	nested?: boolean;
@@ -70,15 +70,17 @@ export class DescriptorParser {
 
 	/** Parse a binary FileDescriptorSet (e.g. from BSR) and load all file descriptors */
 	loadFileDescriptorSet(data: Buffer): void {
-		const FileDescriptorSet = this.descriptorRoot.lookupType('google.protobuf.FileDescriptorSet');
+		const FileDescriptorSet = this.descriptorRoot.lookupType(
+			"google.protobuf.FileDescriptorSet",
+		);
 		const fds = FileDescriptorSet.decode(new Uint8Array(data)) as any;
 
 		if (!fds.file || fds.file.length === 0) {
-			throw new Error('FileDescriptorSet contains no file descriptors');
+			throw new Error("FileDescriptorSet contains no file descriptors");
 		}
 
 		for (const fileDescriptor of fds.file) {
-			const filename = fileDescriptor.name || 'unknown';
+			const filename = fileDescriptor.name || "unknown";
 			if (this.seenFiles.has(filename)) continue;
 			this.seenFiles.add(filename);
 			this.addDescriptorToRoot(fileDescriptor);
@@ -87,9 +89,11 @@ export class DescriptorParser {
 
 	/** Process a single raw FileDescriptorProto (binary bytes from reflection) */
 	processFileDescriptor(fdBytes: Buffer): void {
-		const FileDescriptorProto = this.descriptorRoot.lookupType('google.protobuf.FileDescriptorProto');
+		const FileDescriptorProto = this.descriptorRoot.lookupType(
+			"google.protobuf.FileDescriptorProto",
+		);
 		const descriptor = FileDescriptorProto.decode(fdBytes) as any;
-		const filename = descriptor.name || 'unknown';
+		const filename = descriptor.name || "unknown";
 
 		if (this.seenFiles.has(filename)) return;
 		this.seenFiles.add(filename);
@@ -100,7 +104,10 @@ export class DescriptorParser {
 	getServices(): GrpcService[] {
 		const services: GrpcService[] = [];
 
-		const traverse = (namespace: protobuf.Namespace, parentPath: string = ''): void => {
+		const traverse = (
+			namespace: protobuf.Namespace,
+			parentPath: string = "",
+		): void => {
 			for (const [name, nested] of Object.entries(namespace.nested || {})) {
 				const fullPath = parentPath ? `${parentPath}.${name}` : name;
 
@@ -110,13 +117,19 @@ export class DescriptorParser {
 					for (const [methodName, method] of Object.entries(nested.methods)) {
 						const m = method as protobuf.Method;
 						if (!methodName || !m.requestType || !m.responseType) {
-							console.warn(`[DescriptorParser] Skipping invalid method in ${fullPath}: missing name or types`);
+							console.warn(
+								`[DescriptorParser] Skipping invalid method in ${fullPath}: missing name or types`,
+							);
 							continue;
 						}
 
 						try {
-							const requestTypeDefinition = this.extractMessageTypeDefinition(m.requestType);
-							const responseTypeDefinition = this.extractMessageTypeDefinition(m.responseType);
+							const requestTypeDefinition = this.extractMessageTypeDefinition(
+								m.requestType,
+							);
+							const responseTypeDefinition = this.extractMessageTypeDefinition(
+								m.responseType,
+							);
 							const methodKey = `${fullPath}.${methodName}`;
 							const httpRule = this.extractHttpRule(methodKey);
 
@@ -138,7 +151,10 @@ export class DescriptorParser {
 
 							methods.push(methodObj);
 						} catch (err) {
-							console.warn(`[DescriptorParser] Failed to process method ${methodName} in ${fullPath}:`, err);
+							console.warn(
+								`[DescriptorParser] Failed to process method ${methodName} in ${fullPath}:`,
+								err,
+							);
 						}
 					}
 
@@ -173,11 +189,11 @@ export class DescriptorParser {
 	// -- Internal methods --
 
 	private addDescriptorToRoot(descriptor: any): void {
-		const pkg = descriptor.package || '';
+		const pkg = descriptor.package || "";
 
 		let namespace: protobuf.Namespace = this.root;
 		if (pkg) {
-			const parts = pkg.split('.');
+			const parts = pkg.split(".");
 			for (const part of parts) {
 				let next = namespace.get(part);
 				if (!next) {
@@ -193,7 +209,7 @@ export class DescriptorParser {
 				try {
 					this.addEnumType(namespace, enumType);
 				} catch (err) {
-					if (!(err as Error).message.includes('duplicate')) {
+					if (!(err as Error).message.includes("duplicate")) {
 						console.warn(`Failed to add enum ${enumType.name}:`, err);
 					}
 				}
@@ -205,7 +221,7 @@ export class DescriptorParser {
 				try {
 					this.addMessageType(namespace, msgType);
 				} catch (err) {
-					if (!(err as Error).message.includes('duplicate')) {
+					if (!(err as Error).message.includes("duplicate")) {
 						console.warn(`Failed to add message ${msgType.name}:`, err);
 					}
 				}
@@ -217,7 +233,7 @@ export class DescriptorParser {
 				try {
 					this.addServiceType(namespace, svcType, pkg);
 				} catch (err) {
-					if (!(err as Error).message.includes('duplicate')) {
+					if (!(err as Error).message.includes("duplicate")) {
 						console.warn(`Failed to add service ${svcType.name}:`, err);
 					}
 				}
@@ -233,14 +249,21 @@ export class DescriptorParser {
 				fields[field.name] = {
 					type: this.getFieldType(field),
 					id: field.number,
-					rule: field.label === 3 ? 'repeated' : undefined,
+					rule: field.label === 3 ? "repeated" : undefined,
 				};
 			}
 		}
 
 		const message = new protobuf.Type(msgType.name);
 		for (const [name, fieldDef] of Object.entries(fields)) {
-			message.add(new protobuf.Field(name, (fieldDef as any).id, (fieldDef as any).type, (fieldDef as any).rule));
+			message.add(
+				new protobuf.Field(
+					name,
+					(fieldDef as any).id,
+					(fieldDef as any).type,
+					(fieldDef as any).rule,
+				),
+			);
 		}
 
 		namespace.add(message);
@@ -271,19 +294,25 @@ export class DescriptorParser {
 		namespace.add(enumObj);
 	}
 
-	private addServiceType(namespace: protobuf.Namespace, svcType: any, packagePath: string): void {
+	private addServiceType(
+		namespace: protobuf.Namespace,
+		svcType: any,
+		packagePath: string,
+	): void {
 		const service = new protobuf.Service(svcType.name);
-		const serviceFullName = packagePath ? `${packagePath}.${svcType.name}` : svcType.name;
+		const serviceFullName = packagePath
+			? `${packagePath}.${svcType.name}`
+			: svcType.name;
 
 		if (svcType.method) {
 			for (const method of svcType.method) {
 				const protoMethod = new protobuf.Method(
 					method.name,
-					'rpc',
-					method.inputType.replace(/^\./, ''),
-					method.outputType.replace(/^\./, ''),
+					"rpc",
+					method.inputType.replace(/^\./, ""),
+					method.outputType.replace(/^\./, ""),
 					method.clientStreaming || false,
-					method.serverStreaming || false
+					method.serverStreaming || false,
 				);
 				service.add(protoMethod);
 
@@ -301,9 +330,10 @@ export class DescriptorParser {
 		const options = this.methodOptions.get(methodKey);
 		if (!options) return undefined;
 
-		const httpAnnotation = options['.google.api.http'] ||
-			options['google.api.http'] ||
-			options['(google.api.http)'] ||
+		const httpAnnotation =
+			options[".google.api.http"] ||
+			options["google.api.http"] ||
+			options["(google.api.http)"] ||
 			options[72295728];
 
 		if (!httpAnnotation) return undefined;
@@ -317,15 +347,20 @@ export class DescriptorParser {
 		if (httpAnnotation.patch) rule.patch = httpAnnotation.patch;
 		if (httpAnnotation.body) rule.body = httpAnnotation.body;
 
-		if (httpAnnotation.additionalBindings && Array.isArray(httpAnnotation.additionalBindings)) {
-			rule.additionalBindings = httpAnnotation.additionalBindings.map((binding: any) => ({
-				get: binding.get,
-				post: binding.post,
-				put: binding.put,
-				delete: binding.delete,
-				patch: binding.patch,
-				body: binding.body,
-			}));
+		if (
+			httpAnnotation.additionalBindings &&
+			Array.isArray(httpAnnotation.additionalBindings)
+		) {
+			rule.additionalBindings = httpAnnotation.additionalBindings.map(
+				(binding: any) => ({
+					get: binding.get,
+					post: binding.post,
+					put: binding.put,
+					delete: binding.delete,
+					patch: binding.patch,
+					body: binding.body,
+				}),
+			);
 		}
 
 		if (!rule.get && !rule.post && !rule.put && !rule.delete && !rule.patch) {
@@ -337,10 +372,21 @@ export class DescriptorParser {
 
 	getFieldType(field: any): string {
 		const typeMap: Record<number, string> = {
-			1: 'double', 2: 'float', 3: 'int64', 4: 'uint64',
-			5: 'int32', 6: 'fixed64', 7: 'fixed32', 8: 'bool',
-			9: 'string', 12: 'bytes', 13: 'uint32', 15: 'sfixed32',
-			16: 'sfixed64', 17: 'sint32', 18: 'sint64',
+			1: "double",
+			2: "float",
+			3: "int64",
+			4: "uint64",
+			5: "int32",
+			6: "fixed64",
+			7: "fixed32",
+			8: "bool",
+			9: "string",
+			12: "bytes",
+			13: "uint32",
+			15: "sfixed32",
+			16: "sfixed64",
+			17: "sint32",
+			18: "sint64",
 		};
 
 		if (field.type in typeMap) {
@@ -348,18 +394,21 @@ export class DescriptorParser {
 		}
 
 		if (field.typeName) {
-			return field.typeName.replace(/^\./, '');
+			return field.typeName.replace(/^\./, "");
 		}
 
-		return 'string';
+		return "string";
 	}
 
-	extractMessageTypeDefinition(typeName: string, visitedTypes: Set<string> = new Set()): MessageTypeDefinition {
+	extractMessageTypeDefinition(
+		typeName: string,
+		visitedTypes: Set<string> = new Set(),
+	): MessageTypeDefinition {
 		try {
 			const message = this.root.lookupType(typeName);
 			if (!message) {
 				return {
-					name: typeName.split('.').pop() || typeName,
+					name: typeName.split(".").pop() || typeName,
 					fullName: typeName,
 					fields: [],
 				};
@@ -372,14 +421,29 @@ export class DescriptorParser {
 					const fieldObj = field as any;
 					const fieldType = fieldObj.type;
 					const rule = fieldObj.rule;
-					const comment = fieldObj.comment || '';
+					const comment = fieldObj.comment || "";
 
 					const primitiveTypes = [
-						'string', 'int32', 'int64', 'uint32', 'uint64',
-						'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32',
-						'sfixed64', 'bool', 'bytes', 'double', 'float'
+						"string",
+						"int32",
+						"int64",
+						"uint32",
+						"uint64",
+						"sint32",
+						"sint64",
+						"fixed32",
+						"fixed64",
+						"sfixed32",
+						"sfixed64",
+						"bool",
+						"bytes",
+						"double",
+						"float",
 					];
-					const isNested = fieldType && typeof fieldType === 'string' && !primitiveTypes.includes(fieldType);
+					const isNested =
+						fieldType &&
+						typeof fieldType === "string" &&
+						!primitiveTypes.includes(fieldType);
 
 					let enumValues: string[] | undefined;
 					let nestedFields: MessageField[] | undefined;
@@ -388,22 +452,35 @@ export class DescriptorParser {
 						try {
 							const nestedType = this.root.lookup(fieldType);
 							if (nestedType && (nestedType as any).valuesById) {
-								enumValues = Object.values((nestedType as any).valuesById) as string[];
+								enumValues = Object.values(
+									(nestedType as any).valuesById,
+								) as string[];
 							} else if (nestedType && !visitedTypes.has(fieldType)) {
 								visitedTypes.add(fieldType);
-								const nestedDefinition = this.extractMessageTypeDefinition(fieldType, visitedTypes);
+								const nestedDefinition = this.extractMessageTypeDefinition(
+									fieldType,
+									visitedTypes,
+								);
 								nestedFields = nestedDefinition.fields;
 								visitedTypes.delete(fieldType);
 							}
 						} catch (e) {
-							console.warn(`[DescriptorParser] Failed to lookup nested type ${fieldType}:`, e);
+							console.warn(
+								`[DescriptorParser] Failed to lookup nested type ${fieldType}:`,
+								e,
+							);
 						}
 					}
 
 					const fieldDef: MessageField = {
 						name: fieldName,
 						type: fieldType,
-						rule: rule === 'repeated' ? 'repeated' : rule === 'required' ? 'required' : 'optional',
+						rule:
+							rule === "repeated"
+								? "repeated"
+								: rule === "required"
+									? "required"
+									: "optional",
 						comment,
 						nested: isNested && !enumValues,
 					};
@@ -426,9 +503,12 @@ export class DescriptorParser {
 				fields,
 			};
 		} catch (error) {
-			console.error(`[DescriptorParser] Failed to extract message type definition for ${typeName}:`, error);
+			console.error(
+				`[DescriptorParser] Failed to extract message type definition for ${typeName}:`,
+				error,
+			);
 			return {
-				name: typeName.split('.').pop() || typeName,
+				name: typeName.split(".").pop() || typeName,
 				fullName: typeName,
 				fields: [],
 			};

@@ -1,236 +1,260 @@
-import { errorMessage } from '@/lib/utils';
+import { errorMessage } from "@/lib/utils";
 
 type DescriptorJob = {
-  networkId: string;
-  endpoint: string;
-  tlsEnabled: boolean;
-  serviceName: string;
-  timeoutMs?: number;
-  priority: 'high' | 'normal';
-  timestamp: number;
-  retryCount?: number;
+	networkId: string;
+	endpoint: string;
+	tlsEnabled: boolean;
+	serviceName: string;
+	timeoutMs?: number;
+	priority: "high" | "normal";
+	timestamp: number;
+	retryCount?: number;
 };
 
 type DescriptorResult = {
-  networkId: string;
-  serviceName: string;
-  service: any;
+	networkId: string;
+	serviceName: string;
+	service: any;
 };
 
 class DescriptorLoaderQueue {
-  private queue: DescriptorJob[] = [];
-  private loading: Set<string> = new Set();
-  private loaded: Set<string> = new Set();
-  private currentJob: DescriptorJob | null = null;
-  private listeners: ((result: DescriptorResult) => void)[] = [];
-  private maxConcurrent = 1;
-  private delayBetweenJobs = 500;
-  private maxRetries = 3;
-  private paused = false;
-  private abortController: AbortController | null = null;
+	private queue: DescriptorJob[] = [];
+	private loading: Set<string> = new Set();
+	private loaded: Set<string> = new Set();
+	private currentJob: DescriptorJob | null = null;
+	private listeners: ((result: DescriptorResult) => void)[] = [];
+	private delayBetweenJobs = 500;
+	private maxRetries = 3;
+	private paused = false;
+	private abortController: AbortController | null = null;
 
-  private getJobKey(job: DescriptorJob): string {
-    return `${job.networkId}:${job.serviceName}`;
-  }
+	private getJobKey(job: DescriptorJob): string {
+		return `${job.networkId}:${job.serviceName}`;
+	}
 
-  enqueue(job: DescriptorJob) {
-    const jobKey = this.getJobKey(job);
+	enqueue(job: DescriptorJob) {
+		const jobKey = this.getJobKey(job);
 
-    if (this.loaded.has(jobKey) || this.loading.has(jobKey)) {
-      return;
-    }
+		if (this.loaded.has(jobKey) || this.loading.has(jobKey)) {
+			return;
+		}
 
-    const existingIndex = this.queue.findIndex(
-      (j) => this.getJobKey(j) === jobKey
-    );
+		const existingIndex = this.queue.findIndex(
+			(j) => this.getJobKey(j) === jobKey,
+		);
 
-    if (existingIndex >= 0) {
-      if (job.priority === 'high' && this.queue[existingIndex].priority === 'normal') {
-        this.queue[existingIndex].priority = 'high';
-        this.sortQueue();
-      }
-      return;
-    }
+		if (existingIndex >= 0) {
+			if (
+				job.priority === "high" &&
+				this.queue[existingIndex].priority === "normal"
+			) {
+				this.queue[existingIndex].priority = "high";
+				this.sortQueue();
+			}
+			return;
+		}
 
-    this.queue.push(job);
-    this.sortQueue();
-    this.processQueue();
-  }
+		this.queue.push(job);
+		this.sortQueue();
+		this.processQueue();
+	}
 
-  enqueueBatch(jobs: DescriptorJob[]) {
-    for (const job of jobs) {
-      const jobKey = this.getJobKey(job);
-      if (this.loaded.has(jobKey) || this.loading.has(jobKey)) {
-        continue;
-      }
-      const existingIndex = this.queue.findIndex(
-        (j) => this.getJobKey(j) === jobKey
-      );
-      if (existingIndex >= 0) {
-        continue;
-      }
-      this.queue.push(job);
-    }
-    this.sortQueue();
-    this.processQueue();
-  }
+	enqueueBatch(jobs: DescriptorJob[]) {
+		for (const job of jobs) {
+			const jobKey = this.getJobKey(job);
+			if (this.loaded.has(jobKey) || this.loading.has(jobKey)) {
+				continue;
+			}
+			const existingIndex = this.queue.findIndex(
+				(j) => this.getJobKey(j) === jobKey,
+			);
+			if (existingIndex >= 0) {
+				continue;
+			}
+			this.queue.push(job);
+		}
+		this.sortQueue();
+		this.processQueue();
+	}
 
-  private sortQueue() {
-    this.queue.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return a.priority === 'high' ? -1 : 1;
-      }
-      return a.timestamp - b.timestamp;
-    });
-  }
+	private sortQueue() {
+		this.queue.sort((a, b) => {
+			if (a.priority !== b.priority) {
+				return a.priority === "high" ? -1 : 1;
+			}
+			return a.timestamp - b.timestamp;
+		});
+	}
 
-  /**
-   * Pause background loading - use when user initiates a direct load
-   */
-  pause() {
-    this.paused = true;
-    // Abort any in-flight background request
-    if (this.abortController) {
-      this.abortController.abort();
-      this.abortController = null;
-    }
-  }
+	/**
+	 * Pause background loading - use when user initiates a direct load
+	 */
+	pause() {
+		this.paused = true;
+		// Abort any in-flight background request
+		if (this.abortController) {
+			this.abortController.abort();
+			this.abortController = null;
+		}
+	}
 
-  /**
-   * Resume background loading
-   */
-  resume() {
-    this.paused = false;
-    this.processQueue();
-  }
+	/**
+	 * Resume background loading
+	 */
+	resume() {
+		this.paused = false;
+		this.processQueue();
+	}
 
-  /**
-   * Mark a service as already loaded (to skip queue processing)
-   */
-  markLoaded(networkId: string, serviceName: string) {
-    const jobKey = `${networkId}:${serviceName}`;
-    this.loaded.add(jobKey);
-    // Remove from queue if present
-    this.queue = this.queue.filter(j => this.getJobKey(j) !== jobKey);
-  }
+	/**
+	 * Mark a service as already loaded (to skip queue processing)
+	 */
+	markLoaded(networkId: string, serviceName: string) {
+		const jobKey = `${networkId}:${serviceName}`;
+		this.loaded.add(jobKey);
+		// Remove from queue if present
+		this.queue = this.queue.filter((j) => this.getJobKey(j) !== jobKey);
+	}
 
-  private async processQueue() {
-    if (this.paused || this.currentJob || this.queue.length === 0) {
-      return;
-    }
+	private async processQueue() {
+		if (this.paused || this.currentJob || this.queue.length === 0) {
+			return;
+		}
 
-    this.currentJob = this.queue.shift()!;
-    const jobKey = this.getJobKey(this.currentJob);
-    this.loading.add(jobKey);
+		this.currentJob = this.queue.shift()!;
+		const jobKey = this.getJobKey(this.currentJob);
+		this.loading.add(jobKey);
 
-    // Create abort controller for this request
-    this.abortController = new AbortController();
+		// Create abort controller for this request
+		this.abortController = new AbortController();
 
-    try {
-      const response = await fetch('/api/grpc/descriptor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: this.currentJob.endpoint,
-          tlsEnabled: this.currentJob.tlsEnabled,
-          serviceName: this.currentJob.serviceName,
-          timeoutMs: this.currentJob.timeoutMs,
-        }),
-        signal: this.abortController.signal,
-      });
+		try {
+			const response = await fetch("/api/grpc/descriptor", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					endpoint: this.currentJob.endpoint,
+					tlsEnabled: this.currentJob.tlsEnabled,
+					serviceName: this.currentJob.serviceName,
+					timeoutMs: this.currentJob.timeoutMs,
+				}),
+				signal: this.abortController.signal,
+			});
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.service) {
-          this.loaded.add(jobKey);
-          this.notifyListeners({
-            networkId: this.currentJob.networkId,
-            serviceName: this.currentJob.serviceName,
-            service: data.service,
-          });
-        }
-      } else {
-        // Re-queue with retry on failure (rate limiting, server errors)
-        const retryCount = (this.currentJob.retryCount || 0) + 1;
-        if (retryCount <= this.maxRetries) {
-          console.warn(`[DescriptorLoader] Failed to load ${this.currentJob.serviceName}: ${response.statusText} (retry ${retryCount}/${this.maxRetries})`);
-          this.queue.push({ ...this.currentJob, retryCount, priority: 'normal' });
-        } else {
-          console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        // Re-add to queue if aborted (will be processed when resumed)
-        if (!this.loaded.has(jobKey)) {
-          this.queue.unshift(this.currentJob);
-        }
-      } else {
-        // Re-queue with retry on error (network issues, rate limiting)
-        const retryCount = (this.currentJob.retryCount || 0) + 1;
-        if (retryCount <= this.maxRetries) {
-          console.warn(`[DescriptorLoader] Error loading ${this.currentJob.serviceName}: ${errorMessage(err)} (retry ${retryCount}/${this.maxRetries})`);
-          this.queue.push({ ...this.currentJob, retryCount, priority: 'normal' });
-        } else {
-          console.error(`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`);
-        }
-      }
-    } finally {
-      this.loading.delete(jobKey);
-      this.currentJob = null;
-      this.abortController = null;
+			if (response.ok) {
+				const data = await response.json();
+				if (data.service) {
+					this.loaded.add(jobKey);
+					this.notifyListeners({
+						networkId: this.currentJob.networkId,
+						serviceName: this.currentJob.serviceName,
+						service: data.service,
+					});
+				}
+			} else {
+				// Re-queue with retry on failure (rate limiting, server errors)
+				const retryCount = (this.currentJob.retryCount || 0) + 1;
+				if (retryCount <= this.maxRetries) {
+					console.warn(
+						`[DescriptorLoader] Failed to load ${this.currentJob.serviceName}: ${response.statusText} (retry ${retryCount}/${this.maxRetries})`,
+					);
+					this.queue.push({
+						...this.currentJob,
+						retryCount,
+						priority: "normal",
+					});
+				} else {
+					console.error(
+						`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`,
+					);
+				}
+			}
+		} catch (err: unknown) {
+			if (err instanceof DOMException && err.name === "AbortError") {
+				// Re-add to queue if aborted (will be processed when resumed)
+				if (!this.loaded.has(jobKey)) {
+					this.queue.unshift(this.currentJob);
+				}
+			} else {
+				// Re-queue with retry on error (network issues, rate limiting)
+				const retryCount = (this.currentJob.retryCount || 0) + 1;
+				if (retryCount <= this.maxRetries) {
+					console.warn(
+						`[DescriptorLoader] Error loading ${this.currentJob.serviceName}: ${errorMessage(err)} (retry ${retryCount}/${this.maxRetries})`,
+					);
+					this.queue.push({
+						...this.currentJob,
+						retryCount,
+						priority: "normal",
+					});
+				} else {
+					console.error(
+						`[DescriptorLoader] Permanently failed to load ${this.currentJob.serviceName} after ${this.maxRetries} retries`,
+					);
+				}
+			}
+		} finally {
+			this.loading.delete(jobKey);
+			this.currentJob = null;
+			this.abortController = null;
 
-      // Skip delay if paused
-      if (!this.paused) {
-        // Use longer delay for retry jobs to avoid hammering rate-limited endpoints
-        const nextJob = this.queue[0];
-        const retryDelay = nextJob?.retryCount ? this.delayBetweenJobs * (nextJob.retryCount + 1) : this.delayBetweenJobs;
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        this.processQueue();
-      }
-    }
-  }
+			// Skip delay if paused
+			if (!this.paused) {
+				// Use longer delay for retry jobs to avoid hammering rate-limited endpoints
+				const nextJob = this.queue[0];
+				const retryDelay = nextJob?.retryCount
+					? this.delayBetweenJobs * (nextJob.retryCount + 1)
+					: this.delayBetweenJobs;
+				await new Promise((resolve) => setTimeout(resolve, retryDelay));
+				this.processQueue();
+			}
+		}
+	}
 
-  onDescriptorLoaded(listener: (result: DescriptorResult) => void) {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
-    };
-  }
+	onDescriptorLoaded(listener: (result: DescriptorResult) => void) {
+		this.listeners.push(listener);
+		return () => {
+			this.listeners = this.listeners.filter((l) => l !== listener);
+		};
+	}
 
-  private notifyListeners(result: DescriptorResult) {
-    for (const listener of this.listeners) {
-      listener(result);
-    }
-  }
+	private notifyListeners(result: DescriptorResult) {
+		for (const listener of this.listeners) {
+			listener(result);
+		}
+	}
 
-  getQueueStats() {
-    return {
-      queued: this.queue.length,
-      loading: this.loading.size,
-      loaded: this.loaded.size,
-      currentJob: this.currentJob?.serviceName || null,
-    };
-  }
+	getQueueStats() {
+		return {
+			queued: this.queue.length,
+			loading: this.loading.size,
+			loaded: this.loaded.size,
+			currentJob: this.currentJob?.serviceName || null,
+		};
+	}
 
-  clear(networkId: string) {
-    this.queue = this.queue.filter((j) => j.networkId !== networkId);
-    const keysToRemove: string[] = [];
-    this.loading.forEach((key) => {
-      if (key.startsWith(`${networkId}:`)) {
-        keysToRemove.push(key);
-      }
-    });
-    keysToRemove.forEach((key) => this.loading.delete(key));
+	clear(networkId: string) {
+		this.queue = this.queue.filter((j) => j.networkId !== networkId);
+		const keysToRemove: string[] = [];
+		this.loading.forEach((key) => {
+			if (key.startsWith(`${networkId}:`)) {
+				keysToRemove.push(key);
+			}
+		});
+		keysToRemove.forEach((key) => {
+			this.loading.delete(key);
+		});
 
-    const loadedKeysToRemove: string[] = [];
-    this.loaded.forEach((key) => {
-      if (key.startsWith(`${networkId}:`)) {
-        loadedKeysToRemove.push(key);
-      }
-    });
-    loadedKeysToRemove.forEach((key) => this.loaded.delete(key));
-  }
+		const loadedKeysToRemove: string[] = [];
+		this.loaded.forEach((key) => {
+			if (key.startsWith(`${networkId}:`)) {
+				loadedKeysToRemove.push(key);
+			}
+		});
+		loadedKeysToRemove.forEach((key) => {
+			this.loaded.delete(key);
+		});
+	}
 }
 
 export const descriptorLoader = new DescriptorLoaderQueue();

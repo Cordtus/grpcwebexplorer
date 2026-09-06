@@ -1,229 +1,239 @@
 // lib/utils/endpoint-manager.ts
 // Endpoint management with failure tracking, smart timeouts, and prioritization
 
-import { errorMessage } from '@/lib/utils';
+import { errorMessage } from "@/lib/utils";
 
 interface EndpointConfig {
-  address: string;
-  tls: boolean;
+	address: string;
+	tls: boolean;
 }
 
 interface EndpointStats {
-  address: string;
-  failures: number;
-  timeouts: number;
-  lastFailure?: number;
-  averageResponseTime?: number;
-  successCount: number;
+	address: string;
+	failures: number;
+	timeouts: number;
+	lastFailure?: number;
+	averageResponseTime?: number;
+	successCount: number;
 }
 
 interface FetchResult {
-  endpoint: string;
-  data: any;
-  responseTime: number;
-  tls: boolean;
+	endpoint: string;
+	data: any;
+	responseTime: number;
+	tls: boolean;
 }
 
 class EndpointManager {
-  private stats: Map<string, EndpointStats> = new Map();
-  private blacklist: Set<string> = new Set();
-  private readonly BLACKLIST_THRESHOLD = 5; // Blacklist after 5 failures
-  private readonly BLACKLIST_DURATION = 3600000; // 1 hour in ms
+	private stats: Map<string, EndpointStats> = new Map();
+	private blacklist: Set<string> = new Set();
+	private readonly BLACKLIST_THRESHOLD = 5; // Blacklist after 5 failures
+	private readonly BLACKLIST_DURATION = 3600000; // 1 hour in ms
 
-  /**
-   * Normalize endpoint URL and detect TLS requirement
-   */
-  normalizeEndpoint(url: string): EndpointConfig {
-    let address = url.trim();
-    let tls = false;
-    let hadHttpsPrefix = false;
+	/**
+	 * Normalize endpoint URL and detect TLS requirement
+	 */
+	normalizeEndpoint(url: string): EndpointConfig {
+		let address = url.trim();
+		let tls = false;
+		let hadHttpsPrefix = false;
 
-    // Remove protocol prefix if present and remember if it was HTTPS
-    if (address.startsWith('https://')) {
-      address = address.replace('https://', '');
-      tls = true;
-      hadHttpsPrefix = true;
-    } else if (address.startsWith('http://')) {
-      address = address.replace('http://', '');
-      tls = false;
-    } else if (address.startsWith('grpc://')) {
-      address = address.replace('grpc://', '');
-      tls = false;
-    } else if (address.startsWith('grpcs://')) {
-      address = address.replace('grpcs://', '');
-      tls = true;
-      hadHttpsPrefix = true;
-    }
+		// Remove protocol prefix if present and remember if it was HTTPS
+		if (address.startsWith("https://")) {
+			address = address.replace("https://", "");
+			tls = true;
+			hadHttpsPrefix = true;
+		} else if (address.startsWith("http://")) {
+			address = address.replace("http://", "");
+			tls = false;
+		} else if (address.startsWith("grpc://")) {
+			address = address.replace("grpc://", "");
+			tls = false;
+		} else if (address.startsWith("grpcs://")) {
+			address = address.replace("grpcs://", "");
+			tls = true;
+			hadHttpsPrefix = true;
+		}
 
-    // Add port if missing
-    if (!address.includes(':')) {
-      // If URL had https:// prefix, use port 443, otherwise use 9090
-      if (hadHttpsPrefix) {
-        address = `${address}:443`;
-        tls = true;
-      } else {
-        address = `${address}:9090`; // Default gRPC port
-      }
-    } else {
-      // Check if port 443 or 9091 (common TLS ports for gRPC)
-      const port = address.split(':')[1];
-      if (port === '443' || port === '9091') {
-        tls = true;
-      }
-    }
+		// Add port if missing
+		if (!address.includes(":")) {
+			// If URL had https:// prefix, use port 443, otherwise use 9090
+			if (hadHttpsPrefix) {
+				address = `${address}:443`;
+				tls = true;
+			} else {
+				address = `${address}:9090`; // Default gRPC port
+			}
+		} else {
+			// Check if port 443 or 9091 (common TLS ports for gRPC)
+			const port = address.split(":")[1];
+			if (port === "443" || port === "9091") {
+				tls = true;
+			}
+		}
 
-    return { address, tls };
-  }
+		return { address, tls };
+	}
 
-  /**
-   * Prioritize endpoints with implicit optimization for known reliable providers
-   */
-  prioritizeEndpoints(endpoints: EndpointConfig[]): EndpointConfig[] {
-    return endpoints.sort((a, b) => {
-      const aStats = this.stats.get(a.address);
-      const bStats = this.stats.get(b.address);
+	/**
+	 * Prioritize endpoints with implicit optimization for known reliable providers
+	 */
+	prioritizeEndpoints(endpoints: EndpointConfig[]): EndpointConfig[] {
+		return endpoints.sort((a, b) => {
+			const aStats = this.stats.get(a.address);
+			const bStats = this.stats.get(b.address);
 
-      // Prioritize endpoints with good track record
-      const aScore = this.calculateScore(a.address, aStats);
-      const bScore = this.calculateScore(b.address, bStats);
+			// Prioritize endpoints with good track record
+			const aScore = this.calculateScore(a.address, aStats);
+			const bScore = this.calculateScore(b.address, bStats);
 
-      return bScore - aScore; // Higher score first
-    });
-  }
+			return bScore - aScore; // Higher score first
+		});
+	}
 
-  /**
-   * Calculate endpoint priority score (higher is better)
-   */
-  private calculateScore(address: string, stats?: EndpointStats): number {
-    let score = 100;
+	/**
+	 * Calculate endpoint priority score (higher is better)
+	 */
+	private calculateScore(address: string, stats?: EndpointStats): number {
+		let score = 100;
 
-    // Penalize for failures
-    if (stats) {
-      score -= stats.failures * 10;
-      score -= stats.timeouts * 5;
+		// Penalize for failures
+		if (stats) {
+			score -= stats.failures * 10;
+			score -= stats.timeouts * 5;
 
-      // Bonus for successes
-      score += stats.successCount * 2;
+			// Bonus for successes
+			score += stats.successCount * 2;
 
-      // Bonus for fast response times
-      if (stats.averageResponseTime && stats.averageResponseTime < 500) {
-        score += 20;
-      }
-    }
+			// Bonus for fast response times
+			if (stats.averageResponseTime && stats.averageResponseTime < 500) {
+				score += 20;
+			}
+		}
 
-    // Implicit optimization: Polkachu endpoints get priority
-    // (non-rate-limited, reliable, but we don't explicitly advertise this)
-    if (address.includes('polkachu.com')) {
-      score += 50;
-    }
+		// Implicit optimization: Polkachu endpoints get priority
+		// (non-rate-limited, reliable, but we don't explicitly advertise this)
+		if (address.includes("polkachu.com")) {
+			score += 50;
+		}
 
-    // Other known reliable providers
-    if (address.includes('basementnodes.ca')) {
-      score += 30;
-    }
+		// Other known reliable providers
+		if (address.includes("basementnodes.ca")) {
+			score += 30;
+		}
 
-    // Blacklisted endpoints get very low score
-    if (this.blacklist.has(address)) {
-      score = -1000;
-    }
+		// Blacklisted endpoints get very low score
+		if (this.blacklist.has(address)) {
+			score = -1000;
+		}
 
-    return score;
-  }
+		return score;
+	}
 
-  /**
-   * Record success for an endpoint
-   */
-  recordSuccess(address: string, responseTime: number): void {
-    const stats = this.stats.get(address) || {
-      address,
-      failures: 0,
-      timeouts: 0,
-      successCount: 0,
-    };
+	/**
+	 * Record success for an endpoint
+	 */
+	recordSuccess(address: string, responseTime: number): void {
+		const stats = this.stats.get(address) || {
+			address,
+			failures: 0,
+			timeouts: 0,
+			successCount: 0,
+		};
 
-    stats.successCount++;
+		stats.successCount++;
 
-    // Update average response time
-    if (stats.averageResponseTime) {
-      stats.averageResponseTime = (stats.averageResponseTime + responseTime) / 2;
-    } else {
-      stats.averageResponseTime = responseTime;
-    }
+		// Update average response time
+		if (stats.averageResponseTime) {
+			stats.averageResponseTime =
+				(stats.averageResponseTime + responseTime) / 2;
+		} else {
+			stats.averageResponseTime = responseTime;
+		}
 
-    this.stats.set(address, stats);
+		this.stats.set(address, stats);
 
-    // Remove from blacklist if it was there and has recovered
-    if (this.blacklist.has(address) && stats.successCount > 3) {
-      this.blacklist.delete(address);
-      console.log(`[EndpointManager] Removed ${address} from blacklist after recovery`);
-    }
-  }
+		// Remove from blacklist if it was there and has recovered
+		if (this.blacklist.has(address) && stats.successCount > 3) {
+			this.blacklist.delete(address);
+			console.log(
+				`[EndpointManager] Removed ${address} from blacklist after recovery`,
+			);
+		}
+	}
 
-  /**
-   * Record failure for an endpoint
-   */
-  recordFailure(address: string, isTimeout: boolean = false): void {
-    const stats = this.stats.get(address) || {
-      address,
-      failures: 0,
-      timeouts: 0,
-      successCount: 0,
-    };
+	/**
+	 * Record failure for an endpoint
+	 */
+	recordFailure(address: string, isTimeout: boolean = false): void {
+		const stats = this.stats.get(address) || {
+			address,
+			failures: 0,
+			timeouts: 0,
+			successCount: 0,
+		};
 
-    stats.failures++;
-    if (isTimeout) {
-      stats.timeouts++;
-    }
-    stats.lastFailure = Date.now();
+		stats.failures++;
+		if (isTimeout) {
+			stats.timeouts++;
+		}
+		stats.lastFailure = Date.now();
 
-    this.stats.set(address, stats);
+		this.stats.set(address, stats);
 
-    // Blacklist if too many failures
-    if (stats.failures >= this.BLACKLIST_THRESHOLD) {
-      this.blacklist.add(address);
-      console.warn(`[EndpointManager] Blacklisted ${address} - ${stats.failures} failures, ${stats.timeouts} timeouts`);
-    } else {
-      console.warn(`[EndpointManager] Failure recorded for ${address} - ${stats.failures} total failures`);
-    }
-  }
+		// Blacklist if too many failures
+		if (stats.failures >= this.BLACKLIST_THRESHOLD) {
+			this.blacklist.add(address);
+			console.warn(
+				`[EndpointManager] Blacklisted ${address} - ${stats.failures} failures, ${stats.timeouts} timeouts`,
+			);
+		} else {
+			console.warn(
+				`[EndpointManager] Failure recorded for ${address} - ${stats.failures} total failures`,
+			);
+		}
+	}
 
-  /**
-   * Check if endpoint is blacklisted
-   */
-  isBlacklisted(address: string): boolean {
-    return this.blacklist.has(address);
-  }
+	/**
+	 * Check if endpoint is blacklisted
+	 */
+	isBlacklisted(address: string): boolean {
+		return this.blacklist.has(address);
+	}
 
-  /**
-   * Get stats for logging/debugging
-   */
-  getStats(): Map<string, EndpointStats> {
-    return new Map(this.stats);
-  }
+	/**
+	 * Get stats for logging/debugging
+	 */
+	getStats(): Map<string, EndpointStats> {
+		return new Map(this.stats);
+	}
 
-  /**
-   * Get blacklisted endpoints
-   */
-  getBlacklist(): string[] {
-    return Array.from(this.blacklist);
-  }
+	/**
+	 * Get blacklisted endpoints
+	 */
+	getBlacklist(): string[] {
+		return Array.from(this.blacklist);
+	}
 
-  /**
-   * Clear old blacklist entries (run periodically)
-   */
-  clearExpiredBlacklist(): void {
-    const now = Date.now();
-    const entries = Array.from(this.stats.entries());
-    for (const [address, stats] of entries) {
-      if (stats.lastFailure && now - stats.lastFailure > this.BLACKLIST_DURATION) {
-        this.blacklist.delete(address);
-        // Reset failure count
-        stats.failures = 0;
-        stats.timeouts = 0;
-        this.stats.set(address, stats);
-      }
-    }
-  }
+	/**
+	 * Clear old blacklist entries (run periodically)
+	 */
+	clearExpiredBlacklist(): void {
+		const now = Date.now();
+		const entries = Array.from(this.stats.entries());
+		for (const [address, stats] of entries) {
+			if (
+				stats.lastFailure &&
+				now - stats.lastFailure > this.BLACKLIST_DURATION
+			) {
+				this.blacklist.delete(address);
+				// Reset failure count
+				stats.failures = 0;
+				stats.timeouts = 0;
+				this.stats.set(address, stats);
+			}
+		}
+	}
 }
 
 // Singleton instance
@@ -234,95 +244,110 @@ export const endpointManager = new EndpointManager();
  * and adaptive timeout based on first responder
  */
 export async function fetchWithConcurrentEndpoints(
-  endpoints: EndpointConfig[],
-  fetchFunction: (endpoint: string, tls: boolean) => Promise<any>,
-  options: {
-    adaptiveTimeoutPercent?: number; // Default 20% - drop endpoints slower than this
-    maxAttempts?: number; // Maximum number of endpoints to try
-  } = {}
+	endpoints: EndpointConfig[],
+	fetchFunction: (endpoint: string, tls: boolean) => Promise<any>,
+	options: {
+		adaptiveTimeoutPercent?: number; // Default 20% - drop endpoints slower than this
+		maxAttempts?: number; // Maximum number of endpoints to try
+	} = {},
 ): Promise<FetchResult> {
-  const { adaptiveTimeoutPercent = 0.2, maxAttempts = 5 } = options;
+	const { adaptiveTimeoutPercent = 0.2, maxAttempts = 5 } = options;
 
-  // Prioritize endpoints
-  const prioritized = endpointManager.prioritizeEndpoints(endpoints);
+	// Prioritize endpoints
+	const prioritized = endpointManager.prioritizeEndpoints(endpoints);
 
-  // Filter out blacklisted
-  const available = prioritized.filter(ep => !endpointManager.isBlacklisted(ep.address));
+	// Filter out blacklisted
+	const available = prioritized.filter(
+		(ep) => !endpointManager.isBlacklisted(ep.address),
+	);
 
-  if (available.length === 0) {
-    throw new Error('No available endpoints - all blacklisted or failed');
-  }
+	if (available.length === 0) {
+		throw new Error("No available endpoints - all blacklisted or failed");
+	}
 
-  // Limit to maxAttempts
-  const toTry = available.slice(0, Math.min(available.length, maxAttempts));
+	// Limit to maxAttempts
+	const toTry = available.slice(0, Math.min(available.length, maxAttempts));
 
-  console.log(`[EndpointManager] Trying ${toTry.length} endpoints concurrently`);
+	console.log(
+		`[EndpointManager] Trying ${toTry.length} endpoints concurrently`,
+	);
 
-  // Race all endpoints concurrently
-  const results = await Promise.allSettled(
-    toTry.map(async (ep) => {
-      const startTime = Date.now();
-      try {
-        const data = await fetchFunction(ep.address, ep.tls);
-        const responseTime = Date.now() - startTime;
+	// Race all endpoints concurrently
+	const results = await Promise.allSettled(
+		toTry.map(async (ep) => {
+			const startTime = Date.now();
+			try {
+				const data = await fetchFunction(ep.address, ep.tls);
+				const responseTime = Date.now() - startTime;
 
-        endpointManager.recordSuccess(ep.address, responseTime);
+				endpointManager.recordSuccess(ep.address, responseTime);
 
-        return {
-          endpoint: ep.address,
-          data,
-          responseTime,
-          tls: ep.tls,
-        };
-      } catch (err: unknown) {
-        const responseTime = Date.now() - startTime;
-        const msg = errorMessage(err);
-        const isTimeout = msg.includes('timeout') || msg.includes('Timeout');
+				return {
+					endpoint: ep.address,
+					data,
+					responseTime,
+					tls: ep.tls,
+				};
+			} catch (err: unknown) {
+				const _responseTime = Date.now() - startTime;
+				const msg = errorMessage(err);
+				const isTimeout = msg.includes("timeout") || msg.includes("Timeout");
 
-        endpointManager.recordFailure(ep.address, isTimeout);
+				endpointManager.recordFailure(ep.address, isTimeout);
 
-        throw err;
-      }
-    })
-  );
+				throw err;
+			}
+		}),
+	);
 
-  // Find first successful response
-  const successful = results
-    .map((result, index) => ({ result, endpoint: toTry[index] }))
-    .filter((item): item is { result: PromiseFulfilledResult<FetchResult>; endpoint: EndpointConfig } =>
-      item.result.status === 'fulfilled'
-    );
+	// Find first successful response
+	const successful = results
+		.map((result, index) => ({ result, endpoint: toTry[index] }))
+		.filter(
+			(
+				item,
+			): item is {
+				result: PromiseFulfilledResult<FetchResult>;
+				endpoint: EndpointConfig;
+			} => item.result.status === "fulfilled",
+		);
 
-  if (successful.length === 0) {
-    // All failed - log details
-    console.error('[EndpointManager] All endpoints failed:');
-    results.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        console.error(`  - ${toTry[i].address}: ${result.reason?.message}`);
-      }
-    });
-    throw new Error('All endpoints failed to respond');
-  }
+	if (successful.length === 0) {
+		// All failed - log details
+		console.error("[EndpointManager] All endpoints failed:");
+		results.forEach((result, i) => {
+			if (result.status === "rejected") {
+				console.error(`  - ${toTry[i].address}: ${result.reason?.message}`);
+			}
+		});
+		throw new Error("All endpoints failed to respond");
+	}
 
-  // Sort by response time
-  successful.sort((a, b) => a.result.value.responseTime - b.result.value.responseTime);
+	// Sort by response time
+	successful.sort(
+		(a, b) => a.result.value.responseTime - b.result.value.responseTime,
+	);
 
-  // Get fastest response
-  const fastest = successful[0].result.value;
-  const adaptiveTimeout = fastest.responseTime * (1 + adaptiveTimeoutPercent);
+	// Get fastest response
+	const fastest = successful[0].result.value;
+	const adaptiveTimeout = fastest.responseTime * (1 + adaptiveTimeoutPercent);
 
-  console.log(`[EndpointManager] Fastest response: ${fastest.endpoint} (${fastest.responseTime}ms)`);
-  console.log(`[EndpointManager] Adaptive timeout threshold: ${adaptiveTimeout.toFixed(0)}ms`);
+	console.log(
+		`[EndpointManager] Fastest response: ${fastest.endpoint} (${fastest.responseTime}ms)`,
+	);
+	console.log(
+		`[EndpointManager] Adaptive timeout threshold: ${adaptiveTimeout.toFixed(0)}ms`,
+	);
 
-  // Log slow responders (would be dropped in future)
-  successful.forEach(({ result, endpoint }) => {
-    if (result.value.responseTime > adaptiveTimeout) {
-      console.warn(
-        `[EndpointManager] Slow responder: ${endpoint.address} (${result.value.responseTime}ms) - ` +
-        `${((result.value.responseTime - fastest.responseTime) / fastest.responseTime * 100).toFixed(0)}% slower than fastest`
-      );
-    }
-  });
+	// Log slow responders (would be dropped in future)
+	successful.forEach(({ result, endpoint }) => {
+		if (result.value.responseTime > adaptiveTimeout) {
+			console.warn(
+				`[EndpointManager] Slow responder: ${endpoint.address} (${result.value.responseTime}ms) - ` +
+					`${(((result.value.responseTime - fastest.responseTime) / fastest.responseTime) * 100).toFixed(0)}% slower than fastest`,
+			);
+		}
+	});
 
-  return fastest;
+	return fastest;
 }

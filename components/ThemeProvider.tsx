@@ -1,92 +1,106 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import type React from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 
-export type Theme = 'light' | 'dark' | 'retro' | 'system';
+export type Theme = "light" | "dark" | "retro" | "system";
 
 interface ThemeContextType {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  resolvedTheme: 'light' | 'dark' | 'retro';
+	theme: Theme;
+	setTheme: (theme: Theme) => void;
+	resolvedTheme: "light" | "dark" | "retro";
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('system');
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark' | 'retro'>('dark');
-  const [mounted, setMounted] = useState(false);
+	const [theme, setThemeState] = useState<Theme>("system");
+	const [resolvedTheme, setResolvedTheme] = useState<
+		"light" | "dark" | "retro"
+	>("dark");
+	const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-    // Load theme from localStorage on mount
-    const savedTheme = localStorage.getItem('grpc-explorer-theme') as Theme;
-    if (savedTheme && ['light', 'dark', 'retro', 'system'].includes(savedTheme)) {
-      setThemeState(savedTheme);
-      applyTheme(savedTheme);
-    } else {
-      // Default to system
-      setThemeState('system');
-      applyTheme('system');
-    }
-  }, []);
+	const applyTheme = useCallback((nextTheme: Theme) => {
+		const root = document.documentElement;
 
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    localStorage.setItem('grpc-explorer-theme', newTheme);
-    applyTheme(newTheme);
-  };
+		// Remove all theme classes
+		root.classList.remove("light", "dark", "retro");
 
-  const applyTheme = (theme: Theme) => {
-    const root = document.documentElement;
+		let effectiveTheme: "light" | "dark" | "retro" = "dark";
 
-    // Remove all theme classes
-    root.classList.remove('light', 'dark', 'retro');
+		if (nextTheme === "system") {
+			// Detect system preference
+			const prefersDark = window.matchMedia(
+				"(prefers-color-scheme: dark)",
+			).matches;
+			effectiveTheme = prefersDark ? "dark" : "light";
+		} else {
+			effectiveTheme = nextTheme;
+		}
 
-    let effectiveTheme: 'light' | 'dark' | 'retro' = 'dark';
+		// Add the effective theme class
+		root.classList.add(effectiveTheme);
+		setResolvedTheme(effectiveTheme);
+	}, []);
 
-    if (theme === 'system') {
-      // Detect system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      effectiveTheme = prefersDark ? 'dark' : 'light';
-    } else {
-      effectiveTheme = theme;
-    }
+	useEffect(() => {
+		setMounted(true);
+		// Load theme from localStorage on mount
+		const savedTheme = localStorage.getItem("grpc-explorer-theme") as Theme;
+		if (
+			savedTheme &&
+			["light", "dark", "retro", "system"].includes(savedTheme)
+		) {
+			setThemeState(savedTheme);
+			applyTheme(savedTheme);
+		} else {
+			// Default to system
+			setThemeState("system");
+			applyTheme("system");
+		}
+	}, [applyTheme]);
 
-    // Add the effective theme class
-    root.classList.add(effectiveTheme);
-    setResolvedTheme(effectiveTheme);
-  };
+	const setTheme = (newTheme: Theme) => {
+		setThemeState(newTheme);
+		localStorage.setItem("grpc-explorer-theme", newTheme);
+		applyTheme(newTheme);
+	};
 
-  // Listen for system theme changes
-  useEffect(() => {
-    if (theme !== 'system') return;
+	// Listen for system theme changes
+	useEffect(() => {
+		if (theme !== "system") return;
 
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      applyTheme('system');
-    };
+		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+		const handleChange = () => {
+			applyTheme("system");
+		};
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+		mediaQuery.addEventListener("change", handleChange);
+		return () => mediaQuery.removeEventListener("change", handleChange);
+	}, [theme, applyTheme]);
 
-  // Prevent flash of unstyled content
-  if (!mounted) {
-    return <div style={{ visibility: 'hidden' }}>{children}</div>;
-  }
+	// Prevent flash of unstyled content
+	if (!mounted) {
+		return <div style={{ visibility: "hidden" }}>{children}</div>;
+	}
 
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+	return (
+		<ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+			{children}
+		</ThemeContext.Provider>
+	);
 }
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
+	const context = useContext(ThemeContext);
+	if (context === undefined) {
+		throw new Error("useTheme must be used within a ThemeProvider");
+	}
+	return context;
 }
