@@ -1,5 +1,26 @@
 // Shared gRPC type definitions
-import type { MessageTypeDefinition } from "@/components/ProtobufFormGenerator";
+
+/** A protobuf message field, as extracted from a descriptor. */
+export interface MessageField {
+	name: string;
+	type: string;
+	rule?: "optional" | "required" | "repeated";
+	defaultValue?: any;
+	comment?: string;
+	nested?: boolean;
+	enumValues?: string[];
+	nestedFields?: MessageField[];
+	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
+	customtype?: string;
+	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
+	scalar?: string;
+}
+
+export interface MessageTypeDefinition {
+	name: string;
+	fullName: string;
+	fields: MessageField[];
+}
 
 /** Explorer mode: generic gRPC or Cosmos SDK-specific */
 export type ExplorerMode = "generic" | "cosmos";
@@ -22,6 +43,14 @@ export interface BufBsrSource {
 	authToken?: string;
 }
 
+/** A module listed by the BSR modules endpoint. */
+export interface BsrModule {
+	name: string;
+	owner: string;
+	description: string;
+	visibility: string;
+}
+
 // HTTP annotation from google.api.http option in proto files
 export interface HttpRule {
 	get?: string;
@@ -36,6 +65,8 @@ export interface HttpRule {
 export interface GrpcMethod {
 	name: string;
 	fullName: string;
+	/** Set by descriptor parsing; omitted by some v2alpha1 summaries. */
+	serviceName?: string;
 	requestType: string;
 	responseType: string;
 	requestStreaming: boolean;

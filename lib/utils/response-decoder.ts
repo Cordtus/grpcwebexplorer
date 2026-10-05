@@ -1,7 +1,4 @@
-import type {
-	MessageField,
-	MessageTypeDefinition,
-} from "@/components/ProtobufFormGenerator";
+import type { MessageField, MessageTypeDefinition } from "@/lib/types/grpc";
 import { bech32Encode, bech32Hrp } from "@/lib/utils/bech32";
 
 /** How a decoded byte value should be interpreted, derived from field metadata. */

@@ -3,57 +3,15 @@
 
 import * as protobuf from "protobufjs";
 import descriptorJson from "protobufjs/google/protobuf/descriptor.json";
+import type {
+	GrpcMethod,
+	GrpcService,
+	HttpRule,
+	MessageField,
+	MessageTypeDefinition,
+} from "@/lib/types/grpc";
 
-export interface MessageField {
-	name: string;
-	type: string;
-	rule?: "optional" | "required" | "repeated";
-	defaultValue?: any;
-	comment?: string;
-	nested?: boolean;
-	enumValues?: string[];
-	nestedFields?: MessageField[];
-	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
-	customtype?: string;
-	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
-	scalar?: string;
-}
-
-export interface MessageTypeDefinition {
-	name: string;
-	fullName: string;
-	fields: MessageField[];
-}
-
-export interface HttpRule {
-	get?: string;
-	post?: string;
-	put?: string;
-	delete?: string;
-	patch?: string;
-	body?: string;
-	additionalBindings?: HttpRule[];
-}
-
-export interface GrpcMethod {
-	name: string;
-	fullName: string;
-	serviceName: string;
-	requestType: string;
-	responseType: string;
-	requestStreaming: boolean;
-	responseStreaming: boolean;
-	description?: string;
-	httpRule?: HttpRule;
-	requestTypeDefinition: MessageTypeDefinition;
-	responseTypeDefinition: MessageTypeDefinition;
-}
-
-export interface GrpcService {
-	name: string;
-	fullName: string;
-	methods: GrpcMethod[];
-}
+/** Parse protobuf FileDescriptorSets into gRPC service/method definitions. */
 
 /**
  * Parses protobuf FileDescriptorSet data into a protobufjs Root,

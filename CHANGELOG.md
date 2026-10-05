@@ -13,6 +13,10 @@
 - Field options (`gogoproto.customtype`, `cosmos_proto.scalar`) are preserved through reflection descriptor decoding instead of being dropped by protobufjs.
 - Markerless base64 bytes fields known to be `sdk.Dec` (e.g. `slash_fraction_downtime`) are now decoded and interpreted rather than left as raw base64.
 
+### Changed
+- Consolidated duplicated descriptor types (`MessageField`, `MessageTypeDefinition`, `GrpcMethod`, `GrpcService`, `HttpRule`, `BsrModule`) into `lib/types/grpc.ts` as the single source of truth; `descriptor-parser`/`reflection-client` re-export them for compatibility.
+- `MethodDetailPanel` now uses the shared `ExecutionResult` instead of a local copy.
+
 ## [1.4.0] - 2026-09-06
 
 ### Changed

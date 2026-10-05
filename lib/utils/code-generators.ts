@@ -1,8 +1,11 @@
 // lib/utils/code-generators.ts
 // Client stub code generation for multiple languages
 
-import type { MessageTypeDefinition } from "@/components/ProtobufFormGenerator";
-import type { GrpcAuthConfig, HttpRule } from "@/lib/types/grpc";
+import type {
+	GrpcAuthConfig,
+	HttpRule,
+	MessageTypeDefinition,
+} from "@/lib/types/grpc";
 
 export interface CodeGenContext {
 	serviceName: string;
