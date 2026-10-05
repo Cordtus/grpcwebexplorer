@@ -67,7 +67,7 @@ const NETWORK_COLORS = [
 ];
 
 // Keep persisted network state aligned with descriptor completeness metadata.
-const NETWORK_CACHE_VERSION = "2.1.0";
+const NETWORK_CACHE_VERSION = "2.2.0";
 
 function updateExecutionHealth(
 	network: GrpcNetwork,
@@ -369,6 +369,7 @@ export default function GrpcExplorerApp() {
 			mode?: ExplorerMode,
 			bsrSource?: BufBsrSource,
 			authConfig?: GrpcAuthConfig,
+			bech32Prefix?: string,
 		) => {
 			const networkMode = mode || defaultMode;
 
@@ -519,6 +520,9 @@ export default function GrpcExplorerApp() {
 					endpoints: fallbackEndpoints,
 					...(endpointConfigs ? { endpointConfigs } : {}),
 					...(cachedChainId ? { chainId: cachedChainId } : {}),
+					...(cached.bech32Prefix || bech32Prefix
+						? { bech32Prefix: cached.bech32Prefix || bech32Prefix }
+						: {}),
 					tlsEnabled: resolvedTls,
 					services: cached.services || [],
 					color,
@@ -555,6 +559,7 @@ export default function GrpcExplorerApp() {
 				endpoint,
 				endpoints: [],
 				...(endpointConfigs ? { endpointConfigs } : {}),
+				...(bech32Prefix ? { bech32Prefix } : {}),
 				tlsEnabled,
 				services: [],
 				color,
@@ -655,6 +660,9 @@ export default function GrpcExplorerApp() {
 									), // Store others as fallbacks
 									endpointHealth: { [actualEndpoint]: { lastSuccess: now } },
 									...(fetchedChainId ? { chainId: fetchedChainId } : {}),
+									...(data.bech32Prefix || bech32Prefix
+										? { bech32Prefix: data.bech32Prefix || bech32Prefix }
+										: {}),
 									loading: false,
 									cached: false,
 									cacheTimestamp: now,
@@ -1547,6 +1555,9 @@ export default function GrpcExplorerApp() {
 												: {})}
 											{...(network?.tlsEnabled !== undefined
 												? { tlsEnabled: network.tlsEnabled }
+												: {})}
+											{...(network?.bech32Prefix
+												? { bech32Prefix: network.bech32Prefix }
 												: {})}
 											mode={network?.mode}
 										/>

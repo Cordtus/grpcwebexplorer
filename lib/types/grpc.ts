@@ -84,6 +84,8 @@ export interface GrpcNetwork {
 	endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
 	endpointHealth?: Record<string, EndpointExecutionHealth>;
 	chainId?: string;
+	/** Chain bech32 prefix from the chain registry, used to render address bytes. */
+	bech32Prefix?: string;
 	tlsEnabled: boolean;
 	services: GrpcService[];
 	color: string;

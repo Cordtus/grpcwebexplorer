@@ -6,7 +6,7 @@ import {
 	fetchServicesWithCosmosOptimization,
 	type GrpcService,
 } from "@/lib/grpc/reflection-utils";
-import { fetchChainApis } from "@/lib/services/chainRegistry";
+import { fetchChainApis, fetchChainInfo } from "@/lib/services/chainRegistry";
 import { errorMessage, isTLSError } from "@/lib/utils";
 import { normalizeRequestTimeoutMs } from "@/lib/utils/client-cache";
 import { endpointManager } from "@/lib/utils/endpoint-manager";
@@ -340,6 +340,57 @@ export async function POST(req: Request) {
 			}
 		}
 
+		// Determine the chain's bech32 prefix (Cosmos mode only), so clients can
+		// render address bytes. Chain markers use the registry; direct endpoints
+		// ask the node via cosmos.auth.v1beta1.Query/Bech32Prefix.
+		let detectedBech32Prefix: string | undefined;
+		if (!isGenericMode) {
+			if (chainName) {
+				try {
+					const info = await fetchChainInfo(chainName);
+					if (info?.bech32_prefix) {
+						detectedBech32Prefix = info.bech32_prefix;
+					}
+				} catch (err: unknown) {
+					console.log(
+						`[Services] Could not read bech32 prefix from registry: ${errorMessage(err)}`,
+					);
+				}
+			}
+
+			if (!detectedBech32Prefix) {
+				try {
+					const prefixClient = new (
+						await import("@/lib/grpc/reflection-client")
+					).ReflectionClient({
+						endpoint: successfulEndpoint!,
+						tls: tlsUsed!,
+						timeout: 5000,
+					});
+
+					try {
+						await prefixClient.initializeForMethod("cosmos.auth.v1beta1.Query");
+						const prefixResponse = await prefixClient.invokeMethod(
+							"cosmos.auth.v1beta1.Query",
+							"Bech32Prefix",
+							{},
+							5000,
+						);
+						detectedBech32Prefix =
+							prefixResponse?.bech32Prefix ??
+							prefixResponse?.bech32_prefix ??
+							undefined;
+					} finally {
+						prefixClient.close();
+					}
+				} catch (err: unknown) {
+					console.log(
+						`[Services] Could not detect bech32 prefix: ${errorMessage(err)}`,
+					);
+				}
+			}
+		}
+
 		// Prepare status
 		const status = {
 			total: services.length,
@@ -379,6 +430,7 @@ export async function POST(req: Request) {
 		return NextResponse.json({
 			services: services,
 			chainId: detectedChainId,
+			bech32Prefix: detectedBech32Prefix,
 			status,
 			// Include all endpoints for round-robin distribution (only for chain markers)
 			availableEndpoints: allEndpoints,

@@ -13,6 +13,10 @@ export interface MessageField {
 	nested?: boolean;
 	enumValues?: string[];
 	nestedFields?: MessageField[];
+	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
+	customtype?: string;
+	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
+	scalar?: string;
 }
 
 export interface MessageTypeDefinition {
@@ -66,6 +70,42 @@ export class DescriptorParser {
 	constructor() {
 		this.root = new protobuf.Root();
 		this.descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
+		this.registerFieldExtensions();
+	}
+
+	/**
+	 * protobufjs drops unknown extensions when decoding FileDescriptorProto.
+	 * Register the extensions we care about so field.options carries them.
+	 */
+	private registerFieldExtensions(): void {
+		try {
+			const fieldOptions = this.descriptorRoot.lookupType(
+				"google.protobuf.FieldOptions",
+			);
+			fieldOptions.add(
+				new protobuf.Field(
+					"gogoproto.customtype",
+					65003,
+					"string",
+					undefined,
+					"google.protobuf.FieldOptions",
+				),
+			);
+			fieldOptions.add(
+				new protobuf.Field(
+					"cosmos_proto.scalar",
+					93002,
+					"string",
+					undefined,
+					"google.protobuf.FieldOptions",
+				),
+			);
+		} catch (err) {
+			console.warn(
+				"[DescriptorParser] Failed to register field extensions:",
+				err,
+			);
+		}
 	}
 
 	/** Parse a binary FileDescriptorSet (e.g. from BSR) and load all file descriptors */
@@ -242,28 +282,29 @@ export class DescriptorParser {
 	}
 
 	private addMessageType(namespace: protobuf.Namespace, msgType: any): void {
-		const fields: any = {};
+		const message = new protobuf.Type(msgType.name);
 
 		if (msgType.field) {
 			for (const field of msgType.field) {
-				fields[field.name] = {
-					type: this.getFieldType(field),
-					id: field.number,
-					rule: field.label === 3 ? "repeated" : undefined,
-				};
-			}
-		}
+				const fieldObj = new protobuf.Field(
+					field.name,
+					field.number,
+					this.getFieldType(field),
+					field.label === 3 ? "repeated" : undefined,
+				);
 
-		const message = new protobuf.Type(msgType.name);
-		for (const [name, fieldDef] of Object.entries(fields)) {
-			message.add(
-				new protobuf.Field(
-					name,
-					(fieldDef as any).id,
-					(fieldDef as any).type,
-					(fieldDef as any).rule,
-				),
-			);
+				const options = field.options;
+				if (options) {
+					const customtype =
+						options[".google.protobuf.FieldOptions.gogoproto.customtype"];
+					const scalar =
+						options[".google.protobuf.FieldOptions.cosmos_proto.scalar"];
+					if (customtype) (fieldObj as any).__customtype = customtype;
+					if (scalar) (fieldObj as any).__scalar = scalar;
+				}
+
+				message.add(fieldObj);
+			}
 		}
 
 		namespace.add(message);
@@ -484,6 +525,13 @@ export class DescriptorParser {
 						comment,
 						nested: isNested && !enumValues,
 					};
+
+					if (fieldObj.__customtype) {
+						fieldDef.customtype = fieldObj.__customtype;
+					}
+					if (fieldObj.__scalar) {
+						fieldDef.scalar = fieldObj.__scalar;
+					}
 
 					if (enumValues) {
 						fieldDef.enumValues = enumValues;

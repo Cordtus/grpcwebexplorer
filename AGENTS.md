@@ -141,18 +141,40 @@ Networks use a fixed 8-color palette (`NETWORK_COLORS` in GrpcExplorerApp.tsx):
 
 ## Base64/Binary Decoding
 
-Response bytes are preserved as base64 in API JSON. Decoding is an explicit
-display choice in the results UI:
+Response bytes are preserved as base64 in API JSON. Decoding is on by default in
+the results UI, with a "Decode" toggle to turn it off:
 
-- `lib/utils/response-decoder.ts`: Recursively annotates base64/binary-looking
-  strings for formatted display only, parses decoded JSON when present, and
-  falls back to decoded text or byte metadata
+- `lib/utils/response-decoder.ts`: Recursively annotates encoded strings for
+  formatted display only. Chooses base64 or hex per value, shows both when a
+  value is ambiguous, parses decoded JSON when present, and falls back to decoded
+  text or byte metadata
+- Detection uses field context where available: `bytes` fields are always
+  base64-decoded (protobuf JSON convention), `string` fields fall back to the
+  conservative base64/hex heuristics
+- Cosmos `sdk.Dec` fields — whether encoded as `bytes` (base64 raw integer) or
+  `string` (raw integer text) — are normalized to a decimal, e.g. `0.05`, using
+  the gogoproto `customtype` / `cosmos_proto.scalar` annotation
+- A percentage is shown only for fields classified as fractions (rates, quorums,
+  taxes, inflation, commission, etc.) via a field/message-name classifier, since
+  `sdk.Dec` is also used for quantities (coin amounts, shares, prices) that must
+  not be rendered as percentages
+- Address-typed `bytes` fields (`AccAddress` / `ValAddress` / `ConsAddress`
+  customtypes, or `cosmos.*AddressBytes` scalars) are rendered as bech32. The
+  chain prefix comes from the chain registry (`bech32_prefix` in `chain.json`,
+  stored as `GrpcNetwork.bech32Prefix`); for direct endpoints the services route
+  detects it via `cosmos.auth.v1beta1.Query/Bech32Prefix`. If still unknown it is
+  inferred from any valid bech32 string in the same response (`valoper`/`valcons`
+  reduced to the base prefix). `lib/utils/bech32.ts` implements the codec
+- `lib/grpc/descriptor-parser.ts` registers the `gogoproto.customtype` and
+  `cosmos_proto.scalar` field extensions so they survive reflection decoding and
+  reach `MessageField.customtype` / `MessageField.scalar`
 - `components/MethodDetailPanel.tsx`: Provides the "Decode" toggle in the
-  Results toolbar
+  Results toolbar and builds the field-context map passed to the decoder
 - Raw response JSON, whole-response copy, and saved JSON keep original base64
   values
-- Field-level copy from a decoded formatted value copies decoded JSON when
-  available, then decoded text, otherwise the original base64 value
+- Field-level copy from a decoded formatted value copies bech32 when present,
+  then the interpreted decimal or percentage, then decoded JSON, then decoded
+  text, otherwise the original base64 value
 
 ## Keyboard Shortcuts
 

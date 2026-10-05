@@ -49,6 +49,7 @@ interface AddNetworkDialogProps {
 		mode?: ExplorerMode,
 		bsrSource?: BufBsrSource,
 		authConfig?: GrpcAuthConfig,
+		bech32Prefix?: string,
 	) => void;
 	onClose: () => void;
 	defaultMode?: ExplorerMode | undefined;
@@ -66,6 +67,8 @@ interface ChainData {
 	chain_id: string;
 	pretty_name: string;
 	grpc_endpoints: Array<{ address: string; provider?: string }>;
+	/** Chain bech32 prefix from the chain registry. */
+	bech32_prefix?: string;
 }
 
 const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
@@ -268,7 +271,15 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 		configs?: EndpointConfig[],
 		bsrSource?: BufBsrSource,
 	) => {
-		onAdd(finalEndpoint, tls, configs, mode, bsrSource, buildAuthConfig());
+		onAdd(
+			finalEndpoint,
+			tls,
+			configs,
+			mode,
+			bsrSource,
+			buildAuthConfig(),
+			selectedChainDetails?.bech32_prefix,
+		);
 		setEndpoint("");
 		setTlsEnabled(true);
 		setShowDropdown(false);
@@ -397,6 +408,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 				chain_name: data.info.chain_name,
 				chain_id: data.info.chain_id,
 				pretty_name: data.info.pretty_name,
+				bech32_prefix: data.info.bech32_prefix,
 				grpc_endpoints: grpcEndpoints.map((ep: any) => ({
 					address: ep.address,
 					provider: ep.provider,

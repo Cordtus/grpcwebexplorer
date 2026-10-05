@@ -313,6 +313,43 @@ describe("DescriptorParser", () => {
 			expect(def.fullName).toBe("nonexistent.Type");
 		});
 
+		it("captures gogoproto customtype and cosmos_proto scalar annotations", () => {
+			const protoWithCustomtype = encodeFileDescriptor({
+				name: "dec.proto",
+				package: "test",
+				messageType: [
+					{
+						name: "Params",
+						field: [
+							{ name: "window", number: 1, type: 3, label: 1 },
+							{
+								name: "fraction",
+								number: 2,
+								type: 12 /* bytes */,
+								label: 1,
+								options: {
+									".google.protobuf.FieldOptions.gogoproto.customtype":
+										"cosmossdk.io/math.LegacyDec",
+									".google.protobuf.FieldOptions.cosmos_proto.scalar":
+										"cosmos.Dec",
+								},
+							},
+						],
+					},
+				],
+			});
+
+			parser.processFileDescriptor(protoWithCustomtype);
+			const def = parser.extractMessageTypeDefinition("test.Params");
+
+			expect(
+				def.fields.find((f) => f.name === "window")?.customtype,
+			).toBeUndefined();
+			const fraction = def.fields.find((f) => f.name === "fraction");
+			expect(fraction?.customtype).toBe("cosmossdk.io/math.LegacyDec");
+			expect(fraction?.scalar).toBe("cosmos.Dec");
+		});
+
 		it("handles all primitive field types", () => {
 			// Create a message with various primitive types
 			const protoWithPrimitives = encodeFileDescriptor({
