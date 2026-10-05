@@ -20,6 +20,10 @@ export interface MessageField {
 	nested?: boolean;
 	enumValues?: string[];
 	nestedFields?: MessageField[]; // Recursively populated for nested message types
+	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
+	customtype?: string;
+	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
+	scalar?: string;
 }
 
 export interface MessageTypeDefinition {

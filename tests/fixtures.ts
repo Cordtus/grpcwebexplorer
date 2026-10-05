@@ -6,6 +6,28 @@ import * as protobuf from "protobufjs";
 import descriptorJson from "protobufjs/google/protobuf/descriptor.json";
 
 const descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
+// Register the field extensions so fixtures can encode/decode these options.
+const fixtureFieldOptions = descriptorRoot.lookupType(
+	"google.protobuf.FieldOptions",
+);
+fixtureFieldOptions.add(
+	new protobuf.Field(
+		"gogoproto.customtype",
+		65003,
+		"string",
+		undefined,
+		"google.protobuf.FieldOptions",
+	),
+);
+fixtureFieldOptions.add(
+	new protobuf.Field(
+		"cosmos_proto.scalar",
+		93002,
+		"string",
+		undefined,
+		"google.protobuf.FieldOptions",
+	),
+);
 const FileDescriptorProto = descriptorRoot.lookupType(
 	"google.protobuf.FileDescriptorProto",
 );

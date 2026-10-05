@@ -38,9 +38,14 @@ import {
 	generateTypescriptSnippet,
 } from "@/lib/utils/code-generators";
 import {
+	type BinaryDecoding,
+	buildResponseFieldContext,
+	type DecodedBinaryInterpretation,
 	type DecodedBinaryValue,
+	type DecodedScalarValue,
 	decodeBinaryValuesForDisplay,
 	isDecodedBinaryValue,
+	isDecodedScalarValue,
 } from "@/lib/utils/response-decoder";
 import { generateRestUrl } from "@/lib/utils/rest-path-mapper";
 
@@ -69,6 +74,8 @@ interface MethodDetailPanelProps {
 	authConfig?: GrpcAuthConfig | undefined;
 	restEndpoint?: string;
 	mode?: ExplorerMode | undefined;
+	/** Chain bech32 prefix from the chain registry, used to render address bytes. */
+	bech32Prefix?: string;
 	result: ExecutionResult | null;
 	isExecuting: boolean;
 }
@@ -91,42 +98,118 @@ function hasNonEmptyParams(params: Record<string, any>): boolean {
 
 // ── JsonViewer (inlined from ResultsPanel) ──────────────────────────────
 
-function DecodedBinaryViewer({ value }: { value: DecodedBinaryValue }) {
-	const hasJson = value.json !== undefined;
+function BinaryDecodingRow({
+	decoding,
+	interpretation,
+}: {
+	decoding: BinaryDecoding;
+	interpretation?: DecodedBinaryInterpretation | undefined;
+}) {
+	const hasJson = decoding.json !== undefined;
 
 	return (
-		<div className="inline-flex max-w-full flex-col gap-2 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
+		<div className="flex flex-col gap-1">
 			<span className="flex flex-wrap items-center gap-2">
 				<span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
 					<Binary className="h-3 w-3" />
-					base64
+					{decoding.encoding}
 				</span>
-				<span className="text-muted-foreground">{value.byteLength} bytes</span>
+				<span className="text-muted-foreground">
+					{decoding.byteLength} bytes
+				</span>
+				{interpretation && (
+					<span className="text-[10px] font-semibold uppercase text-green-600 dark:text-green-400">
+						{interpretation.kind === "cosmos-dec" ? "sdk.Dec" : "decoded"}
+					</span>
+				)}
+				{decoding.bech32 && (
+					<span className="text-[10px] font-semibold uppercase text-green-600 dark:text-green-400">
+						bech32
+					</span>
+				)}
 				{hasJson && (
 					<span className="text-[10px] font-semibold uppercase text-green-600 dark:text-green-400">
 						decoded JSON
 					</span>
 				)}
 			</span>
-			{hasJson ? (
+			{decoding.bech32 ? (
+				<span className="break-all font-mono text-foreground">
+					{decoding.bech32}
+				</span>
+			) : interpretation ? (
+				<span className="flex flex-wrap items-baseline gap-2">
+					<span className="text-foreground font-semibold text-sm">
+						{interpretation.value}
+					</span>
+					{interpretation.percent && (
+						<span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
+							{interpretation.percent}
+						</span>
+					)}
+				</span>
+			) : hasJson ? (
 				<div className="min-w-0 rounded bg-background/70 p-2 text-foreground">
-					<JsonViewer data={value.json} />
+					<JsonViewer data={decoding.json} />
 				</div>
-			) : value.text ? (
+			) : decoding.text ? (
 				<span className="break-all text-foreground">
 					<span className="text-muted-foreground">decoded text: </span>
-					&quot;{value.text}&quot;
+					&quot;{decoding.text}&quot;
 				</span>
 			) : (
 				<span className="break-all text-muted-foreground">
-					hex: {value.hexPreview}
-					{value.byteLength > 32 ? " ..." : ""}
+					hex: {decoding.hexPreview}
+					{decoding.byteLength > 32 ? " ..." : ""}
+				</span>
+			)}
+			{interpretation && decoding.text && (
+				<span className="break-all text-[11px] text-muted-foreground">
+					decoded text: &quot;{decoding.text}&quot;
+				</span>
+			)}
+		</div>
+	);
+}
+
+function DecodedBinaryViewer({ value }: { value: DecodedBinaryValue }) {
+	return (
+		<div className="inline-flex max-w-full flex-col gap-2 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
+			<BinaryDecodingRow
+				decoding={value}
+				interpretation={value.interpretation}
+			/>
+			{value.alternates?.map((alternate) => (
+				<BinaryDecodingRow key={alternate.encoding} decoding={alternate} />
+			))}
+			<span className="break-all text-[10px] text-muted-foreground">
+				original: &quot;{value.original}&quot;
+			</span>
+		</div>
+	);
+}
+
+function DecodedScalarViewer({ value }: { value: DecodedScalarValue }) {
+	const { interpretation } = value;
+
+	return (
+		<span className="inline-flex max-w-full flex-wrap items-baseline gap-2 rounded border border-primary/20 bg-primary/5 px-2 py-1 align-top">
+			<span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase text-primary">
+				<Binary className="h-3 w-3" />
+				sdk.Dec
+			</span>
+			<span className="text-foreground font-semibold text-sm">
+				{interpretation.value}
+			</span>
+			{interpretation.percent && (
+				<span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
+					{interpretation.percent}
 				</span>
 			)}
 			<span className="break-all text-[10px] text-muted-foreground">
-				original base64: &quot;{value.original}&quot;
+				original: &quot;{value.original}&quot;
 			</span>
-		</div>
+		</span>
 	);
 }
 
@@ -150,13 +233,23 @@ function JsonViewer({
 	};
 
 	const handleCopyValue = (value: any, key: string) => {
-		const text = isDecodedBinaryValue(value)
-			? value.json !== undefined
-				? JSON.stringify(value.json, null, 2)
-				: value.text || value.original
-			: typeof value === "object"
-				? JSON.stringify(value, null, 2)
-				: String(value);
+		const text = isDecodedScalarValue(value)
+			? value.interpretation.percent
+				? `${value.interpretation.value} (${value.interpretation.percent})`
+				: value.interpretation.value
+			: isDecodedBinaryValue(value)
+				? value.bech32
+					? value.bech32
+					: value.interpretation
+						? value.interpretation.percent
+							? `${value.interpretation.value} (${value.interpretation.percent})`
+							: value.interpretation.value
+						: value.json !== undefined
+							? JSON.stringify(value.json, null, 2)
+							: value.text || value.original
+				: typeof value === "object"
+					? JSON.stringify(value, null, 2)
+					: String(value);
 		navigator.clipboard.writeText(text);
 		const next = new Set(copiedKeys);
 		next.add(key);
@@ -176,6 +269,7 @@ function JsonViewer({
 	if (data === undefined)
 		return <span className="text-muted-foreground">undefined</span>;
 	if (isDecodedBinaryValue(data)) return <DecodedBinaryViewer value={data} />;
+	if (isDecodedScalarValue(data)) return <DecodedScalarViewer value={data} />;
 	if (typeof data === "string")
 		return (
 			<span className="text-green-600 dark:text-green-400 break-all">
@@ -265,7 +359,8 @@ function JsonViewer({
 					const isObj =
 						typeof value === "object" &&
 						value !== null &&
-						!isDecodedBinaryValue(value);
+						!isDecodedBinaryValue(value) &&
+						!isDecodedScalarValue(value);
 
 					return (
 						<div key={key} className="mb-1 group min-w-0 overflow-hidden">
@@ -365,6 +460,7 @@ export default function MethodDetailPanel({
 	authConfig,
 	restEndpoint,
 	mode,
+	bech32Prefix,
 	result,
 	isExecuting,
 }: MethodDetailPanelProps) {
@@ -378,7 +474,7 @@ export default function MethodDetailPanel({
 		"formatted",
 	);
 	const [resultCopied, setResultCopied] = useState(false);
-	const [decodeBinaryValues, setDecodeBinaryValues] = useState(false);
+	const [decodeBinaryValues, setDecodeBinaryValues] = useState(true);
 
 	// Track identity so we can reset tab on method change
 	const methodKey = `${service.fullName}.${method.name}`;
@@ -521,10 +617,18 @@ export default function MethodDetailPanel({
 	const curlUnsupported = codeTab === "curl" && !restResult.supported;
 	const hasScaffoldToggle =
 		codeTab === "typescript" || codeTab === "go" || codeTab === "python";
+	const responseFieldContext = useMemo(
+		() => buildResponseFieldContext(method.responseTypeDefinition),
+		[method.responseTypeDefinition],
+	);
 	const displayResultData = useMemo(() => {
 		if (!decodeBinaryValues || !result?.data) return result?.data;
-		return decodeBinaryValuesForDisplay(result.data);
-	}, [decodeBinaryValues, result?.data]);
+		return decodeBinaryValuesForDisplay(
+			result.data,
+			responseFieldContext,
+			bech32Prefix,
+		);
+	}, [decodeBinaryValues, result?.data, responseFieldContext, bech32Prefix]);
 
 	const codeTabs: { key: CodeTab; label: string }[] = useMemo(() => {
 		const all: { key: CodeTab; label: string }[] = [
@@ -905,7 +1009,7 @@ export default function MethodDetailPanel({
 												? "bg-primary text-primary-foreground"
 												: "bg-muted text-muted-foreground hover:bg-muted/70",
 										)}
-										title="Decode base64 and binary-looking values in the formatted response view"
+										title="Decode base64 and hex values in the formatted response view"
 									>
 										<Binary className="h-3.5 w-3.5" />
 										<span className="hidden sm:inline">Decode</span>
