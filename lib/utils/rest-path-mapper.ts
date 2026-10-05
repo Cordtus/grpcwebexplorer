@@ -3,8 +3,7 @@
 // as they're compile-time extensions for gRPC-gateway. We generate paths
 // heuristically based on Cosmos SDK conventions which are deterministic.
 
-import type { MessageTypeDefinition } from "@/components/ProtobufFormGenerator";
-import type { HttpRule } from "@/lib/types/grpc";
+import type { HttpRule, MessageTypeDefinition } from "@/lib/types/grpc";
 
 export interface RestPathResult {
 	url: string;

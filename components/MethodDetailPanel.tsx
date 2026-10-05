@@ -20,6 +20,7 @@ import {
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+	ExecutionResult,
 	ExplorerMode,
 	GrpcAuthConfig,
 	GrpcMethod,
@@ -52,16 +53,6 @@ import { generateRestUrl } from "@/lib/utils/rest-path-mapper";
 type MainTab = "proto" | "code" | "results";
 type CodeTab = "curl" | "grpcurl" | "typescript" | "go" | "python";
 type ScaffoldMode = "simple" | "full";
-
-interface ExecutionResult {
-	methodId: string;
-	success: boolean;
-	data?: any;
-	error?: string;
-	timestamp: number;
-	duration?: number;
-	endpoint?: string;
-}
 
 interface MethodDetailPanelProps {
 	method: GrpcMethod;

@@ -2,15 +2,9 @@
 // List and browse BSR modules by organization + curated popular list
 
 import { NextResponse } from "next/server";
+import type { BsrModule } from "@/lib/types/grpc";
 
 export const runtime = "nodejs";
-
-interface BsrModule {
-	name: string;
-	owner: string;
-	description: string;
-	visibility: string;
-}
 
 /** Curated list of well-known public BSR modules */
 const POPULAR_MODULES: BsrModule[] = [

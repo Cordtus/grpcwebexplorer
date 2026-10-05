@@ -9,28 +9,8 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import type { MessageField, MessageTypeDefinition } from "@/lib/types/grpc";
 import { cn } from "@/lib/utils";
-
-export interface MessageField {
-	name: string;
-	type: string;
-	rule?: "optional" | "required" | "repeated";
-	defaultValue?: any;
-	comment?: string;
-	nested?: boolean;
-	enumValues?: string[];
-	nestedFields?: MessageField[]; // Recursively populated for nested message types
-	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
-	customtype?: string;
-	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
-	scalar?: string;
-}
-
-export interface MessageTypeDefinition {
-	name: string;
-	fullName: string;
-	fields: MessageField[];
-}
 
 interface ProtobufFormGeneratorProps {
 	messageType: MessageTypeDefinition;

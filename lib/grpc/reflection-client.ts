@@ -3,6 +3,11 @@
 
 import * as grpc from "@grpc/grpc-js";
 import * as protobuf from "protobufjs";
+import type {
+	GrpcMethod,
+	GrpcService,
+	MessageTypeDefinition,
+} from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
 import { DescriptorParser } from "./descriptor-parser";
 
@@ -68,61 +73,6 @@ message ErrorResponse {
   string error_message = 2;
 }
 `;
-
-export interface GrpcService {
-	name: string;
-	fullName: string;
-	methods: GrpcMethod[];
-	/** Whether this service has a full protobuf descriptor or only a v2alpha1 summary. */
-	descriptorStatus?: "loaded" | "pending";
-}
-
-export interface MessageField {
-	name: string;
-	type: string;
-	rule?: "optional" | "required" | "repeated";
-	defaultValue?: any;
-	comment?: string;
-	nested?: boolean;
-	enumValues?: string[];
-	nestedFields?: MessageField[]; // Recursively populated for nested message types
-	/** gogoproto.customtype, e.g. "cosmossdk.io/math.LegacyDec" for sdk.Dec bytes fields */
-	customtype?: string;
-	/** cosmos_proto.scalar, e.g. "cosmos.Dec" */
-	scalar?: string;
-}
-
-export interface MessageTypeDefinition {
-	name: string;
-	fullName: string;
-	fields: MessageField[];
-}
-
-// HTTP annotation from google.api.http option
-export interface HttpRule {
-	get?: string;
-	post?: string;
-	put?: string;
-	delete?: string;
-	patch?: string;
-	body?: string;
-	// Additional bindings for alternate paths
-	additionalBindings?: HttpRule[];
-}
-
-export interface GrpcMethod {
-	name: string;
-	fullName: string;
-	serviceName: string;
-	requestType: string;
-	responseType: string;
-	requestStreaming: boolean;
-	responseStreaming: boolean;
-	description?: string;
-	httpRule?: HttpRule; // REST API mapping from google.api.http annotation
-	requestTypeDefinition: MessageTypeDefinition;
-	responseTypeDefinition: MessageTypeDefinition;
-}
 
 export interface ReflectionOptions {
 	endpoint: string;

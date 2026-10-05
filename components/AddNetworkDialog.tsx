@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type {
+	BsrModule,
 	BufBsrSource,
 	EndpointConfig,
 	ExplorerMode,
@@ -53,13 +54,6 @@ interface AddNetworkDialogProps {
 	) => void;
 	onClose: () => void;
 	defaultMode?: ExplorerMode | undefined;
-}
-
-interface BsrModule {
-	name: string;
-	owner: string;
-	description: string;
-	visibility: string;
 }
 
 interface ChainData {

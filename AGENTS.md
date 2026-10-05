@@ -101,11 +101,17 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 Core types in `lib/types/grpc.ts`:
 
 - `GrpcService`: Service with name, fullName, methods array
-- `GrpcMethod`: Method descriptor with serviceName, request/response types, streaming flags, and full MessageTypeDefinition
+- `GrpcMethod`: Method descriptor with optional serviceName, request/response types, streaming flags, and full MessageTypeDefinition
 - `GrpcNetwork`: Network state including services, color, cached status, chainId, fallback endpoints
 - `MethodInstance`: Open method tab with params, pinned state, and execution state
 - `ExecutionResult`: Method execution result with success, data/error, timestamp, and duration
-- `MessageTypeDefinition`: Protobuf message schema with fields array (defined in ProtobufFormGenerator)
+- `MessageTypeDefinition` / `MessageField`: Protobuf message schema and its fields
+  (including `customtype`/`scalar` annotations)
+- `HttpRule`: REST mapping from `google.api.http`
+- `BsrModule`: BSR module listing entry
+
+`lib/types/grpc.ts` is the single source of truth; `lib/grpc/reflection-utils.ts`
+re-exports `GrpcService` for API routes.
 
 Always use these shared types - never redefine locally.
 

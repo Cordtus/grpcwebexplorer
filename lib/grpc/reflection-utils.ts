@@ -1,19 +1,13 @@
 // lib/grpc/reflection-utils.ts
 // Utility functions for gRPC reflection matching the old API from utils/grpcReflection.ts
 
+import type { GrpcService } from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
+import { getFromCache, saveToCache } from "@/lib/utils/client-cache";
 import { ReflectionClient } from "./reflection-client";
 
-// Re-export types for convenience
-export type {
-	GrpcMethod,
-	GrpcService,
-	MessageField,
-	MessageTypeDefinition,
-	ReflectionOptions,
-} from "./reflection-client";
-
-import { getFromCache, saveToCache } from "@/lib/utils/client-cache";
+// Re-export for API routes (e.g. the services route).
+export type { GrpcService } from "@/lib/types/grpc";
 
 /**
  * Fetch all services and their methods using gRPC reflection
@@ -27,7 +21,7 @@ export async function fetchServicesViaReflection(options: {
 	tls: boolean;
 	timeout?: number;
 	additionalEndpoints?: Array<{ address: string; tls: boolean }>;
-}): Promise<import("./reflection-client").GrpcService[]> {
+}): Promise<GrpcService[]> {
 	const client = new ReflectionClient({
 		endpoint: options.endpoint,
 		tls: options.tls,
@@ -64,7 +58,7 @@ export async function fetchServicesWithCosmosOptimization(options: {
 	tls: boolean;
 	timeout?: number;
 	additionalEndpoints?: Array<{ address: string; tls: boolean }>;
-}): Promise<import("./reflection-client").GrpcService[]> {
+}): Promise<GrpcService[]> {
 	const client = new ReflectionClient({
 		endpoint: options.endpoint,
 		tls: options.tls,
@@ -73,7 +67,7 @@ export async function fetchServicesWithCosmosOptimization(options: {
 	});
 
 	try {
-		const v2alpha1Services: import("./reflection-client").GrpcService[] = [];
+		const v2alpha1Services: GrpcService[] = [];
 
 		console.log("[Reflection] Attempting v2alpha1 reflection...");
 
@@ -111,7 +105,7 @@ export async function fetchServicesWithCosmosOptimization(options: {
 			}));
 
 			// Merge: prefer enriched services (with full field definitions), keep v2alpha1-only services
-			const finalServices: import("./reflection-client").GrpcService[] = [];
+			const finalServices: GrpcService[] = [];
 			const seenServices = new Set<string>();
 
 			for (const service of enrichedServices) {
@@ -187,7 +181,7 @@ export async function fetchServicesWithCosmosOptimization(options: {
 export async function loadServiceDescriptor(
 	options: { endpoint: string; tls: boolean; timeout?: number },
 	serviceName: string,
-): Promise<import("./reflection-client").GrpcService | null> {
+): Promise<GrpcService | null> {
 	if (!options?.endpoint || typeof options.tls !== "boolean") {
 		throw new Error("Invalid options: endpoint and tls are required");
 	}
@@ -198,8 +192,7 @@ export async function loadServiceDescriptor(
 	const cacheKey = `descriptor:${options.endpoint}:${options.tls}:${serviceName}`;
 
 	try {
-		const cached =
-			getFromCache<import("./reflection-client").GrpcService>(cacheKey);
+		const cached = getFromCache<GrpcService>(cacheKey);
 		if (cached) {
 			console.log(`[Reflection] Using cached descriptor for ${serviceName}`);
 			return { ...cached, descriptorStatus: "loaded" };
