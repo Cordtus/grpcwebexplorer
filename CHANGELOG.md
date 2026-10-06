@@ -16,6 +16,7 @@
 ### Changed
 - Consolidated duplicated descriptor types (`MessageField`, `MessageTypeDefinition`, `GrpcMethod`, `GrpcService`, `HttpRule`, `BsrModule`) into `lib/types/grpc.ts` as the single source of truth; `descriptor-parser`/`reflection-client` re-export them for compatibility.
 - `MethodDetailPanel` now uses the shared `ExecutionResult` instead of a local copy.
+- Results panel JSON viewer: reduced right-edge padding and nesting indentation so long values wrap less, and made copy buttons always faintly visible with distinct icons for copying a value (`Copy`) versus an object (`Braces`) or array (`Brackets`).
 
 ## [1.4.0] - 2026-09-06
 
