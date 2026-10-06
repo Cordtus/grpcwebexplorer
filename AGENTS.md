@@ -17,6 +17,7 @@ yarn dev          # Dev server at localhost:3000
 yarn build        # Production build
 yarn build:prod   # Production build with telemetry disabled
 yarn lint         # Run ESLint
+yarn test         # Run unit tests (Vitest)
 yarn test:grpc    # gRPC reflection integration tests (requires dev server running)
 
 # Docker deployment
@@ -151,9 +152,10 @@ Response bytes are preserved as base64 in API JSON. Decoding is on by default in
 the results UI, with a "Decode" toggle to turn it off:
 
 - `lib/utils/response-decoder.ts`: Recursively annotates encoded strings for
-  formatted display only. Chooses base64 or hex per value, shows both when a
-  value is ambiguous, parses decoded JSON when present, and falls back to decoded
-  text or byte metadata
+  formatted display only. Chooses base64 or hex per value and only surfaces the
+  result when it is human-readable — decoded plaintext, parsed JSON, an `sdk.Dec`
+  decimal, or a bech32 address. Binary bytes are left as their original base64
+  (no hex/byte dumps)
 - Detection uses field context where available: `bytes` fields are always
   base64-decoded (protobuf JSON convention), `string` fields fall back to the
   conservative base64/hex heuristics

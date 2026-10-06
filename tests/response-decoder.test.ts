@@ -3,7 +3,6 @@ import { bech32Encode } from "@/lib/utils/bech32";
 import {
 	buildResponseFieldContext,
 	decodeBinaryValuesForDisplay,
-	inspectBase64Value,
 	inspectBinaryValue,
 	isDecodedBinaryValue,
 	isDecodedScalarValue,
@@ -11,7 +10,7 @@ import {
 
 describe("response decoder", () => {
 	it("annotates printable base64 text without replacing the original value", () => {
-		const decoded = inspectBase64Value("SGVsbG8=");
+		const decoded = inspectBinaryValue("SGVsbG8=");
 
 		expect(decoded).toMatchObject({
 			__decodedBinary: true,
@@ -23,7 +22,7 @@ describe("response decoder", () => {
 	});
 
 	it("parses decoded JSON payloads into structured values", () => {
-		const decoded = inspectBase64Value("eyJmb28iOiJiYXIiLCJjb3VudCI6M30=");
+		const decoded = inspectBinaryValue("eyJmb28iOiJiYXIiLCJjb3VudCI6M30=");
 
 		expect(decoded).toMatchObject({
 			__decodedBinary: true,
@@ -37,35 +36,27 @@ describe("response decoder", () => {
 		});
 	});
 
-	it("annotates binary base64 with byte metadata", () => {
-		const decoded = inspectBase64Value("AAECAwQ=");
-
-		expect(decoded).toMatchObject({
-			__decodedBinary: true,
-			encoding: "base64",
-			original: "AAECAwQ=",
-			byteLength: 5,
-			hexPreview: "00 01 02 03 04",
-		});
-		expect(decoded).not.toHaveProperty("text");
+	it("leaves binary base64 undecoded rather than dumping bytes", () => {
+		expect(inspectBinaryValue("AAECAwQ=")).toBeNull();
+		expect(inspectBinaryValue("AAECAwQ=", { type: "bytes" })).toBeNull();
 	});
 
 	it("leaves ordinary strings alone", () => {
-		expect(inspectBase64Value("cosmoshub-4")).toBeNull();
-		expect(inspectBase64Value("test")).toBeNull();
+		expect(inspectBinaryValue("cosmoshub-4")).toBeNull();
+		expect(inspectBinaryValue("test")).toBeNull();
 	});
 
 	it("does not annotate hex hashes or plain opaque tokens as base64", () => {
-		expect(inspectBase64Value("deadbeefdeadbeef")).toBeNull();
-		expect(inspectBase64Value("0123456789abcdef0123456789abcdef")).toBeNull();
-		expect(inspectBase64Value("abcdefghijklmnop")).toBeNull();
+		expect(inspectBinaryValue("deadbeefdeadbeef")).toBeNull();
+		expect(inspectBinaryValue("0123456789abcdef0123456789abcdef")).toBeNull();
+		expect(inspectBinaryValue("abcdefghijklmnop")).toBeNull();
 	});
 
 	it("recurses through arrays and objects without mutating input", () => {
 		const input = {
 			id: "cosmoshub-4",
 			values: ["SGVsbG8=", "eyJwYXlsb2FkIjoiU0dWc2JHOD0ifQ==", null],
-			nested: { payload: "AAECAwQ=" },
+			nested: { payload: "SGVsbG8=" },
 		};
 
 		const output = decodeBinaryValuesForDisplay(input);
@@ -157,10 +148,8 @@ describe("response decoder", () => {
 		);
 
 		expect(output.params.min_signed_per_window.interpretation).toMatchObject({
-			kind: "cosmos-dec",
 			value: "0.05",
 			percent: "5%",
-			sourceType: "cosmossdk.io/math.LegacyDec",
 		});
 		expect(output.params.slash_fraction_double_sign.interpretation.value).toBe(
 			"0.05",
@@ -176,47 +165,39 @@ describe("response decoder", () => {
 	});
 
 	it("does not interpret decimal bytes without field context", () => {
-		const decoded = inspectBase64Value("NTAwMDAwMDAwMDAwMDAwMDA=");
+		const decoded = inspectBinaryValue("NTAwMDAwMDAwMDAwMDAwMDA=");
 		expect(decoded?.interpretation).toBeUndefined();
 		expect(decoded?.text).toBe("50000000000000000");
 		// markerless decimal bytes stay untouched when there is no context
-		expect(inspectBase64Value("MTAwMDAwMDAwMDAwMDAw")).toBeNull();
+		expect(inspectBinaryValue("MTAwMDAwMDAwMDAwMDAw")).toBeNull();
 	});
 
-	it("decodes hex hashes and 0x-prefixed values", () => {
-		expect(inspectBinaryValue("DEADBEEFDEADBEEF")).toMatchObject({
+	it("decodes hex to plaintext and leaves binary hex alone", () => {
+		expect(inspectBinaryValue("48656c6c6f")).toMatchObject({
 			__decodedBinary: true,
 			encoding: "hex",
-			byteLength: 8,
+			text: "Hello",
 		});
-		expect(inspectBinaryValue("0xdeadbeef")).toMatchObject({
+		expect(inspectBinaryValue("0x48656c6c6f")).toMatchObject({
 			encoding: "hex",
-			byteLength: 4,
+			text: "Hello",
 		});
+		// hex that decodes to binary is not shown as a byte dump
+		expect(inspectBinaryValue("DEADBEEFDEADBEEF")).toBeNull();
+		expect(inspectBinaryValue("0xdeadbeef")).toBeNull();
 		// decimal strings and non-hex tokens are left alone
 		expect(inspectBinaryValue("10000")).toBeNull();
 		expect(inspectBinaryValue("12345678")).toBeNull();
 		expect(inspectBinaryValue("cosmoshub-4")).toBeNull();
 	});
 
-	it("shows both base64 and hex when a bytes value is ambiguous", () => {
-		const decoded = inspectBinaryValue("deadbeefdeadbeef", { type: "bytes" });
-
-		expect(decoded).toMatchObject({ encoding: "base64", byteLength: 12 });
-		expect(decoded?.alternates).toHaveLength(1);
-		expect(decoded?.alternates?.[0]).toMatchObject({
-			encoding: "hex",
-			byteLength: 8,
-		});
-	});
-
-	it("force-decodes markerless bytes fields", () => {
-		// "AAAA" is base64 for three zero bytes; too short for the base64 heuristic
-		expect(inspectBinaryValue("AAAA")).toBeNull();
-		expect(inspectBinaryValue("AAAA", { type: "bytes" })).toMatchObject({
+	it("force-decodes markerless bytes fields that decode to text", () => {
+		// "YWJj" is base64 for "abc"; too short for the base64 heuristic
+		expect(inspectBinaryValue("YWJj")).toBeNull();
+		expect(inspectBinaryValue("YWJj", { type: "bytes" })).toMatchObject({
 			encoding: "base64",
 			byteLength: 3,
-			hexPreview: "00 00 00",
+			text: "abc",
 		});
 	});
 
@@ -253,7 +234,6 @@ describe("response decoder", () => {
 
 		expect(isDecodedScalarValue(output.params.min_commission_rate)).toBe(true);
 		expect(output.params.min_commission_rate.interpretation).toMatchObject({
-			kind: "cosmos-dec",
 			value: "0.05",
 			percent: "5%",
 		});
@@ -431,5 +411,20 @@ describe("response decoder", () => {
 		);
 
 		expect(output.address.bech32).toBe(bech32Encode("atone", bytes20));
+	});
+
+	it("leaves binary bytes fields as their original base64", () => {
+		const context = buildResponseFieldContext({
+			name: "Response",
+			fullName: "test.Response",
+			fields: [{ name: "hash", type: "bytes" }],
+		});
+
+		const output: any = decodeBinaryValuesForDisplay(
+			{ hash: "AAECAwQ=" },
+			context,
+		);
+
+		expect(output.hash).toBe("AAECAwQ=");
 	});
 });
