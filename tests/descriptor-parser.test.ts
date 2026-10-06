@@ -79,6 +79,41 @@ describe("DescriptorParser", () => {
 			expect(method.responseTypeDefinition.fields[0].type).toBe("string");
 		});
 
+		it("recovers google.api.http annotations on methods", () => {
+			const fd = encodeFileDescriptor({
+				name: "svc.proto",
+				package: "test",
+				messageType: [
+					{
+						name: "Req",
+						field: [{ name: "id", number: 1, type: 9, label: 1 }],
+					},
+					{ name: "Res", field: [] },
+				],
+				service: [
+					{
+						name: "Query",
+						method: [
+							{
+								name: "GetThing",
+								inputType: ".test.Req",
+								outputType: ".test.Res",
+								options: {
+									".google.protobuf.MethodOptions.google.api.http": {
+										get: "/test/v1/things/{id}",
+									},
+								},
+							},
+						],
+					},
+				],
+			});
+
+			parser.processFileDescriptor(fd);
+			const method = parser.getServices()[0].methods[0];
+			expect(method.httpRule).toEqual({ get: "/test/v1/things/{id}" });
+		});
+
 		it("handles enums correctly", () => {
 			parser.processFileDescriptor(COMPLEX_FD_BYTES);
 			const services = parser.getServices();

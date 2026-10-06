@@ -150,12 +150,6 @@ export class ReflectionClient {
 	private get root(): protobuf.Root {
 		return this.parser.getRoot();
 	}
-	private get seenFiles(): Set<string> {
-		return (this.parser as any).seenFiles;
-	}
-	private get methodOptions(): Map<string, any> {
-		return (this.parser as any).methodOptions;
-	}
 
 	/**
 	 * Initialize reflection stub (lightweight setup without loading all services)

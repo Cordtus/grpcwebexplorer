@@ -33,10 +33,38 @@ export class DescriptorParser {
 
 	/**
 	 * protobufjs drops unknown extensions when decoding FileDescriptorProto.
-	 * Register the extensions we care about so field.options carries them.
+	 * Register the extensions we care about so field/method options carry them.
 	 */
 	private registerFieldExtensions(): void {
 		try {
+			// google.api.HttpRule, required to decode the gRPC-gateway http option.
+			this.descriptorRoot.addJSON({
+				google: {
+					nested: {
+						api: {
+							nested: {
+								HttpRule: {
+									fields: {
+										selector: { type: "string", id: 1 },
+										get: { type: "string", id: 2 },
+										put: { type: "string", id: 3 },
+										post: { type: "string", id: 4 },
+										delete: { type: "string", id: 5 },
+										patch: { type: "string", id: 6 },
+										body: { type: "string", id: 7 },
+										additional_bindings: {
+											rule: "repeated",
+											type: "HttpRule",
+											id: 11,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			});
+
 			const fieldOptions = this.descriptorRoot.lookupType(
 				"google.protobuf.FieldOptions",
 			);
@@ -56,6 +84,20 @@ export class DescriptorParser {
 					"string",
 					undefined,
 					"google.protobuf.FieldOptions",
+				),
+			);
+
+			// HTTP annotations (gRPC-gateway) are also dropped unless registered.
+			const methodOptions = this.descriptorRoot.lookupType(
+				"google.protobuf.MethodOptions",
+			);
+			methodOptions.add(
+				new protobuf.Field(
+					"google.api.http",
+					72295728,
+					"google.api.HttpRule",
+					undefined,
+					"google.protobuf.MethodOptions",
 				),
 			);
 		} catch (err) {
@@ -330,6 +372,7 @@ export class DescriptorParser {
 		if (!options) return undefined;
 
 		const httpAnnotation =
+			options[".google.protobuf.MethodOptions.google.api.http"] ||
 			options[".google.api.http"] ||
 			options["google.api.http"] ||
 			options["(google.api.http)"] ||
@@ -346,20 +389,17 @@ export class DescriptorParser {
 		if (httpAnnotation.patch) rule.patch = httpAnnotation.patch;
 		if (httpAnnotation.body) rule.body = httpAnnotation.body;
 
-		if (
-			httpAnnotation.additionalBindings &&
-			Array.isArray(httpAnnotation.additionalBindings)
-		) {
-			rule.additionalBindings = httpAnnotation.additionalBindings.map(
-				(binding: any) => ({
-					get: binding.get,
-					post: binding.post,
-					put: binding.put,
-					delete: binding.delete,
-					patch: binding.patch,
-					body: binding.body,
-				}),
-			);
+		const additional =
+			httpAnnotation.additional_bindings || httpAnnotation.additionalBindings;
+		if (Array.isArray(additional) && additional.length > 0) {
+			rule.additionalBindings = additional.map((binding: any) => ({
+				get: binding.get,
+				post: binding.post,
+				put: binding.put,
+				delete: binding.delete,
+				patch: binding.patch,
+				body: binding.body,
+			}));
 		}
 
 		if (!rule.get && !rule.post && !rule.put && !rule.delete && !rule.patch) {

@@ -102,36 +102,56 @@ describe("generateGrpcurl", () => {
 // -- curl (REST) --
 
 describe("generateCurl", () => {
-	it("returns fallback message when no httpRule", () => {
-		const out = generateCurl(makeCtx(), "https://api.example.com");
-		expect(out).toContain("No known REST mapping");
+	it("returns fallback message when unsupported", () => {
+		const out = generateCurl(makeCtx(), {
+			url: "",
+			supported: false,
+			method: "GET",
+			warning: "No REST annotation for this method",
+		});
+		expect(out).toContain("No REST annotation");
 	});
 
-	it("generates GET curl with path params", () => {
-		const out = generateCurl(
-			makeCtx({ params: { name: "cosmos" } }),
-			"https://api.example.com",
-			{ get: "/v1/greet/{name}" },
-		);
+	it("generates GET curl", () => {
+		const out = generateCurl(makeCtx({ params: { name: "cosmos" } }), {
+			url: "https://api.example.com/v1/greet/cosmos",
+			supported: true,
+			method: "GET",
+		});
 		expect(out).toContain("curl -X GET");
 		expect(out).toContain("https://api.example.com/v1/greet/cosmos");
 	});
 
 	it("generates POST curl with body", () => {
-		const out = generateCurl(makeCtx(), "https://api.example.com", {
-			post: "/v1/greet",
-			body: "*",
+		const out = generateCurl(makeCtx(), {
+			url: "https://api.example.com/v1/greet",
+			supported: true,
+			method: "POST",
 		});
 		expect(out).toContain("curl -X POST");
 		expect(out).toContain("Content-Type: application/json");
 		expect(out).toContain('"name"');
 	});
 
+	it("excludes path params from the POST body", () => {
+		const out = generateCurl(makeCtx({ params: { id: "42", name: "world" } }), {
+			url: "https://api.example.com/v1/greet/42",
+			supported: true,
+			method: "POST",
+			usedParams: ["id"],
+		});
+		expect(out).toContain('"name"');
+		expect(out).not.toContain('"id"');
+	});
+
 	it("includes auth headers in curl", () => {
 		const out = generateCurl(
 			makeCtx({ authConfig: { type: "bearer", bearerToken: "abc" } }),
-			"https://api.example.com",
-			{ get: "/v1/test" },
+			{
+				url: "https://api.example.com/v1/test",
+				supported: true,
+				method: "GET",
+			},
 		);
 		expect(out).toContain("authorization: Bearer abc");
 	});
@@ -140,12 +160,13 @@ describe("generateCurl", () => {
 // -- TypeScript --
 
 describe("generateTypescriptSnippet", () => {
-	it("generates valid TypeScript with grpc-js import", () => {
+	it("generates valid TypeScript using proto-loader", () => {
 		const out = generateTypescriptSnippet(makeCtx());
 		expect(out).toContain("import * as grpc from '@grpc/grpc-js'");
+		expect(out).toContain("protoLoader.loadSync");
 		expect(out).toContain("grpc.example.com:443");
 		expect(out).toContain("createSsl()");
-		expect(out).toContain("/example.greeter.GreeterService/SayHello");
+		expect(out).toContain("client.SayHello(");
 	});
 
 	it("uses insecure credentials when TLS off", () => {
@@ -181,8 +202,9 @@ describe("generateGoSnippet", () => {
 		const out = generateGoSnippet(makeCtx());
 		expect(out).toContain("package main");
 		expect(out).toContain('"google.golang.org/grpc"');
-		expect(out).toContain("credentials.NewTLS(nil)");
-		expect(out).toContain("/example.greeter.GreeterService/SayHello");
+		expect(out).toContain("credentials.NewTLS(&tls.Config{})");
+		expect(out).toContain("client.SayHello(ctx, req)");
+		expect(out).toContain("protojson.Unmarshal");
 	});
 
 	it("uses insecure when TLS off", () => {
@@ -222,7 +244,9 @@ describe("generatePythonSnippet", () => {
 		const out = generatePythonSnippet(makeCtx());
 		expect(out).toContain("import grpc");
 		expect(out).toContain("ssl_channel_credentials()");
-		expect(out).toContain("/example.greeter.GreeterService/SayHello");
+		expect(out).toContain("service_pb2_grpc.GreeterServiceStub(channel)");
+		expect(out).toContain("json_format.Parse");
+		expect(out).toContain("stub.SayHello(request");
 	});
 
 	it("uses insecure channel when TLS off", () => {

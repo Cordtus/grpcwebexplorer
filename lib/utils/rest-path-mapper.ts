@@ -1,24 +1,25 @@
-// Generates REST API paths from gRPC method descriptors
-// HTTP annotations (google.api.http) are NOT available via gRPC reflection
-// as they're compile-time extensions for gRPC-gateway. We generate paths
-// heuristically based on Cosmos SDK conventions which are deterministic.
+// Generates REST API paths from gRPC method descriptors.
+// The google.api.http annotation is recovered from the descriptor options (see
+// descriptor-parser), so paths match the real gRPC-gateway routes. Methods with
+// no annotation report that no REST mapping is known.
 
-import type { HttpRule, MessageTypeDefinition } from "@/lib/types/grpc";
+import type { HttpRule } from "@/lib/types/grpc";
 
 export interface RestPathResult {
 	url: string;
 	supported: boolean;
 	method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 	warning?: string;
+	/** Params consumed by the path (excluded from query string and request body). */
+	usedParams?: string[];
 }
 
-// Replace path parameters in HTTP path template with actual values
-// e.g., "/cosmos/bank/v1beta1/balances/{address}" with {address: "cosmos1..."}
+// Replace path parameters in an HTTP path template with actual values.
+// e.g. "/cosmos/bank/v1beta1/balances/{address}" with {address: "cosmos1..."}
 //    -> "/cosmos/bank/v1beta1/balances/cosmos1..."
 function substitutePathParams(
 	pathTemplate: string,
 	params: Record<string, any>,
-	_fields: MessageTypeDefinition["fields"],
 ): { path: string; usedParams: Set<string> } {
 	const usedParams = new Set<string>();
 	let path = pathTemplate;
@@ -61,11 +62,10 @@ function substitutePathParams(
 	return { path, usedParams };
 }
 
-// Build query string from remaining parameters not used in path
+// Build query string from remaining parameters not used in the path
 function buildQueryString(
 	params: Record<string, any>,
 	usedParams: Set<string>,
-	_fields: MessageTypeDefinition["fields"],
 ): string {
 	const parts: string[] = [];
 
@@ -105,14 +105,12 @@ function buildQueryString(
 	return parts.length > 0 ? `?${parts.join("&")}` : "";
 }
 
-// Generate REST URL using HTTP annotation from proto
+// Generate a REST URL from a real google.api.http annotation
 function generateFromHttpRule(
 	httpRule: HttpRule,
 	params: Record<string, any>,
 	baseUrl: string,
-	fields: MessageTypeDefinition["fields"],
 ): RestPathResult {
-	// Determine HTTP method and path from the rule
 	let httpMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" = "GET";
 	let pathTemplate = "";
 
@@ -142,33 +140,31 @@ function generateFromHttpRule(
 		};
 	}
 
-	// Substitute path parameters
-	const { path, usedParams } = substitutePathParams(
-		pathTemplate,
-		params,
-		fields,
-	);
-
-	// Build query string from remaining params (for GET requests)
+	const { path, usedParams } = substitutePathParams(pathTemplate, params);
 	const queryString =
-		httpMethod === "GET" ? buildQueryString(params, usedParams, fields) : "";
+		httpMethod === "GET" ? buildQueryString(params, usedParams) : "";
 
 	return {
 		url: baseUrl + path + queryString,
 		supported: true,
 		method: httpMethod,
+		usedParams: Array.from(usedParams),
 	};
 }
 
-// Fallback: Generate path heuristically based on Cosmos SDK conventions
-function generateHeuristic(
+/** Generate the REST URL/method for a gRPC method, if a REST mapping is known. */
+export function generateRestUrl(
 	serviceFullName: string,
-	methodName: string,
 	params: Record<string, any>,
 	baseUrl: string,
-	fields: MessageTypeDefinition["fields"],
+	httpRule?: HttpRule,
 ): RestPathResult {
-	// Msg services (transactions) typically don't have REST GET endpoints
+	// Prefer the real google.api.http annotation recovered from the descriptor.
+	if (httpRule) {
+		return generateFromHttpRule(httpRule, params, baseUrl);
+	}
+
+	// Msg services are transactions: POST only, and require signing.
 	if (serviceFullName.endsWith(".Msg")) {
 		return {
 			url: "",
@@ -178,104 +174,10 @@ function generateHeuristic(
 		};
 	}
 
-	// Convert service name to base path
-	// e.g., "cosmos.bank.v1beta1.Query" -> "/cosmos/bank/v1beta1"
-	const parts = serviceFullName.split(".");
-	const lastPart = parts[parts.length - 1];
-	if (lastPart === "Query" || lastPart === "Service" || lastPart === "Msg") {
-		parts.pop();
-	}
-	const basePath = `/${parts.join("/").toLowerCase()}`;
-
-	// Convert method name to path segment
-	// e.g., "AllBalances" -> "balances"
-	let methodSegment = methodName
-		.replace(/^(Get|Query|List|All)/, "")
-		.replace(/^By/, "");
-	if (!methodSegment) methodSegment = methodName;
-	methodSegment = methodSegment
-		.replace(/([A-Z])/g, "_$1")
-		.toLowerCase()
-		.replace(/^_/, "");
-
-	// Build path with common parameter patterns
-	let path = `${basePath}/${methodSegment}`;
-	const usedParams = new Set<string>();
-
-	// Common path parameter patterns
-	const pathParamOrder = [
-		"address",
-		"validator_addr",
-		"validator_address",
-		"delegator_addr",
-		"delegator_address",
-		"proposal_id",
-		"client_id",
-		"connection_id",
-		"channel_id",
-		"port_id",
-		"denom",
-		"hash",
-		"height",
-		"name",
-		"id",
-		"code_id",
-		"granter",
-		"grantee",
-	];
-
-	for (const param of pathParamOrder) {
-		const value = params[param];
-		if (value !== undefined && value !== "") {
-			path += `/${encodeURIComponent(String(value))}`;
-			usedParams.add(param);
-		}
-	}
-
-	// Build query string
-	const queryString = buildQueryString(params, usedParams, fields);
-
 	return {
-		url: baseUrl + path + queryString,
-		supported: true,
+		url: "",
+		supported: false,
 		method: "GET",
+		warning: "No REST annotation for this method",
 	};
-}
-
-// Main function to generate REST URL from gRPC method info
-export function generateRestUrl(
-	serviceFullName: string,
-	methodName: string,
-	params: Record<string, any>,
-	baseUrl: string,
-	requestTypeDefinition?: MessageTypeDefinition,
-	httpRule?: HttpRule,
-): RestPathResult {
-	const fields = requestTypeDefinition?.fields || [];
-
-	// If we have an HTTP annotation from the proto, use it
-	if (httpRule) {
-		return generateFromHttpRule(httpRule, params, baseUrl, fields);
-	}
-
-	// Fall back to heuristic generation
-	return generateHeuristic(
-		serviceFullName,
-		methodName,
-		params,
-		baseUrl,
-		fields,
-	);
-}
-
-// Check if a method likely has REST support
-export function hasRestMapping(
-	serviceFullName: string,
-	_methodName: string,
-): boolean {
-	// Query and Service endpoints typically have REST mappings
-	// Msg endpoints don't (they're POST/transactions)
-	return (
-		serviceFullName.endsWith(".Query") || serviceFullName.endsWith(".Service")
-	);
 }

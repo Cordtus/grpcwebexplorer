@@ -12,11 +12,15 @@
 ### Fixed
 - Field options (`gogoproto.customtype`, `cosmos_proto.scalar`) are preserved through reflection descriptor decoding instead of being dropped by protobufjs.
 - Markerless base64 bytes fields known to be `sdk.Dec` (e.g. `slash_fraction_downtime`) are now decoded and interpreted rather than left as raw base64.
+- REST paths now use the real `google.api.http` annotation recovered from the descriptor instead of an inaccurate name-based guess, so e.g. `GetTx` maps to `GET /cosmos/tx/v1beta1/txs/{hash}`. Methods with no annotation report that no REST mapping is known.
+- Generated curl uses the same accurate REST result as the displayed path.
+- Generated TypeScript/Go/Python snippets now use correct protobuf clients (proto-loader dynamic client; generated stubs with `protojson`/`json_format`) instead of sending JSON bytes as the gRPC payload.
 
 ### Changed
 - Consolidated duplicated descriptor types (`MessageField`, `MessageTypeDefinition`, `GrpcMethod`, `GrpcService`, `HttpRule`, `BsrModule`) into `lib/types/grpc.ts` as the single source of truth; `descriptor-parser`/`reflection-client` re-export them for compatibility.
 - `MethodDetailPanel` now uses the shared `ExecutionResult` instead of a local copy.
 - Results panel JSON viewer: reduced right-edge padding and nesting indentation so long values wrap less, and made copy buttons always faintly visible with distinct icons for copying a value (`Copy`) versus an object (`Braces`) or array (`Brackets`).
+- Simplified the per-method pin tooltip to "Disable auto-collapse" / "Enable auto-collapse".
 
 ## [1.4.0] - 2026-09-06
 

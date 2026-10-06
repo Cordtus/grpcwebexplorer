@@ -7,7 +7,7 @@ export interface CacheEntry<T> {
 	version: string;
 }
 
-const CACHE_VERSION = "2.1.0";
+const CACHE_VERSION = "2.3.0";
 const CACHE_PREFIX = "grpc-explorer:";
 const SETTINGS_KEY = "grpc-explorer:settings";
 

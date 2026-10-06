@@ -224,9 +224,7 @@ const MethodBlock = React.memo(function MethodBlock({
 								: "text-muted-foreground hover:bg-muted hover:text-foreground",
 						)}
 						title={
-							instance.pinned
-								? "Unpin method (allow auto-collapse)"
-								: "Pin method (prevent auto-collapse)"
+							instance.pinned ? "Enable auto-collapse" : "Disable auto-collapse"
 						}
 					>
 						<Pin className="h-3.5 w-3.5" />
