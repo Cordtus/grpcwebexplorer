@@ -110,7 +110,7 @@ function BinaryDecodingRow({
 				</span>
 				{interpretation && (
 					<span className="text-[10px] font-semibold uppercase text-green-600 dark:text-green-400">
-						{interpretation.kind === "cosmos-dec" ? "sdk.Dec" : "decoded"}
+						sdk.Dec
 					</span>
 				)}
 				{decoding.bech32 && (
@@ -148,12 +148,7 @@ function BinaryDecodingRow({
 					<span className="text-muted-foreground">decoded text: </span>
 					&quot;{decoding.text}&quot;
 				</span>
-			) : (
-				<span className="break-all text-muted-foreground">
-					hex: {decoding.hexPreview}
-					{decoding.byteLength > 32 ? " ..." : ""}
-				</span>
-			)}
+			) : null}
 			{interpretation && decoding.text && (
 				<span className="break-all text-[11px] text-muted-foreground">
 					decoded text: &quot;{decoding.text}&quot;

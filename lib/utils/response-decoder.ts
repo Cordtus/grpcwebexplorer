@@ -1,24 +1,21 @@
 import type { MessageField, MessageTypeDefinition } from "@/lib/types/grpc";
 import { bech32Encode, bech32Hrp } from "@/lib/utils/bech32";
 
-/** How a decoded byte value should be interpreted, derived from field metadata. */
+/** A human-readable interpretation of a decoded value (Cosmos sdk.Dec). */
 export interface DecodedBinaryInterpretation {
-	/** Recognized semantic type. Currently only Cosmos sdk.Dec. */
-	kind: "cosmos-dec";
 	/** Human-readable decimal, e.g. "0.05". */
 	value: string;
 	/** Human-readable percentage, e.g. "5%". */
 	percent?: string;
-	/** Source annotation that triggered the interpretation. */
-	sourceType?: string;
 }
 
-/** A single way of reading an encoded string as bytes. */
+/** A single way of reading an encoded string as human-readable content. */
 export interface BinaryDecoding {
 	encoding: "base64" | "hex";
 	byteLength: number;
-	hexPreview: string;
+	/** Decoded plaintext, when the bytes are valid printable UTF-8. */
 	text?: string;
+	/** Parsed JSON, when the decoded text is JSON. */
 	json?: unknown;
 	/** Bech32 rendering, when the field is a known address type. */
 	bech32?: string;
@@ -100,12 +97,6 @@ function utf8Decode(bytes: Uint8Array): string | null {
 	} catch {
 		return null;
 	}
-}
-
-function hexPreview(bytes: Uint8Array, limit = 32): string {
-	return Array.from(bytes.slice(0, limit))
-		.map((byte) => byte.toString(16).padStart(2, "0"))
-		.join(" ");
 }
 
 function parseJsonText(text: string): unknown | undefined {
@@ -212,11 +203,7 @@ function interpretCosmosDecimal(
 		: normalizeDecimal(trimmed);
 	if (value === null) return null;
 
-	const interpretation: DecodedBinaryInterpretation = {
-		kind: "cosmos-dec",
-		value,
-		...(context?.customtype ? { sourceType: context.customtype } : {}),
-	};
+	const interpretation: DecodedBinaryInterpretation = { value };
 
 	// Cosmos Dec is used for both rates (fractions of 1) and quantities such as
 	// coin amounts or prices. Only surface a percentage for fields classified as
@@ -241,11 +228,20 @@ function buildDecoding(
 	const decoding: BinaryDecoding = {
 		encoding,
 		byteLength: bytes.length,
-		hexPreview: hexPreview(bytes),
 	};
 	const text = utf8Decode(bytes);
 	if (text !== null) decoding.text = text;
 	return decoding;
+}
+
+/** True when a decoding produced something a human can read. */
+function isHumanReadable(decoding: Decoding): boolean {
+	return (
+		decoding.text !== undefined ||
+		decoding.json !== undefined ||
+		decoding.bech32 !== undefined ||
+		decoding.interpretation !== undefined
+	);
 }
 
 type AddressKind = "acc" | "valoper" | "valcons";
@@ -369,7 +365,9 @@ function buildBase64Decoding(
 		}
 	}
 
-	return decoding;
+	// Only surface decodings that produce readable content; binary bytes are
+	// left as their original base64 rather than shown as hex.
+	return isHumanReadable(decoding) ? decoding : null;
 }
 
 /** Try reading the value as hex. Rejects plain decimal strings and short bare tokens. */
@@ -389,11 +387,17 @@ function buildHexDecoding(value: string): BinaryDecoding | null {
 	for (let i = 0; i < bytes.length; i++) {
 		bytes[i] = Number.parseInt(stripped.slice(i * 2, i * 2 + 2), 16);
 	}
-	return buildDecoding(bytes, "hex");
+
+	const decoding = buildDecoding(bytes, "hex");
+	// Hex is only useful when it decodes to plaintext (binary hex is left raw).
+	if (decoding.text === undefined) return null;
+	const json = parseJsonText(decoding.text);
+	if (json !== undefined) decoding.json = json;
+	return decoding;
 }
 
 function decodingScore(decoding: Decoding): number {
-	if (decoding.interpretation) return 3;
+	if (decoding.interpretation || decoding.bech32) return 3;
 	if (decoding.json !== undefined) return 2;
 	if (decoding.text !== undefined) return 1;
 	return 0;
@@ -432,20 +436,6 @@ export function buildResponseFieldContext(
 	return Object.keys(map).length > 0 ? map : undefined;
 }
 
-/** Inspect a value as base64 only. Kept for callers that need a single encoding. */
-export function inspectBase64Value(
-	value: string,
-	context?: ResponseFieldContext,
-): DecodedBinaryValue | null {
-	const decoding = buildBase64Decoding(
-		value,
-		context,
-		isCosmosDecimal(context),
-	);
-	if (!decoding) return null;
-	return { __decodedBinary: true, original: value, ...decoding };
-}
-
 /**
  * Inspect a value and decode it as base64, hex, or both when applicable.
  * Field context (bytes vs string, customtype/scalar) drives the choice.
@@ -458,7 +448,8 @@ export function inspectBinaryValue(
 	const force = isBytes || isCosmosDecimal(context);
 
 	const base64 = buildBase64Decoding(value, context, force);
-	const hex = buildHexDecoding(value);
+	// protobuf JSON always base64-encodes `bytes`, so never read those as hex.
+	const hex = isBytes ? null : buildHexDecoding(value);
 
 	if (!base64 && !hex) return null;
 
