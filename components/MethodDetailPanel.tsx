@@ -3,6 +3,8 @@
 import {
 	AlertTriangle,
 	Binary,
+	Braces,
+	Brackets,
 	Check,
 	CheckCircle,
 	ChevronDown,
@@ -297,21 +299,22 @@ function JsonViewer({
 					<button
 						type="button"
 						onClick={() => handleCopyValue(data, key)}
-						className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity"
-						title="Copy array"
+						className="opacity-50 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
+						title="Copy entire array"
+						aria-label="Copy entire array"
 					>
 						{copiedKeys.has(key) ? (
 							<Check className="h-3 w-3 text-green-500" />
 						) : (
-							<Copy className="h-3 w-3 text-muted-foreground" />
+							<Brackets className="h-3 w-3 text-muted-foreground" />
 						)}
 					</button>
 				</div>
 				{isOpen && (
-					<div className="ml-4 mt-1 min-w-0 overflow-hidden">
+					<div className="ml-2 mt-1 min-w-0 overflow-hidden">
 						{visible.map((item, i) => (
 							<div key={i} className="flex items-start min-w-0 overflow-hidden">
-								<span className="text-muted-sm mr-2 shrink-0">{i}:</span>
+								<span className="text-muted-sm mr-1 shrink-0">{i}:</span>
 								<div className="flex-1-truncate break-all">
 									<JsonViewer
 										data={item}
@@ -355,7 +358,7 @@ function JsonViewer({
 									<button
 										type="button"
 										onClick={() => toggleExpand(itemKey)}
-										className="mr-1 hover:bg-muted rounded p-0.5 shrink-0"
+										className="mr-0.5 hover:bg-muted rounded p-0.5 shrink-0"
 									>
 										{isOpen ? (
 											<ChevronDown className="h-3 w-3" />
@@ -364,16 +367,16 @@ function JsonViewer({
 										)}
 									</button>
 								) : (
-									<span className="w-5 shrink-0" />
+									<span className="w-4 mr-0.5 shrink-0" />
 								)}
 								<span className="text-foreground font-medium shrink-0">
 									{key}:
 								</span>
-								<div className="ml-2 flex-1 flex items-start gap-1 min-w-0 overflow-hidden">
+								<div className="ml-1.5 flex-1 flex items-start gap-1 min-w-0 overflow-hidden">
 									{isObj ? (
 										<>
 											{isOpen ? (
-												<div className="ml-4 flex-1-truncate">
+												<div className="ml-2 flex-1-truncate">
 													<JsonViewer
 														data={value}
 														level={level + 1}
@@ -388,13 +391,16 @@ function JsonViewer({
 											<button
 												type="button"
 												onClick={() => handleCopyValue(value, itemKey)}
-												className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
-												title={`Copy ${Array.isArray(value) ? "array" : "object"}`}
+												className="opacity-50 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
+												title={`Copy entire ${Array.isArray(value) ? "array" : "object"}`}
+												aria-label={`Copy entire ${Array.isArray(value) ? "array" : "object"}`}
 											>
 												{copiedKeys.has(itemKey) ? (
 													<Check className="h-3 w-3 text-green-500" />
+												) : Array.isArray(value) ? (
+													<Brackets className="h-3 w-3 text-muted-foreground" />
 												) : (
-													<Copy className="h-3 w-3 text-muted-foreground" />
+													<Braces className="h-3 w-3 text-muted-foreground" />
 												)}
 											</button>
 										</>
@@ -410,8 +416,9 @@ function JsonViewer({
 											<button
 												type="button"
 												onClick={() => handleCopyValue(value, itemKey)}
-												className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
+												className="opacity-50 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity shrink-0"
 												title="Copy value"
+												aria-label="Copy value"
 											>
 												{copiedKeys.has(itemKey) ? (
 													<Check className="h-3 w-3 text-green-500" />
@@ -1026,7 +1033,7 @@ export default function MethodDetailPanel({
 
 						{/* Results content */}
 						<div className="flex-1 overflow-auto min-h-0 min-w-0 w-full">
-							<div className="p-4 w-full max-w-full overflow-hidden">
+							<div className="py-4 pl-4 pr-1 w-full max-w-full overflow-hidden">
 								{isExecuting ? (
 									<div className="h-full flex items-center justify-center py-12">
 										<div className="text-center">
@@ -1058,7 +1065,7 @@ export default function MethodDetailPanel({
 												</pre>
 											</div>
 										) : result.data ? (
-											<div className="panel-section overflow-hidden">
+											<div className="panel-section overflow-hidden pr-1">
 												<h3 className="section-header mb-2">Response Data</h3>
 												{resultViewMode === "formatted" ? (
 													<div className="text-xs font-mono overflow-x-auto min-w-0 w-full">
