@@ -109,6 +109,97 @@ function shortTypeName(typeName: string): string {
 	return typeName.split(".").pop() || typeName;
 }
 
+type RpcKind = "unary" | "client_streaming" | "server_streaming" | "bidi";
+
+function rpcKind(ctx: CodeGenContext): RpcKind {
+	if (ctx.requestStreaming && ctx.responseStreaming) return "bidi";
+	if (ctx.requestStreaming) return "client_streaming";
+	if (ctx.responseStreaming) return "server_streaming";
+	return "unary";
+}
+
+function tsSimpleCall(ctx: CodeGenContext): string {
+	const request = formatParams(ctx.params);
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `const call = client.${ctx.methodName}(${request}, metadata);
+call.on('data', (response: any) => console.log(response));
+call.on('error', (err: grpc.ServiceError) => { client.close(); console.error(err); });
+call.on('end', () => client.close());`;
+		case "client_streaming":
+			return `const call = client.${ctx.methodName}(metadata, (err: grpc.ServiceError | null, response: any) => {
+  if (err) console.error(err);
+  else console.log(response);
+  client.close();
+});
+call.write(${request});
+call.end();`;
+		case "bidi":
+			return `const call = client.${ctx.methodName}(metadata);
+call.on('data', (response: any) => console.log(response));
+call.on('error', (err: grpc.ServiceError) => { client.close(); console.error(err); });
+call.on('end', () => client.close());
+call.write(${request});
+call.end();`;
+		default:
+			return `client.${ctx.methodName}(
+  ${request},
+  metadata,
+  (err: grpc.ServiceError | null, response: any) => {
+    if (err) console.error(err);
+    else console.log(response);
+    client.close();
+  }
+);`;
+	}
+}
+
+function tsFullCall(ctx: CodeGenContext): string {
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `  return new Promise((resolve, reject) => {
+    const call = client[METHOD](request, buildMetadata());
+    call.on('data', (response: any) => console.log('Response:', JSON.stringify(response, null, 2)));
+    call.on('error', (err: grpc.ServiceError) => { client.close(); reject(err); });
+    call.on('end', () => { client.close(); resolve(); });
+  });`;
+		case "client_streaming":
+			return `  return new Promise((resolve, reject) => {
+    const call = client[METHOD](buildMetadata(), (err: grpc.ServiceError | null, response: any) => {
+      client.close();
+      if (err) reject(err);
+      else { console.log('Response:', JSON.stringify(response, null, 2)); resolve(); }
+    });
+    call.write(request);
+    call.end();
+  });`;
+		case "bidi":
+			return `  return new Promise((resolve, reject) => {
+    const call = client[METHOD](buildMetadata());
+    call.on('data', (response: any) => console.log('Response:', JSON.stringify(response, null, 2)));
+    call.on('error', (err: grpc.ServiceError) => { client.close(); reject(err); });
+    call.on('end', () => { client.close(); resolve(); });
+    call.write(request);
+    call.end();
+  });`;
+		default:
+			return `  return new Promise((resolve, reject) => {
+    const deadline = new Date(Date.now() + 30000);
+
+    client[METHOD](request, buildMetadata(), { deadline }, (err: grpc.ServiceError | null, response: any) => {
+      client.close();
+      if (err) {
+        console.error(\`gRPC error (\${err.code}): \${err.message}\`);
+        reject(err);
+      } else {
+        console.log('Response:', JSON.stringify(response, null, 2));
+        resolve();
+      }
+    });
+  });`;
+	}
+}
+
 export function generateTypescriptSnippet(ctx: CodeGenContext): string {
 	const { pkg, service } = splitService(ctx.serviceName);
 	const meta = buildMetadata(ctx);
@@ -140,15 +231,7 @@ const client = new Client(
 const metadata = new grpc.Metadata();
 ${metaLines || "// metadata.add('key', 'value');"}
 
-client.${ctx.methodName}(
-  ${formatParams(ctx.params)},
-  metadata,
-  (err: grpc.ServiceError | null, response: any) => {
-    if (err) console.error(err);
-    else console.log(response);
-    client.close();
-  }
-);`;
+${tsSimpleCall(ctx)}`;
 }
 
 export function generateTypescriptFull(ctx: CodeGenContext): string {
@@ -198,26 +281,141 @@ async function invoke(): Promise<void> {
   const client = createClient();
   const request = ${formatParams(ctx.params)};
 
-  return new Promise((resolve, reject) => {
-    const deadline = new Date(Date.now() + 30000);
-
-    client[METHOD](request, buildMetadata(), { deadline }, (err: grpc.ServiceError | null, response: any) => {
-      client.close();
-      if (err) {
-        console.error(\`gRPC error (\${err.code}): \${err.message}\`);
-        reject(err);
-      } else {
-        console.log('Response:', JSON.stringify(response, null, 2));
-        resolve();
-      }
-    });
-  });
+${tsFullCall(ctx)}
 }
 
 invoke().catch(console.error);`;
 }
 
 // -- Go --
+
+function goSimpleCall(ctx: CodeGenContext): string {
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `stream, err := client.${ctx.methodName}(ctx, req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("%+v", resp)
+	}`;
+		case "client_streaming":
+			return `stream, err := client.${ctx.methodName}(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := stream.Send(req); err != nil {
+		log.Fatal(err)
+	}
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%+v", resp)`;
+		case "bidi":
+			return `stream, err := client.${ctx.methodName}(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := stream.Send(req); err != nil {
+		log.Fatal(err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		log.Fatal(err)
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("%+v", resp)
+	}`;
+		default:
+			return `resp, err := client.${ctx.methodName}(ctx, req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%+v", resp)`;
+	}
+}
+
+function goFullCall(ctx: CodeGenContext): string {
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `stream, err := client.${ctx.methodName}(ctx, req)
+	if err != nil {
+		log.Fatalf("gRPC error: %v", err)
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Receive error: %v", err)
+		}
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		fmt.Println(string(data))
+	}`;
+		case "client_streaming":
+			return `stream, err := client.${ctx.methodName}(ctx)
+	if err != nil {
+		log.Fatalf("gRPC error: %v", err)
+	}
+	if err := stream.Send(req); err != nil {
+		log.Fatalf("Send error: %v", err)
+	}
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Fatalf("gRPC error: %v", err)
+	}
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	fmt.Println(string(data))`;
+		case "bidi":
+			return `stream, err := client.${ctx.methodName}(ctx)
+	if err != nil {
+		log.Fatalf("gRPC error: %v", err)
+	}
+	if err := stream.Send(req); err != nil {
+		log.Fatalf("Send error: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		log.Fatalf("CloseSend error: %v", err)
+	}
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Receive error: %v", err)
+		}
+		data, _ := json.MarshalIndent(resp, "", "  ")
+		fmt.Println(string(data))
+	}`;
+		default:
+			return `resp, err := client.${ctx.methodName}(ctx, req)
+	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			log.Fatalf("gRPC error (code %s): %s", st.Code(), st.Message())
+		}
+		log.Fatalf("Error: %v", err)
+	}
+
+	data, _ := json.MarshalIndent(resp, "", "  ")
+	fmt.Println(string(data))`;
+	}
+}
 
 export function generateGoSnippet(ctx: CodeGenContext): string {
 	const { pkg, service } = splitService(ctx.serviceName);
@@ -233,6 +431,7 @@ export function generateGoSnippet(ctx: CodeGenContext): string {
 		? '\t"google.golang.org/grpc/credentials"\n'
 		: '\t"google.golang.org/grpc/credentials/insecure"\n';
 	const metaImport = hasMeta ? '\t"google.golang.org/grpc/metadata"\n' : "";
+	const ioImport = ctx.responseStreaming ? '\t"io"\n' : "";
 	const credExpr = ctx.tlsEnabled
 		? "credentials.NewTLS(&tls.Config{})"
 		: "insecure.NewCredentials()";
@@ -241,7 +440,7 @@ export function generateGoSnippet(ctx: CodeGenContext): string {
 
 import (
 	"context"
-${stdImports}	"log"
+${stdImports}${ioImport}	"log"
 
 	"google.golang.org/grpc"
 ${credImport}${metaImport}	"google.golang.org/protobuf/encoding/protojson"
@@ -269,11 +468,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	resp, err := client.${ctx.methodName}(ctx, req)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v", resp)
+\t${goSimpleCall(ctx)}
 }`;
 }
 
@@ -291,6 +486,9 @@ export function generateGoFull(ctx: CodeGenContext): string {
 		? '\t"google.golang.org/grpc/credentials"\n'
 		: '\t"google.golang.org/grpc/credentials/insecure"\n';
 	const metaImport = hasMeta ? '\t"google.golang.org/grpc/metadata"\n' : "";
+	const ioImport = ctx.responseStreaming ? '\t"io"\n' : "";
+	const statusImport =
+		rpcKind(ctx) === "unary" ? '\t"google.golang.org/grpc/status"\n' : "";
 	const credExpr = ctx.tlsEnabled
 		? "credentials.NewTLS(&tls.Config{})"
 		: "insecure.NewCredentials()";
@@ -306,12 +504,11 @@ import (
 	"context"
 ${stdImports}	"encoding/json"
 	"fmt"
-	"log"
+${ioImport}	"log"
 	"time"
 
 	"google.golang.org/grpc"
-${credImport}${metaImport}	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
+${credImport}${metaImport}${statusImport}	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "your/module/gen/${pkgPath}" // adjust to your generated package
 )
@@ -337,20 +534,46 @@ func main() {
 		log.Fatalf("Invalid request: %v", err)
 	}
 
-	resp, err := client.${ctx.methodName}(ctx, req)
-	if err != nil {
-		if st, ok := status.FromError(err); ok {
-			log.Fatalf("gRPC error (code %s): %s", st.Code(), st.Message())
-		}
-		log.Fatalf("Error: %v", err)
-	}
-
-	data, _ := json.MarshalIndent(resp, "", "  ")
-	fmt.Println(string(data))
+\t${goFullCall(ctx)}
 }`;
 }
 
 // -- Python --
+
+function pySimpleCall(ctx: CodeGenContext, metaArg: string): string {
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `for response in stub.${ctx.methodName}(request${metaArg}):
+    print(response)`;
+		case "client_streaming":
+			return `response = stub.${ctx.methodName}(iter([request])${metaArg})
+print(response)`;
+		case "bidi":
+			return `for response in stub.${ctx.methodName}(iter([request])${metaArg}):
+    print(response)`;
+		default:
+			return `response = stub.${ctx.methodName}(request${metaArg})
+print(response)`;
+	}
+}
+
+function pyFullCall(ctx: CodeGenContext): string {
+	const args = "metadata=build_metadata(), timeout=TIMEOUT";
+	switch (rpcKind(ctx)) {
+		case "server_streaming":
+			return `for response in stub.${ctx.methodName}(request, ${args}):
+            print(json.dumps(json_format.MessageToDict(response), indent=2))`;
+		case "client_streaming":
+			return `response = stub.${ctx.methodName}(iter([request]), ${args})
+        print(json.dumps(json_format.MessageToDict(response), indent=2))`;
+		case "bidi":
+			return `for response in stub.${ctx.methodName}(iter([request]), ${args}):
+            print(json.dumps(json_format.MessageToDict(response), indent=2))`;
+		default:
+			return `response = stub.${ctx.methodName}(request, ${args})
+        print(json.dumps(json_format.MessageToDict(response), indent=2))`;
+	}
+}
 
 export function generatePythonSnippet(ctx: CodeGenContext): string {
 	const { pkg, service } = splitService(ctx.serviceName);
@@ -381,8 +604,7 @@ stub = service_pb2_grpc.${service}Stub(channel)
 request = service_pb2.${request}()
 json_format.Parse(json.dumps(${formatParams(ctx.params)}), request)
 
-response = stub.${ctx.methodName}(request${metaArg})
-print(response)
+${pySimpleCall(ctx, metaArg)}
 channel.close()`;
 }
 
@@ -438,8 +660,7 @@ def invoke():
         request = service_pb2.${request}()
         json_format.Parse(json.dumps(${formatParams(ctx.params)}), request)
 
-        response = stub.${ctx.methodName}(request, metadata=build_metadata(), timeout=TIMEOUT)
-        print(json.dumps(json_format.MessageToDict(response), indent=2))
+        ${pyFullCall(ctx)}
 
     except grpc.RpcError as e:
         print(f"gRPC error ({e.code()}): {e.details()}", file=sys.stderr)

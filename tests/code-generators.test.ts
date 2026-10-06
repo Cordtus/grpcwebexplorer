@@ -276,6 +276,55 @@ describe("generatePythonFull", () => {
 	});
 });
 
+// -- Streaming --
+
+describe("streaming methods", () => {
+	it("server streaming iterates responses", () => {
+		const ctx = makeCtx({ responseStreaming: true });
+		expect(generateTypescriptSnippet(ctx)).toContain("call.on('data'");
+		expect(generateGoSnippet(ctx)).toContain("stream.Recv()");
+		expect(generateGoSnippet(ctx)).toContain('"io"');
+		expect(generatePythonSnippet(ctx)).toContain(
+			"for response in stub.SayHello(",
+		);
+	});
+
+	it("client streaming sends then closes", () => {
+		const ctx = makeCtx({ requestStreaming: true });
+		expect(generateTypescriptSnippet(ctx)).toContain("call.write(");
+		expect(generateTypescriptSnippet(ctx)).toContain("call.end()");
+		expect(generateGoSnippet(ctx)).toContain("stream.CloseAndRecv()");
+		expect(generatePythonSnippet(ctx)).toContain("iter([request])");
+	});
+
+	it("bidi streaming sends and receives", () => {
+		const ctx = makeCtx({ requestStreaming: true, responseStreaming: true });
+		expect(generateGoSnippet(ctx)).toContain("stream.CloseSend()");
+		expect(generateGoSnippet(ctx)).toContain("stream.Recv()");
+		expect(generateTypescriptFull(ctx)).toContain("call.write(request)");
+		expect(generatePythonFull(ctx)).toContain("for response in stub.SayHello(");
+	});
+
+	it("unary methods do not emit streaming constructs", () => {
+		const ctx = makeCtx();
+		expect(generateGoSnippet(ctx)).not.toContain('"io"');
+		expect(generateTypescriptSnippet(ctx)).not.toContain("call.on(");
+	});
+
+	it("go full streaming omits the unused status import", () => {
+		const out = generateGoFull(makeCtx({ responseStreaming: true }));
+		expect(out).toContain("stream.Recv()");
+		expect(out).not.toContain("google.golang.org/grpc/status");
+		expect(out).not.toContain("status.FromError");
+	});
+
+	it("client streaming does not import io", () => {
+		const out = generateGoSnippet(makeCtx({ requestStreaming: true }));
+		expect(out).toContain("stream.CloseAndRecv()");
+		expect(out).not.toContain('"io"');
+	});
+});
+
 // -- Cross-cutting concerns --
 
 describe("auth handling across generators", () => {

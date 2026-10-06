@@ -21,6 +21,7 @@
 - `MethodDetailPanel` now uses the shared `ExecutionResult` instead of a local copy.
 - Results panel JSON viewer: reduced right-edge padding and nesting indentation so long values wrap less, and made copy buttons always faintly visible with distinct icons for copying a value (`Copy`) versus an object (`Braces`) or array (`Brackets`).
 - Simplified the per-method pin tooltip to "Disable auto-collapse" / "Enable auto-collapse".
+- Generated code snippets now handle all four RPC modes — unary, client-streaming, server-streaming, and bidi — instead of always emitting a unary call.
 
 ## [1.4.0] - 2026-09-06
 
