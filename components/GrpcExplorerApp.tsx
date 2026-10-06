@@ -1425,13 +1425,13 @@ export default function GrpcExplorerApp() {
 					onShowSettings={() => setShowSettings(true)}
 				/>
 
-				{/* Method Instances (left) + Detail Panel (right) */}
+				{/* Requests (left) + Detail Panel (right) */}
 				<div className="flex-1 min-h-0 min-w-0 overflow-hidden">
 					<ResizablePanelGroup
 						direction={isMobileLayout ? "vertical" : "horizontal"}
 						className="h-full w-full"
 					>
-						{/* Left: Method Instances */}
+						{/* Left: Requests */}
 						<ResizablePanel
 							defaultSize={isMobileLayout ? 42 : 33}
 							minSize={isMobileLayout ? 24 : 20}
@@ -1443,11 +1443,11 @@ export default function GrpcExplorerApp() {
 								<div className="sticky top-0 z-10 bg-background border-b border-border">
 									<div className="flex items-center justify-between p-4">
 										<h2 className="text-sm font-semibold text-foreground">
-											Method Instances
+											Requests
 										</h2>
 										<div className="flex items-center gap-2">
 											<span className="text-xs text-muted-foreground">
-												{methodInstances.length} active
+												{methodInstances.length} open
 											</span>
 											{methodInstances.length > 0 && (
 												<button
