@@ -174,8 +174,10 @@ the results UI, with a "Decode" toggle to turn it off:
   inferred from any valid bech32 string in the same response (`valoper`/`valcons`
   reduced to the base prefix). `lib/utils/bech32.ts` implements the codec
 - `lib/grpc/descriptor-parser.ts` registers the `gogoproto.customtype` and
-  `cosmos_proto.scalar` field extensions so they survive reflection decoding and
-  reach `MessageField.customtype` / `MessageField.scalar`
+  `cosmos_proto.scalar` field extensions and the `google.api.http` method
+  extension so they survive reflection decoding; the HTTP annotation drives the
+  REST path (`lib/utils/rest-path-mapper.ts`), and methods without one report no
+  REST mapping
 - `components/MethodDetailPanel.tsx`: Provides the "Decode" toggle in the
   Results toolbar and builds the field-context map passed to the decoder
 - Raw response JSON, whole-response copy, and saved JSON keep original base64

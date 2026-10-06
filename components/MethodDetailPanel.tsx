@@ -540,20 +540,11 @@ export default function MethodDetailPanel({
 	const restResult = useMemo(() => {
 		return generateRestUrl(
 			service.fullName,
-			method.name,
 			params,
 			restBaseUrl,
-			method.requestTypeDefinition,
 			method.httpRule,
 		);
-	}, [
-		service.fullName,
-		method.name,
-		params,
-		restBaseUrl,
-		method.requestTypeDefinition,
-		method.httpRule,
-	]);
+	}, [service.fullName, params, restBaseUrl, method.httpRule]);
 
 	const codeGenCtx: CodeGenContext = useMemo(
 		() => ({
@@ -591,7 +582,7 @@ export default function MethodDetailPanel({
 			case "grpcurl":
 				return generateGrpcurl(codeGenCtx);
 			case "curl":
-				return generateCurl(codeGenCtx, restBaseUrl, method.httpRule);
+				return generateCurl(codeGenCtx, restResult);
 			case "typescript":
 				return scaffoldMode === "full"
 					? generateTypescriptFull(codeGenCtx)
@@ -605,7 +596,7 @@ export default function MethodDetailPanel({
 					? generatePythonFull(codeGenCtx)
 					: generatePythonSnippet(codeGenCtx);
 		}
-	}, [codeTab, codeGenCtx, restBaseUrl, method.httpRule, scaffoldMode]);
+	}, [codeTab, codeGenCtx, restResult, scaffoldMode]);
 
 	const curlUnsupported = codeTab === "curl" && !restResult.supported;
 	const hasScaffoldToggle =

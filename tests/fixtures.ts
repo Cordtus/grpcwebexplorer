@@ -6,7 +6,33 @@ import * as protobuf from "protobufjs";
 import descriptorJson from "protobufjs/google/protobuf/descriptor.json";
 
 const descriptorRoot = protobuf.Root.fromJSON(descriptorJson);
-// Register the field extensions so fixtures can encode/decode these options.
+// Register extensions so fixtures can encode/decode these options.
+descriptorRoot.addJSON({
+	google: {
+		nested: {
+			api: {
+				nested: {
+					HttpRule: {
+						fields: {
+							selector: { type: "string", id: 1 },
+							get: { type: "string", id: 2 },
+							put: { type: "string", id: 3 },
+							post: { type: "string", id: 4 },
+							delete: { type: "string", id: 5 },
+							patch: { type: "string", id: 6 },
+							body: { type: "string", id: 7 },
+							additional_bindings: {
+								rule: "repeated",
+								type: "HttpRule",
+								id: 11,
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+});
 const fixtureFieldOptions = descriptorRoot.lookupType(
 	"google.protobuf.FieldOptions",
 );
@@ -28,6 +54,17 @@ fixtureFieldOptions.add(
 		"google.protobuf.FieldOptions",
 	),
 );
+descriptorRoot
+	.lookupType("google.protobuf.MethodOptions")
+	.add(
+		new protobuf.Field(
+			"google.api.http",
+			72295728,
+			"google.api.HttpRule",
+			undefined,
+			"google.protobuf.MethodOptions",
+		),
+	);
 const FileDescriptorProto = descriptorRoot.lookupType(
 	"google.protobuf.FileDescriptorProto",
 );

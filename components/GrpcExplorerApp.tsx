@@ -67,7 +67,7 @@ const NETWORK_COLORS = [
 ];
 
 // Keep persisted network state aligned with descriptor completeness metadata.
-const NETWORK_CACHE_VERSION = "2.2.0";
+const NETWORK_CACHE_VERSION = "2.3.0";
 
 function updateExecutionHealth(
 	network: GrpcNetwork,
