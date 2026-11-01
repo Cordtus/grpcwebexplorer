@@ -126,6 +126,14 @@ Always use these shared types - never redefine locally.
 - Enum dropdowns with values from schema
 - Uses `MessageTypeDefinition.fields` array to iterate
 
+Well-known JSON types are special-cased: `google.protobuf.Struct`, `Value`, and
+`ListValue` render as a JSON textarea (their proto3 JSON form) rather than their
+map/oneof plumbing. The textarea keeps partially-typed input locally and only
+propagates valid JSON. `lib/grpc/well-known-json.ts` converts those JSON values
+into the protobufjs object shape inside `ReflectionClient.invokeMethod` before
+`fromObject`, so stored params stay standard proto3 JSON. The generated
+TypeScript snippet is not converted and still expects the protobufjs shape.
+
 When working with forms, remember that `requestTypeDefinition` is always defined (may have empty fields array for methods with no params).
 
 ## Color System
