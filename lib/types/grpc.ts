@@ -1,5 +1,15 @@
 // Shared gRPC type definitions
 
+/**
+ * Well-known types that proto3 JSON represents as plain JSON values, so the
+ * explorer edits them as JSON rather than exposing their internal message shape.
+ */
+export const JSON_WELL_KNOWN_TYPES = [
+	"google.protobuf.Struct",
+	"google.protobuf.Value",
+	"google.protobuf.ListValue",
+] as const;
+
 /** A protobuf message field, as extracted from a descriptor. */
 export interface MessageField {
 	name: string;

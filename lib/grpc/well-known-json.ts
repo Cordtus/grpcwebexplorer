@@ -4,24 +4,29 @@
 // ({ fields: [{ key, value: { string_value } }] }). Convert at the encode
 // boundary so callers can send standard JSON.
 //
-// DescriptorParser rebuilds Struct's `fields` map as repeated map-entry fields,
-// which is the only shape this app encodes.
+// DescriptorParser builds every field as a protobuf.Field (it ignores
+// map_entry), so Struct's `fields` is a repeated map-entry field here.
 
 import * as protobuf from "protobufjs";
+import { JSON_WELL_KNOWN_TYPES } from "@/lib/types/grpc";
 
-const STRUCT = "google.protobuf.Struct";
-const VALUE = "google.protobuf.Value";
-const LIST_VALUE = "google.protobuf.ListValue";
+const [STRUCT, VALUE, LIST_VALUE] = JSON_WELL_KNOWN_TYPES;
 
 /** Convert proto3-JSON Struct/Value/ListValue values in `params` to protobufjs shape. */
 export function normalizeWellKnownParams(
 	requestType: protobuf.Type,
-	params: Record<string, any>,
-): Record<string, any> {
+	params: any,
+): any {
+	const name = bareName(requestType);
+	// The request type itself may be a well-known type, in which case params is
+	// the JSON value itself (not a message object).
+	if (name === STRUCT || name === VALUE || name === LIST_VALUE) {
+		return params === undefined ? params : normalizeValue(requestType, params);
+	}
 	if (!params || typeof params !== "object" || Array.isArray(params)) {
 		return params;
 	}
-	return normalizeValue(requestType, params);
+	return normalizeMessage(requestType, params);
 }
 
 function bareName(type: protobuf.Type): string {
@@ -93,15 +98,7 @@ function normalizeMessage(type: protobuf.Type, value: unknown): any {
 		// it), but is a real NullValue for a Value field.
 		if (fieldValue === null && bareName(resolved) !== VALUE) continue;
 
-		if (field.map) {
-			if (!fieldValue || typeof fieldValue !== "object") continue;
-			output[field.name] = Object.fromEntries(
-				Object.entries(fieldValue).map(([key, item]) => [
-					key,
-					normalizeValue(resolved, item),
-				]),
-			);
-		} else if (field.repeated) {
+		if (field.repeated) {
 			if (!Array.isArray(fieldValue)) continue;
 			output[field.name] = fieldValue.map((item) =>
 				normalizeValue(resolved, item),

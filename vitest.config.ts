@@ -15,6 +15,7 @@ export default defineConfig({
 			provider: "v8",
 			include: [
 				"lib/grpc/descriptor-parser.ts",
+				"lib/grpc/well-known-json.ts",
 				"lib/utils/code-generators.ts",
 				"lib/utils/client-cache.ts",
 				"lib/types/grpc.ts",

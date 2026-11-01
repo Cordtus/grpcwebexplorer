@@ -9,20 +9,45 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import type { MessageField, MessageTypeDefinition } from "@/lib/types/grpc";
+import {
+	JSON_WELL_KNOWN_TYPES,
+	type MessageField,
+	type MessageTypeDefinition,
+} from "@/lib/types/grpc";
 import { cn } from "@/lib/utils";
 
-/** Proto3 JSON maps these well-known types to plain JSON values. */
-const JSON_WELL_KNOWN_TYPES = new Set([
-	"google.protobuf.Struct",
-	"google.protobuf.Value",
-	"google.protobuf.ListValue",
-]);
+const JSON_WELL_KNOWN_SET = new Set<string>(JSON_WELL_KNOWN_TYPES);
+
+type JsonShape = "any" | "object" | "array";
+
+const JSON_SHAPE_ERRORS: Record<Exclude<JsonShape, "any">, string> = {
+	object: "Expected a JSON object",
+	array: "Expected a JSON array",
+};
+
+/** Proto3 JSON placeholder for a well-known type, singular or repeated. */
+function wellKnownPlaceholder(type: string, repeated: boolean): string {
+	if (repeated) {
+		if (type === "google.protobuf.Value") return '[1, "two"]';
+		if (type === "google.protobuf.ListValue") return '[[1, "two"], ["three"]]';
+		return '[{"key": "value"}]';
+	}
+	if (type === "google.protobuf.Value") return '"value" or {"key": "value"}';
+	if (type === "google.protobuf.ListValue") return '["value", 1, true]';
+	return '{"key": "value"}';
+}
+
+/** The JSON shape a well-known value must have, given whether it is repeated. */
+function wellKnownShape(type: string, repeated: boolean): JsonShape {
+	if (repeated || type === "google.protobuf.ListValue") return "array";
+	if (type === "google.protobuf.Struct") return "object";
+	return "any";
+}
 
 interface ProtobufFormGeneratorProps {
 	messageType: MessageTypeDefinition;
-	value: Record<string, any>;
-	onChange: (value: Record<string, any>) => void;
+	value: any;
+	onChange: (value: any) => void;
 	readonly?: boolean;
 }
 
@@ -32,6 +57,21 @@ const ProtobufFormGenerator: React.FC<ProtobufFormGeneratorProps> = ({
 	onChange,
 	readonly = false,
 }) => {
+	// Some methods take a well-known type directly instead of a message with fields.
+	const messageTypeName = messageType.fullName.replace(/^\./, "");
+	if (JSON_WELL_KNOWN_SET.has(messageTypeName)) {
+		return (
+			<JsonValueInput
+				value={value}
+				onChange={onChange}
+				readonly={readonly}
+				placeholder={wellKnownPlaceholder(messageTypeName, false)}
+				expects={wellKnownShape(messageTypeName, false)}
+				ariaLabel={messageType.name}
+			/>
+		);
+	}
+
 	// If no fields, show empty state (methods with no parameters)
 	if (!messageType.fields || messageType.fields.length === 0) {
 		return (
@@ -72,6 +112,8 @@ interface FieldInputProps {
 	value: any;
 	onChange: (value: any) => void;
 	readonly?: boolean;
+	/** Prefix that keeps DOM ids unique for nested and repeated fields. */
+	path?: string;
 }
 
 const FieldInput: React.FC<FieldInputProps> = ({
@@ -79,23 +121,16 @@ const FieldInput: React.FC<FieldInputProps> = ({
 	value,
 	onChange,
 	readonly = false,
+	path = "",
 }) => {
 	const [expanded, setExpanded] = useState(true);
+	const fieldId = `${path}field-${field.name}`;
 
 	// Struct/Value/ListValue are plain JSON in proto3 JSON, so show a JSON editor
 	// instead of expanding their internal (map/oneof) plumbing.
 	const wellKnownType = field.type.replace(/^\./, "");
-	if (JSON_WELL_KNOWN_TYPES.has(wellKnownType)) {
+	if (JSON_WELL_KNOWN_SET.has(wellKnownType)) {
 		const repeated = field.rule === "repeated";
-		const placeholder = repeated
-			? wellKnownType === "google.protobuf.Value"
-				? '[1, "two"]'
-				: '[{"key": "value"}]'
-			: wellKnownType === "google.protobuf.ListValue"
-				? '["value", 1, true]'
-				: wellKnownType === "google.protobuf.Value"
-					? '"value" or {"key": "value"}'
-					: '{"key": "value"}';
 		return (
 			<div className="border border-border rounded-lg p-3 bg-muted/30">
 				<span className="text-sm font-medium text-foreground mb-2 block">
@@ -112,8 +147,8 @@ const FieldInput: React.FC<FieldInputProps> = ({
 					value={value}
 					onChange={onChange}
 					readonly={readonly}
-					placeholder={placeholder}
-					expectsArray={repeated}
+					placeholder={wellKnownPlaceholder(wellKnownType, repeated)}
+					expects={wellKnownShape(wellKnownType, repeated)}
 					ariaLabel={field.name}
 				/>
 			</div>
@@ -180,6 +215,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
 											<FieldInput
 												field={itemField}
 												value={item}
+												path={`${path}${field.name}[${index}].`}
 												onChange={(v) =>
 													handleArrayChange(
 														arrayValue.map((prev: any, i: number) =>
@@ -271,6 +307,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
 									key={nestedField.name}
 									field={nestedField}
 									value={nestedValue[nestedField.name]}
+									path={`${path}${field.name}.`}
 									onChange={(v) => {
 										const updated = { ...nestedValue, [nestedField.name]: v };
 										onChange(updated);
@@ -314,7 +351,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
 	return (
 		<div>
 			<label
-				htmlFor={`field-${field.name}`}
+				htmlFor={fieldId}
 				className="text-sm font-medium text-foreground mb-1.5 block"
 			>
 				{field.name}
@@ -329,7 +366,7 @@ const FieldInput: React.FC<FieldInputProps> = ({
 				<p className="text-xs text-muted-foreground mb-1.5">{field.comment}</p>
 			)}
 			<PrimitiveInput
-				id={`field-${field.name}`}
+				id={fieldId}
 				type={field.type}
 				value={value}
 				onChange={onChange}
@@ -347,8 +384,8 @@ interface JsonValueInputProps {
 	readonly?: boolean;
 	placeholder?: string;
 	ariaLabel?: string;
-	/** Reject parsed values that are not arrays (repeated well-known fields). */
-	expectsArray?: boolean;
+	/** JSON shape the well-known field requires; other shapes never reach the wire. */
+	expects?: JsonShape;
 }
 
 /**
@@ -361,7 +398,7 @@ const JsonValueInput: React.FC<JsonValueInputProps> = ({
 	readonly = false,
 	placeholder,
 	ariaLabel,
-	expectsArray = false,
+	expects = "any",
 }) => {
 	const serialize = (v: any) =>
 		v === undefined ? "" : JSON.stringify(v, null, 2);
@@ -387,9 +424,19 @@ const JsonValueInput: React.FC<JsonValueInputProps> = ({
 		}
 		try {
 			const parsed = JSON.parse(next);
-			if (expectsArray && !Array.isArray(parsed)) {
-				setError("Expected a JSON array");
-				return;
+			if (expects !== "any") {
+				const isObject =
+					parsed !== null &&
+					typeof parsed === "object" &&
+					!Array.isArray(parsed);
+				if (expects === "object" && !isObject) {
+					setError(JSON_SHAPE_ERRORS.object);
+					return;
+				}
+				if (expects === "array" && !Array.isArray(parsed)) {
+					setError(JSON_SHAPE_ERRORS.array);
+					return;
+				}
 			}
 			emitted.current = serialize(parsed);
 			setError(null);
@@ -403,6 +450,7 @@ const JsonValueInput: React.FC<JsonValueInputProps> = ({
 		<>
 			<textarea
 				aria-label={ariaLabel}
+				aria-invalid={!!error}
 				value={text}
 				onChange={(e) => handleChange(e.target.value)}
 				readOnly={readonly}
@@ -417,7 +465,9 @@ const JsonValueInput: React.FC<JsonValueInputProps> = ({
 				rows={4}
 			/>
 			{error && (
-				<p className="text-xs text-destructive mt-1">Invalid JSON: {error}</p>
+				<p role="alert" className="text-xs text-destructive mt-1">
+					{error}
+				</p>
 			)}
 		</>
 	);
