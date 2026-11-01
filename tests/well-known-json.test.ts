@@ -28,6 +28,7 @@ const STRUCT_FILE = {
 			nestedType: [
 				{
 					name: "FieldsEntry",
+					options: { mapEntry: true },
 					field: [
 						{ name: "key", number: 1, label: 1, type: 9 },
 						{
@@ -260,6 +261,22 @@ describe("normalizeWellKnownParams", () => {
 		const json = structType.toObject(decoded, { defaults: false }) as any;
 
 		expect(json.fields[0]).toEqual({ key: "a", value: { number_value: 1 } });
+	});
+
+	it("converts a request type that is itself a Value or ListValue", () => {
+		const valueType = parser
+			.getRoot()
+			.lookupType("google.protobuf.Value") as protobuf.Type;
+		expect(normalizeWellKnownParams(valueType, "text")).toEqual({
+			string_value: "text",
+		});
+
+		const listType = parser
+			.getRoot()
+			.lookupType("google.protobuf.ListValue") as protobuf.Type;
+		expect(normalizeWellKnownParams(listType, [1])).toEqual({
+			values: [{ number_value: 1 }],
+		});
 	});
 
 	it("leaves ordinary fields untouched", () => {
