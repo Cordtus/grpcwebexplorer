@@ -10,6 +10,8 @@
 - Address-typed `bytes` fields (`AccAddress`/`ValAddress`/`ConsAddress` customtypes or `cosmos.*AddressBytes` scalars) render as bech32. The prefix comes from the chain registry `bech32_prefix` for chain markers, from `cosmos.auth.v1beta1.Query/Bech32Prefix` (services route) for direct endpoints, and falls back to inference from a bech32 string in the same response.
 
 ### Fixed
+- `google.protobuf.Struct`, `google.protobuf.Value`, and `google.protobuf.ListValue` request fields are now editable as plain JSON, matching their proto3 JSON representation. Previously they expanded into map/oneof plumbing whose "Add" button was inert. `lib/grpc/well-known-json.ts` converts those JSON values into the protobufjs object shape at encode time, so stored params stay standard JSON and the request carries the intended data. Note: the generated TypeScript snippet still passes params straight to `@grpc/proto-loader`, which expects the protobufjs shape for these types.
+- Repeated fields inside nested messages can now add, edit, and remove items; their handlers were previously wired to no-ops. Repeated message fields also render the nested editor per item instead of a text box.
 - Field options (`gogoproto.customtype`, `cosmos_proto.scalar`) are preserved through reflection descriptor decoding instead of being dropped by protobufjs.
 - Markerless base64 bytes fields known to be `sdk.Dec` (e.g. `slash_fraction_downtime`) are now decoded and interpreted rather than left as raw base64.
 - REST paths now use the real `google.api.http` annotation recovered from the descriptor instead of an inaccurate name-based guess, so e.g. `GetTx` maps to `GET /cosmos/tx/v1beta1/txs/{hash}`. Methods with no annotation report that no REST mapping is known.

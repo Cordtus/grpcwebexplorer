@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
 import { DescriptorParser } from "./descriptor-parser";
+import { normalizeWellKnownParams } from "./well-known-json";
 
 // Inline reflection.proto definition. v1 and v1alpha differ only in the package
 // name, so the schema is templated once rather than duplicated verbatim.
@@ -1071,7 +1072,9 @@ export class ReflectionClient {
 
 			try {
 				// Encode request
-				const requestMessage = requestType.fromObject(params || {});
+				const requestMessage = requestType.fromObject(
+					normalizeWellKnownParams(requestType, params || {}),
+				);
 				const requestBuffer = Buffer.from(
 					requestType.encode(requestMessage).finish(),
 				);
