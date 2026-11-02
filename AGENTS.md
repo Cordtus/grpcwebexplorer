@@ -86,8 +86,9 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
   refresh clears that endpoint's descriptors
 - `listCachedChains()`: Enumerates all cached service entries for the "Recently Used" UI
 - `CachedChainInfo`: Type containing endpoint, chainId, tlsEnabled, serviceCount, cachedAt, age
-- The menu-bar indicator counts service lists and descriptors separately; it
-  no longer presents a raw localStorage key count as "cached"
+- The menu-bar indicator shows cached networks and breaks out service lists
+  and descriptors in its dropdown; it no longer presents a raw localStorage
+  key count as "cached"
 - `filterRemovedCachedServices()`/`hasRemovedCachedServices()` sanitize caches
   written by older builds; a stale service list containing a removed synthetic
   service is discarded and fetched fresh

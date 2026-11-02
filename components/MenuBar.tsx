@@ -111,11 +111,11 @@ export default function MenuBar({
 							setShowCacheMenu(!showCacheMenu);
 						}}
 						className="flex-center gap-1.5 px-2 py-1 text-muted-sm hover:bg-secondary/50 rounded transition-colors"
-						title={`${cacheStats.serviceCount} cached service lists, ${cacheStats.descriptorCount} cached service descriptors`}
+						title={`${cacheStats.networkCount} networks cached, ${cacheStats.serviceCount} cached service lists, ${cacheStats.descriptorCount} cached service descriptors`}
 					>
 						<Database className="h-3.5 w-3.5" />
 						<span className="hidden md:inline">
-							{cacheStats.serviceCount} service lists cached
+							{cacheStats.networkCount} networks cached
 						</span>
 						<span className="text-muted-foreground/70">
 							<span className="hidden lg:inline">({cacheStats.sizeKB}KB)</span>

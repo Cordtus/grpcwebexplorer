@@ -15,7 +15,7 @@
 - Page restore and network updates no longer bulk-enqueue every pending descriptor. Only selecting a method triggers a descriptor load; expanding a network does not start a background sweep.
 - Any-type loading is memoized per response, so a transaction with many same-type `Any` messages opens one reflection stream instead of one per message.
 - Persisted network and service caches written by the build that exposed the synthetic `cosmos.tx.v1beta1.Transactions` service are sanitized on read. Restored networks drop that service, and a stale service-list cache containing it is discarded so the next add fetches a fresh list.
-- The menu-bar cache indicator now reports cached service lists and descriptors separately instead of a raw localStorage key count as "N cached".
+- The menu-bar cache indicator now shows cached networks and breaks out service lists and descriptors in its dropdown instead of a raw localStorage key count as "N cached".
 - `google.protobuf.Any` wrappers in responses are decoded again. Descriptor field names are snake_case (`type_url`), but the decoder only recognized camelCase (`typeUrl`), so Cosmos tx messages such as `tx.body.messages[].value` stayed base64. Both key shapes now resolve the inner type through reflection and show its fields with `@type`.
 - Methods whose request type is itself `google.protobuf.Struct`, `Value`, or `ListValue` now show a single JSON editor instead of the type's internal plumbing, and encode correctly (previously the form emitted field-shaped params that no longer matched the request).
 - Struct inputs are shape-validated in the form (object, or array when repeated) alongside `ListValue`, so a malformed value is reported inline instead of failing at encode time and counting against endpoint health.
