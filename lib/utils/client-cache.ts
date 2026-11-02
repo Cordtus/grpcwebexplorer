@@ -11,6 +11,14 @@ const CACHE_VERSION = "2.3.0";
 const CACHE_PREFIX = "grpc-explorer:";
 const SETTINGS_KEY = "grpc-explorer:settings";
 
+export const NETWORK_CACHE_STORAGE_KEY = "grpc-explorer-networks";
+export const CACHE_CHANGED_EVENT = "grpc-explorer:cache-changed";
+
+function notifyCacheChanged(): void {
+	if (typeof window === "undefined") return;
+	window.dispatchEvent(new Event(CACHE_CHANGED_EVENT));
+}
+
 export const REQUEST_TIMEOUT_MS = {
 	DEFAULT: 10000,
 	MIN: 1000,
@@ -191,6 +199,7 @@ export function saveToCache<T>(key: string, data: T): void {
 		};
 
 		localStorage.setItem(cacheKey, JSON.stringify(entry));
+		notifyCacheChanged();
 	} catch (error) {
 		console.warn("Cache write error:", error);
 		// Fail silently - might be quota exceeded
@@ -206,6 +215,7 @@ export function removeFromCache(key: string): void {
 	try {
 		const cacheKey = `${CACHE_PREFIX}${key}`;
 		localStorage.removeItem(cacheKey);
+		notifyCacheChanged();
 	} catch (error) {
 		console.warn("Cache remove error:", error);
 	}
@@ -224,35 +234,80 @@ export function clearAllCache(): void {
 				localStorage.removeItem(key);
 			}
 		});
+		notifyCacheChanged();
 	} catch (error) {
 		console.warn("Cache clear error:", error);
 	}
 }
 
+export interface CacheStats {
+	/** Data cache entries (service lists + descriptors), excluding settings. */
+	count: number;
+	serviceCount: number;
+	descriptorCount: number;
+	networkCount: number;
+	sizeKB: number;
+}
+
 /**
- * Get cache statistics
+ * Get cache statistics. The menu bar shows the service-list count; descriptor
+ * entries are reported separately so "cached" means something specific.
  */
-export function getCacheStats(): { count: number; sizeKB: number } {
-	if (typeof window === "undefined") return { count: 0, sizeKB: 0 };
+export function getCacheStats(): CacheStats {
+	if (typeof window === "undefined") {
+		return {
+			count: 0,
+			serviceCount: 0,
+			descriptorCount: 0,
+			networkCount: 0,
+			sizeKB: 0,
+		};
+	}
 
 	try {
 		const keys = Object.keys(localStorage);
-		const cacheKeys = keys.filter((key) => key.startsWith(CACHE_PREFIX));
+		const serviceKeys = keys.filter((key) =>
+			key.startsWith(`${CACHE_PREFIX}services:`),
+		);
+		const descriptorKeys = keys.filter((key) =>
+			key.startsWith(`${CACHE_PREFIX}descriptor:`),
+		);
+		const cacheKeys = [...serviceKeys, ...descriptorKeys];
 
 		let totalSize = 0;
-		cacheKeys.forEach((key) => {
+		for (const key of [...cacheKeys, NETWORK_CACHE_STORAGE_KEY]) {
 			const value = localStorage.getItem(key);
-			if (value) {
-				totalSize += value.length;
+			if (value) totalSize += value.length;
+		}
+
+		let networkCount = 0;
+		try {
+			const networks = localStorage.getItem(NETWORK_CACHE_STORAGE_KEY);
+			if (networks) {
+				const parsed = JSON.parse(networks);
+				if (Array.isArray(parsed?.networks)) {
+					networkCount = parsed.networks.length;
+				}
 			}
-		});
+		} catch {
+			// Ignore malformed network cache.
+		}
 
 		return {
 			count: cacheKeys.length,
+			serviceCount: serviceKeys.length,
+			descriptorCount: descriptorKeys.length,
+			networkCount,
 			sizeKB: Math.round(totalSize / 1024),
 		};
 	} catch (_error) {
-		return { count: 0, sizeKB: 0 };
+		return {
+			count: 0,
+			serviceCount: 0,
+			descriptorCount: 0,
+			networkCount: 0,
+			sizeKB: 0,
+		};
 	}
 }
 
@@ -264,6 +319,39 @@ export function getServicesCacheKey(
 	tlsEnabled: boolean,
 ): string {
 	return `services:${endpoint}:${tlsEnabled}`;
+}
+
+/** Generate cache key for one service descriptor. */
+export function getDescriptorCacheKey(
+	endpoint: string,
+	tlsEnabled: boolean,
+	serviceName: string,
+): string {
+	return `descriptor:${endpoint}:${tlsEnabled}:${serviceName}`;
+}
+
+/** Drop cached descriptors for an endpoint, e.g. after a forced refresh. */
+export function clearDescriptorCache(
+	endpoint: string,
+	tlsEnabled: boolean,
+): void {
+	if (typeof window === "undefined") return;
+
+	try {
+		const prefix = `${CACHE_PREFIX}${getDescriptorCacheKey(
+			endpoint,
+			tlsEnabled,
+			"",
+		)}`;
+		for (const key of Object.keys(localStorage)) {
+			if (key.startsWith(prefix)) {
+				localStorage.removeItem(key);
+			}
+		}
+		notifyCacheChanged();
+	} catch (error) {
+		console.warn("Descriptor cache clear error:", error);
+	}
 }
 
 /**

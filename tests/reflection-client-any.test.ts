@@ -8,12 +8,31 @@ import { ReflectionClient } from "@/lib/grpc/reflection-client";
 function buildClient() {
 	const root = new protobuf.Root();
 	root.addJSON({
+		google: {
+			nested: {
+				protobuf: {
+					nested: {
+						Any: {
+							fields: {
+								type_url: { type: "string", id: 1 },
+								value: { type: "bytes", id: 2 },
+							},
+						},
+					},
+				},
+			},
+		},
 		example: {
 			nested: {
 				Msg: {
 					fields: {
 						sender: { type: "string", id: 1 },
 						amount: { type: "uint64", id: 2 },
+					},
+				},
+				Outer: {
+					fields: {
+						inner: { type: "google.protobuf.Any", id: 1 },
 					},
 				},
 			},
@@ -70,6 +89,39 @@ describe("ReflectionClient Any decoding", () => {
 			sender: "inj1abc",
 			amount: "42",
 			"@type": "example.Msg",
+		});
+	});
+
+	it("recurses into Any wrappers nested inside a decoded Any", async () => {
+		const built = buildClient();
+		client = built.client;
+
+		const root = (client as any).parser.getRoot() as protobuf.Root;
+		const msgType = root.lookupType("example.Msg");
+		const outerType = root.lookupType("example.Outer");
+		const innerBytes = msgType
+			.encode(msgType.fromObject({ sender: "inj1nested", amount: "7" }))
+			.finish();
+		const outerBytes = outerType
+			.encode(
+				outerType.fromObject({
+					inner: { type_url: "/example.Msg", value: innerBytes },
+				}),
+			)
+			.finish();
+
+		const decoded = await (client as any).decodeAnyFields({
+			type_url: "/example.Outer",
+			value: Buffer.from(outerBytes).toString("base64"),
+		});
+
+		expect(decoded).toEqual({
+			inner: {
+				sender: "inj1nested",
+				amount: "7",
+				"@type": "example.Msg",
+			},
+			"@type": "example.Outer",
 		});
 	});
 

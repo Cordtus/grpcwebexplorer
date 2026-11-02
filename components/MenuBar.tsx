@@ -11,7 +11,13 @@ import {
 } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import type { ExplorerMode } from "@/lib/types/grpc";
-import { clearAllCache, getCacheStats } from "@/lib/utils/client-cache";
+import {
+	CACHE_CHANGED_EVENT,
+	type CacheStats,
+	clearAllCache,
+	getCacheStats,
+	NETWORK_CACHE_STORAGE_KEY,
+} from "@/lib/utils/client-cache";
 
 interface MenuBarProps {
 	mode?: ExplorerMode;
@@ -28,7 +34,13 @@ export default function MenuBar({
 	onShowKeyboardShortcuts,
 	onShowHelp,
 }: MenuBarProps) {
-	const [cacheStats, setCacheStats] = useState({ count: 0, sizeKB: 0 });
+	const [cacheStats, setCacheStats] = useState<CacheStats>({
+		count: 0,
+		serviceCount: 0,
+		descriptorCount: 0,
+		networkCount: 0,
+		sizeKB: 0,
+	});
 	const [showCacheMenu, setShowCacheMenu] = useState(false);
 	const isMac =
 		typeof navigator !== "undefined" &&
@@ -51,7 +63,7 @@ export default function MenuBar({
 		) {
 			clearAllCache();
 			// Also clear network cache
-			localStorage.removeItem("grpc-explorer-networks");
+			localStorage.removeItem(NETWORK_CACHE_STORAGE_KEY);
 			updateCacheStats();
 			setShowCacheMenu(false);
 			// Reload page to clear networks from state
@@ -59,9 +71,15 @@ export default function MenuBar({
 		}
 	};
 
-	// Load cache stats on mount
+	// Refresh the indicator whenever any cache entry changes (same tab or another).
 	React.useEffect(() => {
 		updateCacheStats();
+		window.addEventListener(CACHE_CHANGED_EVENT, updateCacheStats);
+		window.addEventListener("storage", updateCacheStats);
+		return () => {
+			window.removeEventListener(CACHE_CHANGED_EVENT, updateCacheStats);
+			window.removeEventListener("storage", updateCacheStats);
+		};
 	}, [updateCacheStats]);
 
 	return (
@@ -93,10 +111,12 @@ export default function MenuBar({
 							setShowCacheMenu(!showCacheMenu);
 						}}
 						className="flex-center gap-1.5 px-2 py-1 text-muted-sm hover:bg-secondary/50 rounded transition-colors"
-						title="Cache information"
+						title={`${cacheStats.serviceCount} cached service lists, ${cacheStats.descriptorCount} cached service descriptors`}
 					>
 						<Database className="h-3.5 w-3.5" />
-						<span className="hidden md:inline">{cacheStats.count} cached</span>
+						<span className="hidden md:inline">
+							{cacheStats.serviceCount} service lists cached
+						</span>
 						<span className="text-muted-foreground/70">
 							<span className="hidden lg:inline">({cacheStats.sizeKB}KB)</span>
 						</span>
@@ -113,10 +133,24 @@ export default function MenuBar({
 								onClick={() => setShowCacheMenu(false)}
 							/>
 							<div className="absolute right-0 top-full mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1">
-								<div className="px-3 py-2 text-muted-sm border-b border-border">
-									<div className="flex-between mb-1">
-										<span>Cache entries:</span>
-										<span className="font-medium">{cacheStats.count}</span>
+								<div className="px-3 py-2 text-muted-sm border-b border-border space-y-1">
+									<div className="flex-between">
+										<span>Loaded networks:</span>
+										<span className="font-medium">
+											{cacheStats.networkCount}
+										</span>
+									</div>
+									<div className="flex-between">
+										<span>Service lists cached:</span>
+										<span className="font-medium">
+											{cacheStats.serviceCount}
+										</span>
+									</div>
+									<div className="flex-between">
+										<span>Descriptors cached:</span>
+										<span className="font-medium">
+											{cacheStats.descriptorCount}
+										</span>
 									</div>
 									<div className="flex-between">
 										<span>Size:</span>

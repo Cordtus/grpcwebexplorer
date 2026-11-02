@@ -28,10 +28,14 @@ import type {
 } from "@/lib/types/grpc";
 import { cn, errorMessage } from "@/lib/utils";
 import {
+	CACHE_CHANGED_EVENT,
+	clearDescriptorCache,
 	getCacheTTL,
+	getDescriptorCacheKey,
 	getFromCache,
 	getRequestTimeoutMs,
 	getServicesCacheKey,
+	NETWORK_CACHE_STORAGE_KEY,
 	saveToCache,
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
@@ -166,7 +170,7 @@ export default function GrpcExplorerApp() {
 	useEffect(() => {
 		try {
 			// Load networks
-			const cached = localStorage.getItem("grpc-explorer-networks");
+			const cached = localStorage.getItem(NETWORK_CACHE_STORAGE_KEY);
 			if (cached) {
 				const parsed = JSON.parse(cached);
 				// Check if cache is still valid (use same TTL as services cache setting)
@@ -182,7 +186,7 @@ export default function GrpcExplorerApp() {
 				if (isValid) {
 					setNetworks(parsed.networks);
 				} else {
-					localStorage.removeItem("grpc-explorer-networks");
+					localStorage.removeItem(NETWORK_CACHE_STORAGE_KEY);
 				}
 			}
 		} catch (err) {
@@ -199,13 +203,14 @@ export default function GrpcExplorerApp() {
 			saveTimerRef.current = setTimeout(() => {
 				try {
 					localStorage.setItem(
-						"grpc-explorer-networks",
+						NETWORK_CACHE_STORAGE_KEY,
 						JSON.stringify({
 							networks,
 							timestamp: Date.now(),
 							version: NETWORK_CACHE_VERSION,
 						}),
 					);
+					window.dispatchEvent(new Event(CACHE_CHANGED_EVENT));
 				} catch (err) {
 					console.error("[NetworkCache] Failed to save networks:", err);
 				}
@@ -727,14 +732,9 @@ export default function GrpcExplorerApp() {
 		[requestTimeoutMs],
 	);
 
-	// Start background descriptor loading when networks are added or updated
-	useEffect(() => {
-		networks.forEach((network) => {
-			if (!network.loading && network.services.length > 0) {
-				enqueueDescriptorLoading(network);
-			}
-		});
-	}, [networks, enqueueDescriptorLoading]);
+	// Descriptors load when a network is expanded or a method is selected, and
+	// are cached client-side. Loading every pending service whenever networks
+	// change re-enumerated the whole chain after each refresh or page restore.
 
 	// Remove network
 	const handleRemoveNetwork = useCallback((networkId: string) => {
@@ -756,6 +756,8 @@ export default function GrpcExplorerApp() {
 			);
 			const { removeFromCache } = await import("@/lib/utils/client-cache");
 			removeFromCache(cacheKey);
+			clearDescriptorCache(network.endpoint, network.tlsEnabled);
+			descriptorLoader.clear(networkId);
 
 			debug.log(`🔄 Force refreshing ${network.endpoint}...`);
 
@@ -916,111 +918,125 @@ export default function GrpcExplorerApp() {
 
 				// If still not loaded, fetch on-demand with priority over background loading
 				if (enrichedMethod === method) {
-					debug.log(
-						`[UI] Loading field definitions for ${service.fullName}...`,
+					const cacheKey = getDescriptorCacheKey(
+						network.endpoint,
+						network.tlsEnabled,
+						service.fullName,
 					);
 
-					// Pause background loading to prioritize user-initiated fetch
-					descriptorLoader.pause();
+					const applyDescriptor = (descriptor: GrpcService): boolean => {
+						const enrichedMethodData = descriptor.methods.find(
+							(m) => m.name === method.name,
+						);
+						if (!enrichedMethodData) return false;
 
-					// Retry with backoff for rate-limiting resilience
-					const maxAttempts = 3;
-					const retryDelays = [0, 1500, 3000];
+						enrichedMethod = enrichedMethodData;
+						enrichedService = {
+							...descriptor,
+							descriptorStatus: "loaded",
+						};
+						descriptorLoader.markLoaded(network.id, service.fullName);
 
-					try {
-						for (let attempt = 0; attempt < maxAttempts; attempt++) {
-							if (attempt > 0) {
-								debug.log(
-									`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`,
-								);
-								await new Promise((r) => setTimeout(r, retryDelays[attempt]));
-							}
+						// Update the network state so other methods from this service also get enriched data
+						setNetworks((prev) =>
+							prev.map((n) => {
+								if (n.id !== network.id) return n;
+								return {
+									...n,
+									services: n.services.map((s) =>
+										s.fullName === descriptor.fullName
+											? { ...descriptor, descriptorStatus: "loaded" }
+											: s,
+									),
+								};
+							}),
+						);
+						return true;
+					};
 
-							try {
-								const response = await fetch("/api/grpc/descriptor", {
-									method: "POST",
-									headers: { "Content-Type": "application/json" },
-									body: JSON.stringify({
-										endpoint: network.endpoint,
-										tlsEnabled: network.tlsEnabled,
-										serviceName: service.fullName,
-										timeoutMs: requestTimeoutMs,
-									}),
-								});
+					const cachedDescriptor = getFromCache<GrpcService>(cacheKey);
+					if (cachedDescriptor && applyDescriptor(cachedDescriptor)) {
+						debug.log(
+							`[UI] Using cached descriptor for ${service.fullName}.${method.name}`,
+						);
+					} else {
+						debug.log(
+							`[UI] Loading field definitions for ${service.fullName}...`,
+						);
 
-								if (!response.ok) {
-									if (attempt < maxAttempts - 1) {
-										console.warn(
-											`[UI] Descriptor fetch failed (${response.status}), will retry...`,
-										);
-										continue;
-									}
-									throw new Error(
-										`Failed to load descriptor: ${response.statusText}`,
+						// Pause background loading to prioritize user-initiated fetch
+						descriptorLoader.pause();
+
+						// Retry with backoff for rate-limiting resilience
+						const maxAttempts = 3;
+						const retryDelays = [0, 1500, 3000];
+
+						try {
+							for (let attempt = 0; attempt < maxAttempts; attempt++) {
+								if (attempt > 0) {
+									debug.log(
+										`[UI] Retry ${attempt + 1}/${maxAttempts} for ${service.fullName}...`,
 									);
+									await new Promise((r) => setTimeout(r, retryDelays[attempt]));
 								}
 
-								const data = await response.json();
-								if (data.service) {
-									const enrichedMethodData = data.service.methods.find(
-										(m: GrpcMethod) => m.name === method.name,
-									);
-									if (enrichedMethodData) {
-										enrichedMethod = enrichedMethodData;
-										enrichedService = {
-											...data.service,
-											descriptorStatus: "loaded",
-										};
+								try {
+									const response = await fetch("/api/grpc/descriptor", {
+										method: "POST",
+										headers: { "Content-Type": "application/json" },
+										body: JSON.stringify({
+											endpoint: network.endpoint,
+											tlsEnabled: network.tlsEnabled,
+											serviceName: service.fullName,
+											timeoutMs: requestTimeoutMs,
+										}),
+									});
+
+									if (!response.ok) {
+										if (attempt < maxAttempts - 1) {
+											console.warn(
+												`[UI] Descriptor fetch failed (${response.status}), will retry...`,
+											);
+											continue;
+										}
+										throw new Error(
+											`Failed to load descriptor: ${response.statusText}`,
+										);
+									}
+
+									const data = await response.json();
+									if (data.service && applyDescriptor(data.service)) {
+										saveToCache(cacheKey, data.service);
 										debug.log(
 											`[UI] Loaded field definitions for ${service.fullName}.${method.name}`,
-										);
-										descriptorLoader.markLoaded(network.id, service.fullName);
-
-										// Update the network state so other methods from this service also get enriched data
-										setNetworks((prev) =>
-											prev.map((n) => {
-												if (n.id !== network.id) return n;
-												return {
-													...n,
-													services: n.services.map((s) =>
-														s.fullName === data.service.fullName
-															? { ...data.service, descriptorStatus: "loaded" }
-															: s,
-													),
-												};
-											}),
 										);
 									} else {
 										throw new Error(
 											`Descriptor for ${service.fullName} does not contain ${method.name}`,
 										);
 									}
-								} else {
-									throw new Error(
-										`No descriptor returned for ${service.fullName}`,
-									);
+									break; // Success - exit retry loop
+								} catch (err) {
+									if (attempt === maxAttempts - 1) throw err;
 								}
-								break; // Success - exit retry loop
-							} catch (err) {
-								if (attempt === maxAttempts - 1) throw err;
 							}
+						} catch (err) {
+							const message = errorMessage(err);
+							console.error(
+								`[UI] Failed to load field definitions after ${maxAttempts} attempts:`,
+								err,
+							);
+							toast.error(
+								`Could not load protobuf descriptor for ${service.name}`,
+								{
+									description: `${message}. Retry after the source endpoint recovers.`,
+									duration: 6000,
+								},
+							);
+							return;
+						} finally {
+							descriptorLoader.resume();
 						}
-					} catch (err) {
-						const message = errorMessage(err);
-						console.error(
-							`[UI] Failed to load field definitions after ${maxAttempts} attempts:`,
-							err,
-						);
-						toast.error(
-							`Could not load protobuf descriptor for ${service.name}`,
-							{
-								description: `${message}. Retry after the source endpoint recovers.`,
-								duration: 6000,
-							},
-						);
-						return;
-					} finally {
-						descriptorLoader.resume();
 					}
 				}
 			}

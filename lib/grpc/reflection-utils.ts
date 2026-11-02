@@ -3,7 +3,6 @@
 
 import type { GrpcService } from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
-import { getFromCache, saveToCache } from "@/lib/utils/client-cache";
 import { ReflectionClient } from "./reflection-client";
 
 // Re-export for API routes (e.g. the services route).
@@ -47,11 +46,12 @@ export async function fetchServicesViaReflection(options: {
  * which is more efficient for Cosmos chains. Falls back to standard reflection
  * if v2alpha1 is not available.
  *
- * After getting the service list from v2alpha1, it loads full field definitions
- * using standard reflection to ensure all methods have proper parameter info.
+ * v2alpha1 returns names and methods only. Field definitions stay pending and
+ * are loaded on demand (and cached client-side), so a refresh does not
+ * re-enumerate every service through standard reflection.
  *
  * @param options - Reflection options (endpoint, tls, timeout)
- * @returns Array of services with full type definitions
+ * @returns Array of services, with pending descriptors where applicable
  */
 export async function fetchServicesWithCosmosOptimization(options: {
 	endpoint: string;
@@ -87,64 +87,19 @@ export async function fetchServicesWithCosmosOptimization(options: {
 			console.log(`[Reflection] Got transaction service via v2alpha1`);
 		}
 
-		// If v2alpha1 succeeded, enrich with full field definitions using standard reflection
+		// v2alpha1 gives the complete service/method list without field
+		// definitions. Return it immediately and load descriptors on demand:
+		// running standard reflection here re-enumerates every service on every
+		// discovery/refresh and defeats the v2alpha1 fast path.
 		if (v2alpha1Services.length > 0) {
-			console.log(
-				`[Reflection] v2alpha1 success: ${v2alpha1Services.length} total services`,
-			);
-			console.log(
-				"[Reflection] Now loading full field definitions via standard reflection...",
-			);
-
-			// Load full descriptors for all v2alpha1 services using standard reflection
-			// This ensures field definitions are always available
-			await client.initialize();
-			const enrichedServices = client.getServices().map((service) => ({
+			const pendingServices = v2alpha1Services.map((service) => ({
 				...service,
-				descriptorStatus: "loaded" as const,
+				descriptorStatus: "pending" as const,
 			}));
-
-			// Merge: prefer enriched services (with full field definitions), keep v2alpha1-only services
-			const finalServices: GrpcService[] = [];
-			const seenServices = new Set<string>();
-
-			for (const service of enrichedServices) {
-				finalServices.push(service);
-				seenServices.add(service.fullName);
-			}
-
-			// Add any v2alpha1-only services not in standard reflection
-			// (e.g. the Transactions service from GetTxDescriptor)
-			for (const v2Service of v2alpha1Services) {
-				if (!seenServices.has(v2Service.fullName)) {
-					finalServices.push({ ...v2Service, descriptorStatus: "pending" });
-					seenServices.add(v2Service.fullName);
-				}
-			}
-
-			// Count services that still have methods with empty field definitions
-			// These may need on-demand loading if rate limiting prevented full enrichment
-			let emptyFieldCount = 0;
-			for (const service of finalServices) {
-				for (const method of service.methods) {
-					if (
-						method.requestTypeDefinition &&
-						method.requestTypeDefinition.fields.length === 0
-					) {
-						emptyFieldCount++;
-					}
-				}
-			}
-			if (emptyFieldCount > 0) {
-				console.warn(
-					`[Reflection] ${emptyFieldCount} methods still have empty field definitions (may need on-demand loading)`,
-				);
-			}
-
 			console.log(
-				`[Reflection] Final enriched services: ${finalServices.length}`,
+				`[Reflection] v2alpha1 success: ${pendingServices.length} services; descriptors load on demand`,
 			);
-			return finalServices;
+			return pendingServices;
 		}
 
 		// Fallback to standard reflection if v2alpha1 not available
@@ -189,22 +144,6 @@ export async function loadServiceDescriptor(
 		throw new Error("Service name is required");
 	}
 
-	const cacheKey = `descriptor:${options.endpoint}:${options.tls}:${serviceName}`;
-
-	try {
-		const cached = getFromCache<GrpcService>(cacheKey);
-		if (cached) {
-			console.log(`[Reflection] Using cached descriptor for ${serviceName}`);
-			return { ...cached, descriptorStatus: "loaded" };
-		}
-	} catch (cacheErr) {
-		// Cache read failed, continue without cache
-		console.warn(
-			`[Reflection] Cache read failed for ${serviceName}:`,
-			cacheErr,
-		);
-	}
-
 	console.log(
 		`[Reflection] Loading descriptor for ${serviceName} from ${options.endpoint}...`,
 	);
@@ -234,14 +173,6 @@ export async function loadServiceDescriptor(
 			const service = services.find((s) => s.fullName === serviceName);
 
 			if (service) {
-				try {
-					saveToCache(cacheKey, service);
-				} catch (cacheErr) {
-					console.warn(
-						`[Reflection] Cache write failed for ${serviceName}:`,
-						cacheErr,
-					);
-				}
 				console.log(
 					`[Reflection] Loaded descriptor for ${serviceName} (${service.methods.length} methods)`,
 				);

@@ -59,8 +59,13 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 `lib/grpc/reflection-utils.ts` provides high-level helpers:
 
 - `fetchServicesViaReflection()`: Standard reflection for any gRPC server
-- `fetchServicesWithCosmosOptimization()`: Tries v2alpha1 first, falls back to standard
-- `loadServiceDescriptor()`: Lazy-loads field definitions for a specific service with caching
+- `fetchServicesWithCosmosOptimization()`: Tries v2alpha1 first, falls back to
+  standard. v2alpha1 provides the service/method list only, so those services
+  are marked `pending`; do not add a full `initialize()` here, which re-enumerates
+  every service and defeats the fast path
+- `loadServiceDescriptor()`: Server-side lazy load for a specific service.
+  Browser caching lives in `descriptor-loader`/`handleSelectMethod`, because
+  client-cache helpers are no-ops on the server
 
 ### Client-Side Caching Strategy
 
@@ -68,11 +73,17 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 
 - **No server-side caching** - all caching is client-side
 - User-configurable TTL: None/1hr/6hr/24hr/36hr/72hr/Never (default: Never)
-- Cache keys: `grpc-explorer:services:{endpoint}:{tls}`
+- Cache keys: `grpc-explorer:services:{endpoint}:{tls}` for service lists and
+  `grpc-explorer:descriptor:{endpoint}:{tls}:{service}` for field definitions
 - Version-aware cache with automatic invalidation on version bumps
 - Networks persisted to `grpc-explorer-networks` with same TTL as services
+- `getDescriptorCacheKey()`/`clearDescriptorCache()`: per-service descriptor
+  cache used by the descriptor loader and method selection; a forced network
+  refresh clears that endpoint's descriptors
 - `listCachedChains()`: Enumerates all cached service entries for the "Recently Used" UI
 - `CachedChainInfo`: Type containing endpoint, chainId, tlsEnabled, serviceCount, cachedAt, age
+- The menu-bar indicator counts service lists and descriptors separately; it
+  no longer presents a raw localStorage key count as "cached"
 
 ### State Management Pattern
 
@@ -250,9 +261,14 @@ Method execution history is managed inside `components/GrpcExplorerApp.tsx`:
 ## Descriptor Loader
 
 `lib/utils/descriptor-loader.ts` handles background loading of protobuf field definitions:
-- Queues lazy-load requests for services discovered via v2alpha1
+- Queues lazy-load requests for services the user expands, and serves any
+  cached descriptor from localStorage without a network request
 - Emits events when descriptors are loaded so UI can update
 - Prevents duplicate loads with internal tracking
+- Descriptors are not bulk-enqueued whenever network state changes. Page
+  refresh restores networks from `grpc-explorer-networks`; method selection
+  loads only the selected service on demand, and a forced refresh clears that
+  endpoint's descriptor cache first
 
 ## AddNetworkDialog Features
 

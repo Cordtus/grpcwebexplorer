@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+	getDescriptorCacheKey,
 	getServicesCacheKey,
 	normalizeRequestTimeoutMs,
 	REQUEST_TIMEOUT_MS,
@@ -25,6 +26,27 @@ describe("Cache key generation", () => {
 			const key1 = getServicesCacheKey("host1:443", true);
 			const key2 = getServicesCacheKey("host2:443", true);
 			expect(key1).not.toBe(key2);
+		});
+	});
+
+	describe("getDescriptorCacheKey", () => {
+		it("includes endpoint, TLS flag, and service name", () => {
+			expect(
+				getDescriptorCacheKey(
+					"grpc.example.com:443",
+					true,
+					"cosmos.bank.Query",
+				),
+			).toBe("descriptor:grpc.example.com:443:true:cosmos.bank.Query");
+		});
+
+		it("separates services and TLS modes", () => {
+			expect(getDescriptorCacheKey("host:443", true, "a.Query")).not.toBe(
+				getDescriptorCacheKey("host:443", false, "a.Query"),
+			);
+			expect(getDescriptorCacheKey("host:443", true, "a.Query")).not.toBe(
+				getDescriptorCacheKey("host:443", true, "b.Query"),
+			);
 		});
 	});
 });

@@ -1,4 +1,9 @@
 import { errorMessage } from "@/lib/utils";
+import {
+	getDescriptorCacheKey,
+	getFromCache,
+	saveToCache,
+} from "@/lib/utils/client-cache";
 
 type DescriptorJob = {
 	networkId: string;
@@ -121,8 +126,34 @@ class DescriptorLoaderQueue {
 			return;
 		}
 
+		// Serve cached descriptors without a network round-trip.
+		while (this.queue.length > 0) {
+			const job = this.queue[0];
+			const cacheKey = getDescriptorCacheKey(
+				job.endpoint,
+				job.tlsEnabled,
+				job.serviceName,
+			);
+			const cached = getFromCache<any>(cacheKey);
+			if (!cached) break;
+
+			this.queue.shift();
+			this.loaded.add(this.getJobKey(job));
+			this.notifyListeners({
+				networkId: job.networkId,
+				serviceName: job.serviceName,
+				service: cached,
+			});
+		}
+		if (this.queue.length === 0) return;
+
 		this.currentJob = this.queue.shift()!;
 		const jobKey = this.getJobKey(this.currentJob);
+		const cacheKey = getDescriptorCacheKey(
+			this.currentJob.endpoint,
+			this.currentJob.tlsEnabled,
+			this.currentJob.serviceName,
+		);
 		this.loading.add(jobKey);
 
 		// Create abort controller for this request
@@ -144,6 +175,7 @@ class DescriptorLoaderQueue {
 			if (response.ok) {
 				const data = await response.json();
 				if (data.service) {
+					saveToCache(cacheKey, data.service);
 					this.loaded.add(jobKey);
 					this.notifyListeners({
 						networkId: this.currentJob.networkId,

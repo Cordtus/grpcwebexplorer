@@ -1265,6 +1265,7 @@ export class ReflectionClient {
 
 				for (const method of queryService.methods) {
 					if (!method.name) continue;
+					const fullQueryPath = method.full_query_path ?? method.fullQueryPath;
 
 					// Note: v2alpha1 doesn't provide full type definitions, so we create simplified ones
 					methods.push({
@@ -1272,15 +1273,14 @@ export class ReflectionClient {
 						fullName: `${queryService.fullname}/${method.name}`,
 						serviceName: queryService.fullname,
 						requestType:
-							method.fullQueryPath ||
-							`${queryService.fullname}.${method.name}Request`,
+							fullQueryPath || `${queryService.fullname}.${method.name}Request`,
 						responseType: `${queryService.fullname}.${method.name}Response`,
 						requestStreaming: false,
 						responseStreaming: false,
 						requestTypeDefinition: {
 							name: `${method.name}Request`,
 							fullName:
-								method.fullQueryPath ||
+								fullQueryPath ||
 								`${queryService.fullname}.${method.name}Request`,
 							fields: [], // Will be populated by standard reflection if needed
 						},
@@ -1347,26 +1347,27 @@ export class ReflectionClient {
 
 			// Parse tx messages from response
 			for (const msg of response.tx.msgs) {
-				if (!msg.msgTypeUrl) continue;
+				const msgTypeUrl = msg.msg_type_url ?? msg.msgTypeUrl;
+				if (!msgTypeUrl) continue;
 
 				// Extract message name from type URL (e.g., /cosmos.bank.v1beta1.MsgSend -> MsgSend)
-				const msgName = msg.msgTypeUrl.split(".").pop() || msg.msgTypeUrl;
-				const serviceName = msg.msgTypeUrl.substring(
+				const msgName = msgTypeUrl.split(".").pop() || msgTypeUrl;
+				const serviceName = msgTypeUrl.substring(
 					1,
-					msg.msgTypeUrl.lastIndexOf("."),
+					msgTypeUrl.lastIndexOf("."),
 				);
 
 				methods.push({
 					name: msgName,
-					fullName: msg.msgTypeUrl,
+					fullName: msgTypeUrl,
 					serviceName: "cosmos.tx.v1beta1.Transactions",
-					requestType: msg.msgTypeUrl,
+					requestType: msgTypeUrl,
 					responseType: `${serviceName}.${msgName}Response`,
 					requestStreaming: false,
 					responseStreaming: false,
 					requestTypeDefinition: {
 						name: msgName,
-						fullName: msg.msgTypeUrl,
+						fullName: msgTypeUrl,
 						fields: [], // Will be populated by standard reflection if needed
 					},
 					responseTypeDefinition: {
