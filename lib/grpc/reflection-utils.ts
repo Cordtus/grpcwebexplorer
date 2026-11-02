@@ -46,8 +46,10 @@ export async function fetchServicesViaReflection(options: {
  * which is more efficient for Cosmos chains. Falls back to standard reflection
  * if v2alpha1 is not available.
  *
- * v2alpha1 returns names and methods only. Field definitions stay pending and
- * are loaded on demand (and cached client-side), so a refresh does not
+ * v2alpha1 reports query services only, with names and methods but no field
+ * definitions. Those stay pending and load on demand (and are cached
+ * client-side). Services v2alpha1 omits (tx/Msg/reflection) are discovered via
+ * one standard name listing and loaded individually, so a refresh does not
  * re-enumerate every service through standard reflection.
  *
  * @param options - Reflection options (endpoint, tls, timeout)
@@ -67,39 +69,60 @@ export async function fetchServicesWithCosmosOptimization(options: {
 	});
 
 	try {
-		const v2alpha1Services: GrpcService[] = [];
-
 		console.log("[Reflection] Attempting v2alpha1 reflection...");
 
-		// Fetch query services via v2alpha1
+		// v2alpha1 only reports query services. If it fails, fall back to the
+		// standard full reflection path below.
 		const queryServices = await client.getQueryServicesViaV2Alpha1();
 		if (queryServices.length > 0) {
-			v2alpha1Services.push(...queryServices);
 			console.log(
 				`[Reflection] Got ${queryServices.length} query services via v2alpha1`,
 			);
-		}
 
-		// Fetch tx descriptor via v2alpha1
-		const txService = await client.getTxDescriptorViaV2Alpha1();
-		if (txService) {
-			v2alpha1Services.push(txService);
-			console.log(`[Reflection] Got transaction service via v2alpha1`);
-		}
+			// v2alpha1 is not a complete service list: tx/Msg/reflection services
+			// only appear in standard reflection. Union those in with one cheap
+			// name listing, then load just the missing services instead of every
+			// service on the chain.
+			const known = new Set(queryServices.map((service) => service.fullName));
+			let allNames: string[] = [];
+			try {
+				allNames = await client.listServiceNames();
+			} catch (err: unknown) {
+				console.warn(
+					`[Reflection] Could not list services for v2alpha1 union: ${errorMessage(err)}`,
+				);
+			}
 
-		// v2alpha1 gives the complete service/method list without field
-		// definitions. Return it immediately and load descriptors on demand:
-		// running standard reflection here re-enumerates every service on every
-		// discovery/refresh and defeats the v2alpha1 fast path.
-		if (v2alpha1Services.length > 0) {
-			const pendingServices = v2alpha1Services.map((service) => ({
+			const missing = allNames.filter(
+				(name) => !known.has(name) && !name.includes("ServerReflection"),
+			);
+			for (const name of missing) {
+				try {
+					await client.initializeForMethod(name);
+				} catch (err: unknown) {
+					console.warn(
+						`[Reflection] Could not load standard-only service ${name}: ${errorMessage(err)}`,
+					);
+				}
+			}
+			const loaded = new Map(
+				client.getServices().map((service) => [service.fullName, service]),
+			);
+			const extraServices = missing.flatMap((name) => {
+				const service = loaded.get(name);
+				return service
+					? [{ ...service, descriptorStatus: "loaded" as const }]
+					: [];
+			});
+
+			const pendingServices = queryServices.map((service) => ({
 				...service,
 				descriptorStatus: "pending" as const,
 			}));
 			console.log(
-				`[Reflection] v2alpha1 success: ${pendingServices.length} services; descriptors load on demand`,
+				`[Reflection] v2alpha1 fast path: ${pendingServices.length} pending query services, ${extraServices.length} standard-only services loaded (${missing.length} missing)`,
 			);
-			return pendingServices;
+			return [...pendingServices, ...extraServices];
 		}
 
 		// Fallback to standard reflection if v2alpha1 not available

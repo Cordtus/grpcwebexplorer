@@ -39,11 +39,7 @@ import {
 	saveToCache,
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
-import { descriptorLoader } from "@/lib/utils/descriptor-loader";
-import {
-	isServiceDescriptorReady,
-	servicesNeedingDescriptors,
-} from "@/lib/utils/descriptor-readiness";
+import { isServiceDescriptorReady } from "@/lib/utils/descriptor-readiness";
 import {
 	getExecutionEndpoints,
 	INCOMPATIBLE_ENDPOINT_COOLDOWN_MS,
@@ -220,27 +216,6 @@ export default function GrpcExplorerApp() {
 			if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 		};
 	}, [networks]);
-
-	// Listen for background-loaded descriptors and update network state
-	useEffect(() => {
-		const unsubscribe = descriptorLoader.onDescriptorLoaded((result) => {
-			setNetworks((prev) =>
-				prev.map((network) => {
-					if (network.id !== result.networkId) return network;
-
-					const updatedServices = network.services.map((service) => {
-						if (service.fullName !== result.serviceName) return service;
-
-						return { ...result.service, descriptorStatus: "loaded" as const };
-					});
-
-					return { ...network, services: updatedServices };
-				}),
-			);
-		});
-
-		return unsubscribe;
-	}, []);
 
 	// Generate unique ID
 	const generateId = useCallback(
@@ -701,46 +676,13 @@ export default function GrpcExplorerApp() {
 		],
 	);
 
-	// Helper to enqueue descriptor loading jobs for a network
-	const enqueueDescriptorLoading = useCallback(
-		(network: GrpcNetwork) => {
-			const pendingServices = servicesNeedingDescriptors(network.services);
-
-			if (pendingServices.length === 0) {
-				debug.log(
-					`[DescriptorLoader] No services need descriptors for ${network.name}`,
-				);
-				return;
-			}
-
-			debug.log(
-				`[DescriptorLoader] Enqueuing ${pendingServices.length} services for ${network.name}`,
-			);
-
-			descriptorLoader.enqueueBatch(
-				pendingServices.map((service) => ({
-					networkId: network.id,
-					endpoint: network.endpoint,
-					tlsEnabled: network.tlsEnabled,
-					serviceName: service.fullName,
-					timeoutMs: requestTimeoutMs,
-					priority: "normal" as const,
-					timestamp: Date.now(),
-				})),
-			);
-		},
-		[requestTimeoutMs],
-	);
-
-	// Descriptors load when a network is expanded or a method is selected, and
-	// are cached client-side. Loading every pending service whenever networks
-	// change re-enumerated the whole chain after each refresh or page restore.
+	// Descriptors load only when a method is selected, and are cached
+	// client-side. They are not bulk-enqueued on restore, expansion, or refresh.
 
 	// Remove network
 	const handleRemoveNetwork = useCallback((networkId: string) => {
 		setNetworks((prev) => prev.filter((n) => n.id !== networkId));
 		setMethodInstances((prev) => prev.filter((m) => m.networkId !== networkId));
-		descriptorLoader.clear(networkId);
 	}, []);
 
 	// Refresh network (force fetch from server, bypass cache)
@@ -756,8 +698,6 @@ export default function GrpcExplorerApp() {
 			);
 			const { removeFromCache } = await import("@/lib/utils/client-cache");
 			removeFromCache(cacheKey);
-			clearDescriptorCache(network.endpoint, network.tlsEnabled);
-			descriptorLoader.clear(networkId);
 
 			debug.log(`🔄 Force refreshing ${network.endpoint}...`);
 
@@ -795,10 +735,23 @@ export default function GrpcExplorerApp() {
 				saveToCache(cacheKey, { ...data, timestamp: now });
 
 				const actualEndpoint = data.status?.endpoint || network.endpoint;
+				const resolvedTls =
+					typeof data.status?.tls === "boolean"
+						? data.status.tls
+						: network.tlsEnabled;
 				const chainId = data.chainId || data.status?.chainId;
 				debug.log(
 					`✓ Refreshed ${data.services?.length || 0} services from ${actualEndpoint}`,
 				);
+
+				// Only discard descriptor caches after the refresh succeeds.
+				clearDescriptorCache(network.endpoint, network.tlsEnabled);
+				if (
+					actualEndpoint !== network.endpoint ||
+					resolvedTls !== network.tlsEnabled
+				) {
+					clearDescriptorCache(actualEndpoint, resolvedTls);
+				}
 
 				setNetworks((prev) =>
 					prev.map((n) => {
@@ -808,6 +761,7 @@ export default function GrpcExplorerApp() {
 								...rest,
 								services: data.services || [],
 								endpoint: actualEndpoint,
+								tlsEnabled: resolvedTls,
 								chainId,
 								endpointHealth: {
 									...n.endpointHealth,
@@ -849,25 +803,6 @@ export default function GrpcExplorerApp() {
 
 				const isExpanding = !targetNetwork.expanded;
 
-				// Prioritize descriptor loading for expanded network
-				if (isExpanding) {
-					const pendingServices = servicesNeedingDescriptors(
-						targetNetwork.services,
-					);
-
-					pendingServices.forEach((service) => {
-						descriptorLoader.enqueue({
-							networkId: targetNetwork.id,
-							endpoint: targetNetwork.endpoint,
-							tlsEnabled: targetNetwork.tlsEnabled,
-							serviceName: service.fullName,
-							timeoutMs: requestTimeoutMs,
-							priority: "high",
-							timestamp: Date.now(),
-						});
-					});
-				}
-
 				// If expanding and auto-collapse is enabled, collapse other networks
 				if (isExpanding && autoCollapseEnabled) {
 					return prev.map((n) =>
@@ -883,7 +818,7 @@ export default function GrpcExplorerApp() {
 				);
 			});
 		},
-		[autoCollapseEnabled, requestTimeoutMs],
+		[autoCollapseEnabled],
 	);
 
 	// Add method instance to center panel
@@ -935,7 +870,6 @@ export default function GrpcExplorerApp() {
 							...descriptor,
 							descriptorStatus: "loaded",
 						};
-						descriptorLoader.markLoaded(network.id, service.fullName);
 
 						// Update the network state so other methods from this service also get enriched data
 						setNetworks((prev) =>
@@ -963,9 +897,6 @@ export default function GrpcExplorerApp() {
 						debug.log(
 							`[UI] Loading field definitions for ${service.fullName}...`,
 						);
-
-						// Pause background loading to prioritize user-initiated fetch
-						descriptorLoader.pause();
 
 						// Retry with backoff for rate-limiting resilience
 						const maxAttempts = 3;
@@ -1034,8 +965,6 @@ export default function GrpcExplorerApp() {
 								},
 							);
 							return;
-						} finally {
-							descriptorLoader.resume();
 						}
 					}
 				}

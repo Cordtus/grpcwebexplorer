@@ -60,12 +60,16 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 
 - `fetchServicesViaReflection()`: Standard reflection for any gRPC server
 - `fetchServicesWithCosmosOptimization()`: Tries v2alpha1 first, falls back to
-  standard. v2alpha1 provides the service/method list only, so those services
-  are marked `pending`; do not add a full `initialize()` here, which re-enumerates
-  every service and defeats the fast path
+  standard. v2alpha1 reports query services only; keep those `pending` and do
+  not add a full `initialize()` here. One cheap `listServiceNames()` call unions
+  in standard-only services (tx/reflection/etc.), and only those missing
+  services are loaded individually. Msg services that reflection does not list
+  are not registered RPCs and are intentionally omitted
 - `loadServiceDescriptor()`: Server-side lazy load for a specific service.
-  Browser caching lives in `descriptor-loader`/`handleSelectMethod`, because
-  client-cache helpers are no-ops on the server
+  Browser caching lives in `handleSelectMethod`, because client-cache helpers
+  are no-ops on the server. The v2alpha1 fast path and descriptor route use the
+  primary endpoint; `additionalEndpoints` only distributes full standard
+  reflection loads
 
 ### Client-Side Caching Strategy
 
@@ -258,17 +262,14 @@ Method execution history is managed inside `components/GrpcExplorerApp.tsx`:
 - Tracks timing data, success/failure, and response payloads
 - Used by MethodBlock for re-executing previous requests
 
-## Descriptor Loader
+## Descriptor Loading
 
-`lib/utils/descriptor-loader.ts` handles background loading of protobuf field definitions:
-- Queues lazy-load requests for services the user expands, and serves any
-  cached descriptor from localStorage without a network request
-- Emits events when descriptors are loaded so UI can update
-- Prevents duplicate loads with internal tracking
-- Descriptors are not bulk-enqueued whenever network state changes. Page
-  refresh restores networks from `grpc-explorer-networks`; method selection
-  loads only the selected service on demand, and a forced refresh clears that
-  endpoint's descriptor cache first
+Descriptors load only when a method is selected (`handleSelectMethod`), via
+`/api/grpc/descriptor`, and are cached client-side under
+`grpc-explorer:descriptor:{endpoint}:{tls}:{service}`. There is no background
+queue: page refresh restores networks from `grpc-explorer-networks` without
+re-fetching services or descriptors, and a forced refresh clears that
+endpoint's descriptor cache only after the new service list succeeds.
 
 ## AddNetworkDialog Features
 

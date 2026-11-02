@@ -96,6 +96,9 @@ export class ReflectionClient {
 	private reflectionStub: any;
 	private parser: DescriptorParser;
 	private reflectionVersion: "v1" | "v1alpha" | null = null;
+	// Deduplicate Any type loads within one response (a tx can contain hundreds
+	// of the same message type).
+	private anyTypeLoads = new Map<string, Promise<protobuf.Type>>();
 	// Stub pool for distributing descriptor loads across multiple endpoints
 	private stubPool: Array<{
 		stub: any;
@@ -598,6 +601,16 @@ export class ReflectionClient {
 	}
 
 	/**
+	 * List all available service names. Used by the Cosmos fast path to union
+	 * v2alpha1 query services with services it does not report (tx/Msg/etc.)
+	 * without loading every descriptor.
+	 */
+	async listServiceNames(): Promise<string[]> {
+		await this.initializeReflectionStub();
+		return this.listServices();
+	}
+
+	/**
 	 * List all available services
 	 */
 	private async listServices(): Promise<string[]> {
@@ -785,6 +798,27 @@ export class ReflectionClient {
 		}
 	}
 
+	/** Resolve one Any type URL, sharing in-flight loads for the same type. */
+	private loadAnyType(typeName: string): Promise<protobuf.Type> {
+		const existing = this.anyTypeLoads.get(typeName);
+		if (existing) return existing;
+
+		const load = (async () => {
+			try {
+				return this.root.lookupType(typeName);
+			} catch {
+				console.log(
+					`[ReflectionClient] Loading type for Any field: ${typeName}`,
+				);
+				await this.loadServiceDescriptor(typeName);
+				return this.root.lookupType(typeName);
+			}
+		})();
+
+		this.anyTypeLoads.set(typeName, load);
+		return load;
+	}
+
 	/**
 	 * Recursively decode google.protobuf.Any fields in a JSON response object.
 	 * Detects objects with both a type URL and `value` key (protobufjs preserves
@@ -814,28 +848,19 @@ export class ReflectionClient {
 		// Detect google.protobuf.Any: object with a type URL (string) and value
 		// (string/Buffer). Descriptor fields keep their proto names, so the key is
 		// normally snake_case (`type_url`); accept camelCase for JSON-shaped input.
-		const typeUrl = obj.typeUrl ?? obj.type_url;
+		const typeUrl = [obj.type_url, obj.typeUrl].find(
+			(candidate) => typeof candidate === "string" && candidate.length > 0,
+		);
 		if (
 			typeof typeUrl === "string" &&
-			typeUrl.length > 0 &&
-			(typeof obj.value === "string" || Buffer.isBuffer(obj.value))
+			(typeof obj.value === "string" || obj.value instanceof Uint8Array)
 		) {
 			const typeName = typeUrl.includes("/")
 				? typeUrl.substring(typeUrl.lastIndexOf("/") + 1)
 				: typeUrl;
 
 			try {
-				let msgType: protobuf.Type;
-				try {
-					msgType = this.root.lookupType(typeName);
-				} catch {
-					console.log(
-						`[ReflectionClient] Loading type for Any field: ${typeName}`,
-					);
-					await this.loadServiceDescriptor(typeName);
-					msgType = this.root.lookupType(typeName);
-				}
-
+				const msgType = await this.loadAnyType(typeName);
 				const valueBuffer =
 					typeof obj.value === "string"
 						? Buffer.from(obj.value, "base64")
@@ -1265,23 +1290,20 @@ export class ReflectionClient {
 
 				for (const method of queryService.methods) {
 					if (!method.name) continue;
-					const fullQueryPath = method.full_query_path ?? method.fullQueryPath;
+					const requestType = `${queryService.fullname}.${method.name}Request`;
 
 					// Note: v2alpha1 doesn't provide full type definitions, so we create simplified ones
 					methods.push({
 						name: method.name,
 						fullName: `${queryService.fullname}/${method.name}`,
 						serviceName: queryService.fullname,
-						requestType:
-							fullQueryPath || `${queryService.fullname}.${method.name}Request`,
+						requestType,
 						responseType: `${queryService.fullname}.${method.name}Response`,
 						requestStreaming: false,
 						responseStreaming: false,
 						requestTypeDefinition: {
 							name: `${method.name}Request`,
-							fullName:
-								fullQueryPath ||
-								`${queryService.fullname}.${method.name}Request`,
+							fullName: requestType,
 							fields: [], // Will be populated by standard reflection if needed
 						},
 						responseTypeDefinition: {
@@ -1310,92 +1332,6 @@ export class ReflectionClient {
 				`[ReflectionClient] v2alpha1 query services not available: ${errorMessage(err)}`,
 			);
 			return [];
-		}
-	}
-
-	/**
-	 * Get transaction descriptor using Cosmos v2alpha1 reflection
-	 * Returns tx methods grouped in a single "Transactions" service
-	 */
-	async getTxDescriptorViaV2Alpha1(): Promise<GrpcService | null> {
-		try {
-			console.log(
-				"[ReflectionClient] Attempting to fetch tx descriptor via v2alpha1...",
-			);
-
-			// Initialize only the v2alpha1 reflection service
-			await this.initializeForMethod(
-				"cosmos.base.reflection.v2alpha1.ReflectionService",
-			);
-
-			// Call GetTxDescriptor
-			const response = await this.invokeMethod(
-				"cosmos.base.reflection.v2alpha1.ReflectionService",
-				"GetTxDescriptor",
-				{},
-				this.getTimeoutMs(),
-			);
-
-			if (!response?.tx?.msgs) {
-				console.log(
-					"[ReflectionClient] No tx messages found in v2alpha1 response",
-				);
-				return null;
-			}
-
-			const methods: GrpcMethod[] = [];
-
-			// Parse tx messages from response
-			for (const msg of response.tx.msgs) {
-				const msgTypeUrl = msg.msg_type_url ?? msg.msgTypeUrl;
-				if (!msgTypeUrl) continue;
-
-				// Extract message name from type URL (e.g., /cosmos.bank.v1beta1.MsgSend -> MsgSend)
-				const msgName = msgTypeUrl.split(".").pop() || msgTypeUrl;
-				const serviceName = msgTypeUrl.substring(
-					1,
-					msgTypeUrl.lastIndexOf("."),
-				);
-
-				methods.push({
-					name: msgName,
-					fullName: msgTypeUrl,
-					serviceName: "cosmos.tx.v1beta1.Transactions",
-					requestType: msgTypeUrl,
-					responseType: `${serviceName}.${msgName}Response`,
-					requestStreaming: false,
-					responseStreaming: false,
-					requestTypeDefinition: {
-						name: msgName,
-						fullName: msgTypeUrl,
-						fields: [], // Will be populated by standard reflection if needed
-					},
-					responseTypeDefinition: {
-						name: `${msgName}Response`,
-						fullName: `${serviceName}.${msgName}Response`,
-						fields: [],
-					},
-				});
-			}
-
-			if (methods.length === 0) {
-				return null;
-			}
-
-			console.log(
-				`[ReflectionClient] Found ${methods.length} tx messages via v2alpha1`,
-			);
-
-			return {
-				name: "Transactions",
-				fullName: "cosmos.tx.v1beta1.Transactions",
-				methods,
-			};
-		} catch (err: unknown) {
-			console.log(
-				`[ReflectionClient] v2alpha1 tx descriptor not available: ${errorMessage(err)}`,
-			);
-			return null;
 		}
 	}
 

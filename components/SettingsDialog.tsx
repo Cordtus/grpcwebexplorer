@@ -17,10 +17,12 @@ import { cn } from "@/lib/utils";
 import {
 	CACHE_TTL_LABELS,
 	CACHE_TTL_OPTIONS,
+	type CacheStats,
 	type CacheTTLOption,
 	clearAllCache,
 	getCacheStats,
 	getCacheTTL,
+	NETWORK_CACHE_STORAGE_KEY,
 	normalizeRequestTimeoutMs,
 	REQUEST_TIMEOUT_MS,
 	setCacheTTL,
@@ -53,7 +55,13 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 		String(requestTimeoutMs),
 	);
 	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>("ONE_HOUR");
-	const [cacheStats, setCacheStatsState] = useState({ count: 0, sizeKB: 0 });
+	const [cacheStats, setCacheStatsState] = useState<CacheStats>({
+		count: 0,
+		serviceCount: 0,
+		descriptorCount: 0,
+		networkCount: 0,
+		sizeKB: 0,
+	});
 	const [localAutoCollapse, setLocalAutoCollapse] =
 		useState(autoCollapseEnabled);
 	const [localDefaultMode, setLocalDefaultMode] = useState<ExplorerMode>(
@@ -260,6 +268,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 										type="button"
 										onClick={() => {
 											clearAllCache();
+											localStorage.removeItem(NETWORK_CACHE_STORAGE_KEY);
 											setCacheStatsState(getCacheStats());
 										}}
 										className="text-xs text-destructive hover:underline"
@@ -268,7 +277,9 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 									</button>
 								</div>
 								<div className="text-xs text-muted-foreground space-y-1">
-									<div>Cached entries: {cacheStats.count}</div>
+									<div>Loaded networks: {cacheStats.networkCount}</div>
+									<div>Service lists cached: {cacheStats.serviceCount}</div>
+									<div>Descriptors cached: {cacheStats.descriptorCount}</div>
 									<div>Storage used: {cacheStats.sizeKB} KB</div>
 								</div>
 							</div>

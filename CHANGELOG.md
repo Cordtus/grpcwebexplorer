@@ -10,10 +10,10 @@
 - Address-typed `bytes` fields (`AccAddress`/`ValAddress`/`ConsAddress` customtypes or `cosmos.*AddressBytes` scalars) render as bech32. The prefix comes from the chain registry `bech32_prefix` for chain markers, from `cosmos.auth.v1beta1.Query/Bech32Prefix` (services route) for direct endpoints, and falls back to inference from a bech32 string in the same response.
 
 ### Fixed
-- Cosmos v2alpha1 responses are read with their descriptor field names (`msg_type_url`, `full_query_path`), so the transaction service is listed and query methods keep their full request paths instead of falling back to empty/derived values.
-- Cosmos service discovery no longer runs a full standard-reflection sweep after v2alpha1. Services from the fast path stay `pending` and field definitions load on demand, so a refresh no longer re-enumerates every service and method.
-- Service descriptors are cached in the browser again. The queue serves cached descriptors without a request, method selection checks the cache first, and a forced network refresh clears that endpoint's descriptor cache.
-- Page restore and network updates no longer bulk-enqueue every pending descriptor. Expanding a network or selecting a method is what triggers loading.
+- Cosmos service discovery no longer runs a full standard-reflection sweep after v2alpha1. Query services from the fast path stay `pending`; one cheap service-name listing unions in standard-only services (tx/reflection/etc.) and only those missing descriptors are loaded. The synthetic `Transactions` pseudo-service is gone because it was never a real callable gRPC service.
+- Service descriptors are cached in the browser. Method selection checks the descriptor cache first and populates it after a successful load; a forced network refresh clears that endpoint's descriptor cache only after the new service list succeeds.
+- Page restore and network updates no longer bulk-enqueue every pending descriptor. Only selecting a method triggers a descriptor load; expanding a network does not start a background sweep.
+- Any-type loading is memoized per response, so a transaction with many same-type `Any` messages opens one reflection stream instead of one per message.
 - The menu-bar cache indicator now reports cached service lists and descriptors separately instead of a raw localStorage key count as "N cached".
 - `google.protobuf.Any` wrappers in responses are decoded again. Descriptor field names are snake_case (`type_url`), but the decoder only recognized camelCase (`typeUrl`), so Cosmos tx messages such as `tx.body.messages[].value` stayed base64. Both key shapes now resolve the inner type through reflection and show its fields with `@type`.
 - Methods whose request type is itself `google.protobuf.Struct`, `Value`, or `ListValue` now show a single JSON editor instead of the type's internal plumbing, and encode correctly (previously the form emitted field-shaped params that no longer matched the request).
