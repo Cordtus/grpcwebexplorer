@@ -12,6 +12,8 @@
 ### Fixed
 - Lavender Five endpoints are always tried after every other provider, including when they win the round-robin rotation.
 - Legacy `GrpcNetwork.endpoints` are converted to `endpointConfigs` on restore and used as execution fallbacks, so cached fallback endpoints actually participate in failover.
+- Adding a second endpoint for a chain that is already present now merges into the latest network state, keeps the server-detected TLS mode, and adds the endpoint to `endpointConfigs` so it is used for execution.
+- The "None (always fresh)" cache TTL is no longer coerced to "never expire"; `0` is preserved and re-opened settings report the selected option.
 - Removed dead endpoint-manager code (unused concurrent race, expired-blacklist helper), ReflectionClient's unused idle client, unused props/helpers, and the duplicate `reflection.proto`/textarea files. Removed the unused `lru-cache` and `@grpc/proto-loader` dependencies.
 - Cosmos service discovery no longer runs a full standard-reflection sweep after v2alpha1. Query services from the fast path stay `pending`; one cheap service-name listing unions in standard-only services (tx/reflection/etc.) and only those missing descriptors are loaded. The synthetic `Transactions` pseudo-service is gone because it was never a real callable gRPC service.
 - Service descriptors are cached in the browser. Method selection checks the descriptor cache first and populates it after a successful load; a forced network refresh clears that endpoint's descriptor cache only after the new service list succeeds.

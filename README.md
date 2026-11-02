@@ -129,8 +129,8 @@ v1alpha with auto-detection. Recursively resolves nested type dependencies
 ### Endpoint Management
 
 Tracks per-endpoint health: success/failure counts, response times. Blacklists
-after 5 consecutive failures (recovers after 3 successes or 1 hour). Retries
-without TLS on SSL errors.
+after 5 consecutive failures for the life of the process, and always tries
+Lavender Five endpoints last. Retries without TLS on SSL errors.
 
 ## Environment Variables
 

@@ -427,7 +427,9 @@ export async function POST(req: Request) {
 
 		// For chain markers, return all available endpoints for round-robin distribution
 		const allEndpoints = isChainMarker
-			? prioritizedEndpoints.map((ep) => ({ address: ep.address, tls: ep.tls }))
+			? prioritizedEndpoints
+					.filter((ep) => !endpointManager.isBlacklisted(ep.address))
+					.map((ep) => ({ address: ep.address, tls: ep.tls }))
 			: [];
 
 		return NextResponse.json({

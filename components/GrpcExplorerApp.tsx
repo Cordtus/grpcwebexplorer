@@ -43,7 +43,10 @@ import {
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
 import { isServiceDescriptorReady } from "@/lib/utils/descriptor-readiness";
-import { normalizeEndpointsToConfigs } from "@/lib/utils/endpoint-configs";
+import {
+	detectTlsFromAddress,
+	normalizeEndpointsToConfigs,
+} from "@/lib/utils/endpoint-configs";
 import {
 	getExecutionEndpoints,
 	INCOMPATIBLE_ENDPOINT_COOLDOWN_MS,
@@ -72,6 +75,39 @@ const NETWORK_COLORS = [
 
 // Keep persisted network state aligned with descriptor completeness metadata.
 const NETWORK_CACHE_VERSION = "2.3.0";
+
+function endpointConfigsFromServer(
+	endpoints: Array<{ address: string; tls?: boolean }> | undefined,
+): EndpointConfig[] {
+	return (endpoints || []).map((endpoint) => ({
+		address: endpoint.address,
+		tlsEnabled: endpoint.tls ?? detectTlsFromAddress(endpoint.address),
+		selected: true,
+	}));
+}
+
+function addEndpointToNetwork(
+	network: GrpcNetwork,
+	address: string,
+	tlsEnabled: boolean,
+): GrpcNetwork {
+	const configs = network.endpointConfigs?.length
+		? network.endpointConfigs
+		: normalizeEndpointsToConfigs(
+				network.endpoint,
+				network.endpoints || [],
+				network.tlsEnabled,
+			);
+	const endpointConfigs = configs.some(
+		(endpoint) => endpoint.address === address,
+	)
+		? configs
+		: [...configs, { address, tlsEnabled, selected: true }];
+	const endpoints = network.endpoints?.includes(address)
+		? network.endpoints
+		: [...(network.endpoints || []), address];
+	return { ...network, endpointConfigs, endpoints, expanded: true };
+}
 
 function updateExecutionHealth(
 	network: GrpcNetwork,
@@ -473,59 +509,30 @@ export default function GrpcExplorerApp() {
 				);
 
 				const actualEndpoint = cached.status?.endpoint || endpoint;
-				const existingNetwork = cachedChainId
-					? networks.find((n) => n.chainId === cachedChainId)
-					: null;
-
-				if (existingNetwork && cachedChainId) {
-					// Same chain detected - add endpoint to existing network instead of duplicating
-					debug.log(
-						`⚠️  Chain ${cachedChainId} already exists, adding ${actualEndpoint} as fallback endpoint`,
-					);
-
-					setNetworks((prev) =>
-						prev.map((n) =>
-							n.id === existingNetwork.id
-								? {
-										...n,
-										endpoints: [...(n.endpoints || []), actualEndpoint],
-										expanded: true, // Expand to show user we recognized the duplicate
-									}
-								: autoCollapseEnabled
-									? { ...n, expanded: false }
-									: n,
-						),
-					);
-
-					return;
-				}
-
-				// New chain with cached data - add immediately
+				const resolvedTls =
+					typeof cached.status?.tls === "boolean"
+						? cached.status.tls
+						: tlsEnabled;
 				const id = generateId();
 				const color = getNextColor();
 				const name =
 					actualEndpoint.split("//").pop()?.split(":")[0] || actualEndpoint;
 
-				// Get cached endpoints for round-robin distribution
-				const cachedEndpoints =
-					cached.availableEndpoints?.map((ep: any) => ep.address || ep) || [];
-				const fallbackEndpoints = cachedEndpoints.filter(
-					(ep: string) => ep !== actualEndpoint,
-				);
-
-				// Use the actual TLS setting from the cached response (services route may have
-				// retried without TLS on a TLS error, so the resolved value can differ from the input)
-				const resolvedTls =
-					typeof cached.status?.tls === "boolean"
-						? cached.status.tls
-						: tlsEnabled;
+				const cachedEndpointConfigs = endpointConfigs?.length
+					? endpointConfigs
+					: endpointConfigsFromServer(cached.availableEndpoints);
+				const fallbackEndpoints = cachedEndpointConfigs
+					.map((config) => config.address)
+					.filter((address) => address !== actualEndpoint);
 
 				const newNetwork: GrpcNetwork = {
 					id,
 					name,
 					endpoint: actualEndpoint,
 					endpoints: fallbackEndpoints,
-					...(endpointConfigs ? { endpointConfigs } : {}),
+					...(cachedEndpointConfigs.length > 0
+						? { endpointConfigs: cachedEndpointConfigs }
+						: {}),
 					...(cachedChainId ? { chainId: cachedChainId } : {}),
 					...(cached.bech32Prefix || bech32Prefix
 						? { bech32Prefix: cached.bech32Prefix || bech32Prefix }
@@ -541,7 +548,26 @@ export default function GrpcExplorerApp() {
 					...(authConfig ? { authConfig } : {}),
 				};
 
-				appendNetwork(newNetwork);
+				setNetworks((prev) => {
+					const existing = cachedChainId
+						? prev.find((network) => network.chainId === cachedChainId)
+						: undefined;
+					if (existing) {
+						return prev.map((network) =>
+							network.id === existing.id
+								? addEndpointToNetwork(network, actualEndpoint, resolvedTls)
+								: autoCollapseEnabled
+									? { ...network, expanded: false }
+									: network,
+						);
+					}
+					return autoCollapseEnabled
+						? [
+								...prev.map((network) => ({ ...network, expanded: false })),
+								newNetwork,
+							]
+						: [...prev, newNetwork];
+				});
 				return;
 			}
 
@@ -601,58 +627,57 @@ export default function GrpcExplorerApp() {
 					`✓ Fetched ${data.services?.length || 0} services from ${actualEndpoint}`,
 				);
 
-				// Check if this chain already exists (might have been added while we were fetching)
-				const existingNetwork = fetchedChainId
-					? networks.find((n) => n.chainId === fetchedChainId && n.id !== id)
-					: null;
-
-				if (existingNetwork && fetchedChainId) {
-					// Same chain detected - remove the loading network and add as fallback instead
-					debug.log(
-						`⚠️  Chain ${fetchedChainId} already exists, converting to fallback endpoint`,
-					);
-
-					setNetworks((prev) =>
-						prev
-							.map((n) =>
-								n.id === existingNetwork.id
-									? {
-											...n,
-											endpoints: [...(n.endpoints || []), actualEndpoint],
-											expanded: true,
-										}
-									: n.id === id
-										? null // Remove the loading network
-										: autoCollapseEnabled
-											? { ...n, expanded: false }
-											: n,
-							)
-							.filter((n): n is GrpcNetwork => n !== null),
-					);
-
-					return;
-				}
-
-				// Update network with fetched data
-				// Store all available endpoints for round-robin distribution
-				const availableEndpoints =
-					data.availableEndpoints?.map((ep: any) => ep.address) || [];
 				// Use the actual TLS setting from the server response (may differ from input after TLS retry)
 				const resolvedTls =
 					typeof data.status?.tls === "boolean" ? data.status.tls : tlsEnabled;
+				const availableConfigs = endpointConfigs?.length
+					? endpointConfigs
+					: endpointConfigsFromServer(data.availableEndpoints);
+				const availableEndpoints = availableConfigs.map(
+					(config) => config.address,
+				);
 
-				setNetworks((prev) =>
-					prev.map((n) =>
-						n.id === id
+				setNetworks((prev) => {
+					const existing = fetchedChainId
+						? prev.find(
+								(network) =>
+									network.chainId === fetchedChainId && network.id !== id,
+							)
+						: undefined;
+
+					if (existing) {
+						debug.log(
+							`⚠️  Chain ${fetchedChainId} already exists, converting to fallback endpoint`,
+						);
+						return prev
+							.map((network) =>
+								network.id === existing.id
+									? addEndpointToNetwork(network, actualEndpoint, resolvedTls)
+									: network.id === id
+										? null
+										: autoCollapseEnabled
+											? { ...network, expanded: false }
+											: network,
+							)
+							.filter((network): network is GrpcNetwork => network !== null);
+					}
+
+					return prev.map((network) =>
+						network.id === id
 							? {
-									...n,
+									...network,
 									services: data.services || [],
 									endpoint: actualEndpoint,
 									tlsEnabled: resolvedTls,
 									endpoints: availableEndpoints.filter(
-										(ep: string) => ep !== actualEndpoint,
-									), // Store others as fallbacks
-									endpointHealth: { [actualEndpoint]: { lastSuccess: now } },
+										(address) => address !== actualEndpoint,
+									),
+									...(availableConfigs.length > 0
+										? { endpointConfigs: availableConfigs }
+										: {}),
+									endpointHealth: {
+										[actualEndpoint]: { lastSuccess: now },
+									},
 									...(fetchedChainId ? { chainId: fetchedChainId } : {}),
 									...(data.bech32Prefix || bech32Prefix
 										? { bech32Prefix: data.bech32Prefix || bech32Prefix }
@@ -661,9 +686,9 @@ export default function GrpcExplorerApp() {
 									cached: false,
 									cacheTimestamp: now,
 								}
-							: n,
-					),
-				);
+							: network,
+					);
+				});
 			} catch (error) {
 				debug.error(`Failed to fetch from ${endpoint}:`, error);
 				setNetworks((prev) =>
@@ -681,7 +706,6 @@ export default function GrpcExplorerApp() {
 			}
 		},
 		[
-			networks,
 			getNextColor,
 			appendNetwork,
 			autoCollapseEnabled,
@@ -734,6 +758,7 @@ export default function GrpcExplorerApp() {
 					body: JSON.stringify({
 						endpoint: network.endpoint,
 						tlsEnabled: network.tlsEnabled,
+						mode: network.mode,
 						timeoutMs: requestTimeoutMs,
 					}),
 				});

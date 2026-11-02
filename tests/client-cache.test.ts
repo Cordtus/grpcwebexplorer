@@ -1,14 +1,16 @@
 // tests/client-cache.test.ts
 // Tests for client-cache utility functions (server-side safe parts)
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	filterRemovedCachedServices,
+	getCacheTTL,
 	getDescriptorCacheKey,
 	getServicesCacheKey,
 	hasRemovedCachedServices,
 	normalizeRequestTimeoutMs,
 	REQUEST_TIMEOUT_MS,
+	setCacheTTL,
 } from "@/lib/utils/client-cache";
 
 describe("Cache key generation", () => {
@@ -69,6 +71,33 @@ describe("Cache key generation", () => {
 				getDescriptorCacheKey("host:443", true, "b.Query"),
 			);
 		});
+	});
+});
+
+describe("Cache TTL settings", () => {
+	const store = new Map<string, string>();
+
+	beforeEach(() => {
+		vi.stubGlobal("window", {});
+		vi.stubGlobal("localStorage", {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => store.set(key, value),
+			removeItem: (key: string) => store.delete(key),
+		});
+	});
+
+	afterEach(() => {
+		store.clear();
+		vi.unstubAllGlobals();
+	});
+
+	it("preserves the NONE option as zero", () => {
+		setCacheTTL("NONE");
+		expect(getCacheTTL()).toBe(0);
+	});
+
+	it("defaults to never expire when unset", () => {
+		expect(getCacheTTL()).toBe(Number.POSITIVE_INFINITY);
 	});
 });
 

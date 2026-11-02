@@ -102,7 +102,9 @@ export function setRequestTimeoutMs(timeoutMs: number): void {
 /** Get user's preferred cache TTL setting. */
 export function getCacheTTL(): number {
 	const ttlOption = readSettings().cacheTTL as CacheTTLOption | undefined;
-	return (ttlOption && CACHE_TTL_OPTIONS[ttlOption]) || CACHE_TTL_OPTIONS.MAX;
+	return ttlOption && ttlOption in CACHE_TTL_OPTIONS
+		? CACHE_TTL_OPTIONS[ttlOption]
+		: CACHE_TTL_OPTIONS.MAX;
 }
 
 /** Set user's preferred cache TTL setting. */
