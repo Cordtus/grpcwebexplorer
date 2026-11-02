@@ -11,6 +11,28 @@ const CACHE_VERSION = "2.3.0";
 const CACHE_PREFIX = "grpc-explorer:";
 const SETTINGS_KEY = "grpc-explorer:settings";
 
+function readSettings(): Record<string, unknown> {
+	if (typeof window === "undefined") return {};
+	try {
+		const raw = localStorage.getItem(SETTINGS_KEY);
+		return raw ? JSON.parse(raw) : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeSetting(key: string, value: unknown): void {
+	if (typeof window === "undefined") return;
+	try {
+		localStorage.setItem(
+			SETTINGS_KEY,
+			JSON.stringify({ ...readSettings(), [key]: value }),
+		);
+	} catch (error) {
+		console.warn(`Failed to save ${key} setting:`, error);
+	}
+}
+
 export const NETWORK_CACHE_STORAGE_KEY = "grpc-explorer-networks";
 export const CACHE_CHANGED_EVENT = "grpc-explorer:cache-changed";
 
@@ -70,67 +92,22 @@ export function normalizeRequestTimeoutMs(
 }
 
 export function getRequestTimeoutMs(): number {
-	if (typeof window === "undefined") return REQUEST_TIMEOUT_MS.DEFAULT;
-
-	try {
-		const settings = localStorage.getItem(SETTINGS_KEY);
-		if (!settings) return REQUEST_TIMEOUT_MS.DEFAULT;
-
-		const parsed = JSON.parse(settings);
-		return normalizeRequestTimeoutMs(parsed.requestTimeoutMs);
-	} catch {
-		return REQUEST_TIMEOUT_MS.DEFAULT;
-	}
+	return normalizeRequestTimeoutMs(readSettings().requestTimeoutMs);
 }
 
 export function setRequestTimeoutMs(timeoutMs: number): void {
-	if (typeof window === "undefined") return;
-
-	try {
-		const settings = localStorage.getItem(SETTINGS_KEY);
-		const parsed = settings ? JSON.parse(settings) : {};
-
-		parsed.requestTimeoutMs = normalizeRequestTimeoutMs(timeoutMs);
-		localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
-	} catch (error) {
-		console.warn("Failed to save request timeout setting:", error);
-	}
+	writeSetting("requestTimeoutMs", normalizeRequestTimeoutMs(timeoutMs));
 }
 
-/**
- * Get user's preferred cache TTL setting
- */
+/** Get user's preferred cache TTL setting. */
 export function getCacheTTL(): number {
-	if (typeof window === "undefined") return CACHE_TTL_OPTIONS.MAX;
-
-	try {
-		const settings = localStorage.getItem(SETTINGS_KEY);
-		if (!settings) return CACHE_TTL_OPTIONS.MAX;
-
-		const parsed = JSON.parse(settings);
-		const ttlOption = parsed.cacheTTL as CacheTTLOption;
-
-		return CACHE_TTL_OPTIONS[ttlOption] || CACHE_TTL_OPTIONS.MAX;
-	} catch (_error) {
-		return CACHE_TTL_OPTIONS.MAX;
-	}
+	const ttlOption = readSettings().cacheTTL as CacheTTLOption | undefined;
+	return (ttlOption && CACHE_TTL_OPTIONS[ttlOption]) || CACHE_TTL_OPTIONS.MAX;
 }
 
-/**
- * Set user's preferred cache TTL setting
- */
+/** Set user's preferred cache TTL setting. */
 export function setCacheTTL(option: CacheTTLOption): void {
-	if (typeof window === "undefined") return;
-
-	try {
-		const settings = localStorage.getItem(SETTINGS_KEY);
-		const parsed = settings ? JSON.parse(settings) : {};
-
-		parsed.cacheTTL = option;
-		localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
-	} catch (error) {
-		console.warn("Failed to save cache TTL setting:", error);
-	}
+	writeSetting("cacheTTL", option);
 }
 
 /**
@@ -241,8 +218,6 @@ export function clearAllCache(): void {
 }
 
 export interface CacheStats {
-	/** Data cache entries (service lists + descriptors), excluding settings. */
-	count: number;
 	serviceCount: number;
 	descriptorCount: number;
 	networkCount: number;
@@ -256,7 +231,6 @@ export interface CacheStats {
 export function getCacheStats(): CacheStats {
 	if (typeof window === "undefined") {
 		return {
-			count: 0,
 			serviceCount: 0,
 			descriptorCount: 0,
 			networkCount: 0,
@@ -294,7 +268,6 @@ export function getCacheStats(): CacheStats {
 		}
 
 		return {
-			count: cacheKeys.length,
 			serviceCount: serviceKeys.length,
 			descriptorCount: descriptorKeys.length,
 			networkCount,
@@ -302,7 +275,6 @@ export function getCacheStats(): CacheStats {
 		};
 	} catch (_error) {
 		return {
-			count: 0,
 			serviceCount: 0,
 			descriptorCount: 0,
 			networkCount: 0,

@@ -11,11 +11,9 @@ interface ExpandableBlockProps {
 	onToggle: () => void;
 	children: React.ReactNode;
 	color?: string;
-	badge?: string | number | React.ReactNode;
 	icon?: React.ReactNode;
 	className?: string;
 	headerClassName?: string;
-	contentClassName?: string;
 	isActive?: boolean;
 	onRemove?: () => void;
 	actions?: React.ReactNode;
@@ -28,11 +26,9 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
 	onToggle,
 	children,
 	color = "#3b82f6",
-	badge,
 	icon,
 	className,
 	headerClassName,
-	contentClassName,
 	isActive = false,
 	onRemove,
 	actions,
@@ -106,12 +102,6 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
 				</div>
 
 				<div className="flex items-center gap-2 ml-2">
-					{badge !== undefined && (
-						<span className="px-2 py-0.5 text-xs font-medium rounded-full bg-muted">
-							{badge}
-						</span>
-					)}
-
 					{actions}
 
 					{onRemove && (
@@ -145,7 +135,7 @@ export const ExpandableBlock: React.FC<ExpandableBlockProps> = ({
 
 			{isExpanded && (
 				<div
-					className={cn("border-t bg-muted/30", contentClassName)}
+					className="border-t bg-muted/30"
 					style={{ borderColor: `${color}20` }}
 				>
 					<div className="p-4">{children}</div>

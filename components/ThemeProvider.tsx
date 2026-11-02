@@ -14,16 +14,12 @@ export type Theme = "light" | "dark" | "retro" | "system";
 interface ThemeContextType {
 	theme: Theme;
 	setTheme: (theme: Theme) => void;
-	resolvedTheme: "light" | "dark" | "retro";
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	const [theme, setThemeState] = useState<Theme>("system");
-	const [resolvedTheme, setResolvedTheme] = useState<
-		"light" | "dark" | "retro"
-	>("dark");
 	const [mounted, setMounted] = useState(false);
 
 	const applyTheme = useCallback((nextTheme: Theme) => {
@@ -46,7 +42,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 		// Add the effective theme class
 		root.classList.add(effectiveTheme);
-		setResolvedTheme(effectiveTheme);
 	}, []);
 
 	useEffect(() => {
@@ -91,7 +86,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+		<ThemeContext.Provider value={{ theme, setTheme }}>
 			{children}
 		</ThemeContext.Provider>
 	);

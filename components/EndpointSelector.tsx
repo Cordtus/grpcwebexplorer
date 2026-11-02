@@ -14,69 +14,13 @@ import { useCallback, useMemo } from "react";
 import { Switch } from "@/components/ui/switch";
 import type { EndpointConfig } from "@/lib/types/grpc";
 import { cn } from "@/lib/utils";
+import { normalizeAddress } from "@/lib/utils/endpoint-configs";
 
 interface EndpointSelectorProps {
 	endpoints: EndpointConfig[];
 	onChange: (endpoints: EndpointConfig[]) => void;
 	disabled?: boolean;
 	validating?: boolean; // Show loading state while validating
-}
-
-/**
- * Detects whether an endpoint likely needs TLS based on port and protocol hints
- */
-function detectTlsFromAddress(address: string): boolean {
-	const normalized = address.toLowerCase().trim();
-
-	// Protocol prefixes
-	if (normalized.startsWith("https://") || normalized.startsWith("grpcs://")) {
-		return true;
-	}
-	if (normalized.startsWith("http://") || normalized.startsWith("grpc://")) {
-		return false;
-	}
-
-	// Extract port
-	const portMatch = normalized.match(/:(\d+)$/);
-	if (portMatch) {
-		const port = portMatch[1];
-		// Standard TLS ports
-		if (port === "443" || port === "9091") {
-			return true;
-		}
-		// Non-TLS ports
-		if (port === "80" || port === "9090") {
-			return false;
-		}
-	}
-
-	// Default to TLS for unknown
-	return true;
-}
-
-/**
- * Normalizes an endpoint address by removing protocol prefixes and adding default port
- */
-function normalizeAddress(address: string): string {
-	let normalized = address.trim();
-
-	// Remove protocol prefixes
-	if (normalized.startsWith("https://")) {
-		normalized = normalized.replace("https://", "");
-	} else if (normalized.startsWith("http://")) {
-		normalized = normalized.replace("http://", "");
-	} else if (normalized.startsWith("grpcs://")) {
-		normalized = normalized.replace("grpcs://", "");
-	} else if (normalized.startsWith("grpc://")) {
-		normalized = normalized.replace("grpc://", "");
-	}
-
-	// Add default port if missing
-	if (!normalized.includes(":")) {
-		normalized = `${normalized}:443`;
-	}
-
-	return normalized;
 }
 
 /**
@@ -311,45 +255,3 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
 };
 
 export default EndpointSelector;
-
-// Helper to create EndpointConfig array from chain registry data
-export function createEndpointConfigs(
-	grpcEndpoints: Array<{ address: string; provider?: string }>,
-): EndpointConfig[] {
-	return grpcEndpoints.map((ep) => {
-		const config: EndpointConfig = {
-			address: normalizeAddress(ep.address),
-			tlsEnabled: detectTlsFromAddress(ep.address),
-			selected: true,
-		};
-		if (ep.provider) {
-			config.provider = ep.provider;
-		}
-		return config;
-	});
-}
-
-// Helper to normalize legacy endpoint format to EndpointConfig
-export function normalizeEndpointsToConfigs(
-	primaryEndpoint: string,
-	fallbackEndpoints: string[] = [],
-	primaryTls: boolean = true,
-): EndpointConfig[] {
-	const configs: EndpointConfig[] = [
-		{
-			address: primaryEndpoint,
-			tlsEnabled: primaryTls,
-			selected: true,
-		},
-	];
-
-	for (const ep of fallbackEndpoints) {
-		configs.push({
-			address: ep,
-			tlsEnabled: detectTlsFromAddress(ep),
-			selected: true,
-		});
-	}
-
-	return configs;
-}

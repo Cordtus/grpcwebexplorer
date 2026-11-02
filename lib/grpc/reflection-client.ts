@@ -3,11 +3,7 @@
 
 import * as grpc from "@grpc/grpc-js";
 import * as protobuf from "protobufjs";
-import type {
-	GrpcMethod,
-	GrpcService,
-	MessageTypeDefinition,
-} from "@/lib/types/grpc";
+import type { GrpcMethod, GrpcService } from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
 import { DescriptorParser } from "./descriptor-parser";
 import { normalizeWellKnownParams } from "./well-known-json";
@@ -92,7 +88,6 @@ export interface ReflectionOptions {
  * Uses @grpc/grpc-js and protobufjs for complete control over reflection and type introspection
  */
 export class ReflectionClient {
-	private client: grpc.Client;
 	private reflectionStub: any;
 	private parser: DescriptorParser;
 	private reflectionVersion: "v1" | "v1alpha" | null = null;
@@ -110,17 +105,6 @@ export class ReflectionClient {
 	private reflectionProtoRoot: protobuf.Root | null = null;
 
 	constructor(private options: ReflectionOptions) {
-		const credentials = this.buildCredentials(
-			options.tls,
-			options.clientCert,
-			options.clientKey,
-		);
-
-		this.client = new grpc.Client(options.endpoint, credentials, {
-			"grpc.max_receive_message_length": -1,
-			"grpc.max_send_message_length": -1,
-		});
-
 		this.parser = new DescriptorParser();
 	}
 
@@ -396,7 +380,6 @@ export class ReflectionClient {
 	private async testReflectionStub(): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const call = this.reflectionStub.ServerReflectionInfo();
-			let _hasData = false;
 
 			const timeout = setTimeout(() => {
 				call.cancel();
@@ -408,7 +391,6 @@ export class ReflectionClient {
 			}, this.getTimeoutMs(5000));
 
 			call.on("data", () => {
-				_hasData = true;
 				clearTimeout(timeout);
 				call.cancel();
 				resolve();
@@ -995,18 +977,6 @@ export class ReflectionClient {
 		}
 	}
 
-	// addDescriptorToRoot, addMessageType, addEnumType, addServiceType,
-	// extractHttpRule, getFieldType, extractMessageTypeDefinition
-	// are now handled by DescriptorParser (this.parser)
-
-	/** Delegate to parser for message type extraction */
-	private extractMessageTypeDefinition(
-		typeName: string,
-		visitedTypes: Set<string> = new Set(),
-	): MessageTypeDefinition {
-		return this.parser.extractMessageTypeDefinition(typeName, visitedTypes);
-	}
-
 	/**
 	 * Get all services (delegates to DescriptorParser)
 	 */
@@ -1354,14 +1324,6 @@ export class ReflectionClient {
 		if (this.reflectionStub) {
 			try {
 				this.reflectionStub.close();
-			} catch (_err) {
-				// Ignore
-			}
-		}
-
-		if (this.client) {
-			try {
-				this.client.close();
 			} catch (_err) {
 				// Ignore
 			}

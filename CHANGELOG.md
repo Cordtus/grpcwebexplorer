@@ -10,6 +10,9 @@
 - Address-typed `bytes` fields (`AccAddress`/`ValAddress`/`ConsAddress` customtypes or `cosmos.*AddressBytes` scalars) render as bech32. The prefix comes from the chain registry `bech32_prefix` for chain markers, from `cosmos.auth.v1beta1.Query/Bech32Prefix` (services route) for direct endpoints, and falls back to inference from a bech32 string in the same response.
 
 ### Fixed
+- Lavender Five endpoints are always tried after every other provider, including when they win the round-robin rotation.
+- Legacy `GrpcNetwork.endpoints` are converted to `endpointConfigs` on restore and used as execution fallbacks, so cached fallback endpoints actually participate in failover.
+- Removed dead endpoint-manager code (unused concurrent race, expired-blacklist helper), ReflectionClient's unused idle client, unused props/helpers, and the duplicate `reflection.proto`/textarea files. Removed the unused `lru-cache` and `@grpc/proto-loader` dependencies.
 - Cosmos service discovery no longer runs a full standard-reflection sweep after v2alpha1. Query services from the fast path stay `pending`; one cheap service-name listing unions in standard-only services (tx/reflection/etc.) and only those missing descriptors are loaded. The synthetic `Transactions` pseudo-service is gone because it was never a real callable gRPC service.
 - Service descriptors are cached in the browser. Method selection checks the descriptor cache first and populates it after a successful load; a forced network refresh clears that endpoint's descriptor cache only after the new service list succeeds.
 - Page restore and network updates no longer bulk-enqueue every pending descriptor. Only selecting a method triggers a descriptor load; expanding a network does not start a background sweep.
@@ -29,6 +32,7 @@
 - Generated TypeScript/Go/Python snippets now use correct protobuf clients (proto-loader dynamic client; generated stubs with `protojson`/`json_format`) instead of sending JSON bytes as the gRPC payload.
 
 ### Changed
+- Deduplicated network insertion, service-discovery fetch/status, settings read-modify-write, and add-network form reset logic; chain-registry chain data now fetches `chain.json` once.
 - Consolidated duplicated descriptor types (`MessageField`, `MessageTypeDefinition`, `GrpcMethod`, `GrpcService`, `HttpRule`, `BsrModule`) into `lib/types/grpc.ts` as the single source of truth; `descriptor-parser`/`reflection-client` re-export them for compatibility.
 - `MethodDetailPanel` now uses the shared `ExecutionResult` instead of a local copy.
 - Results panel JSON viewer: reduced right-edge padding and nesting indentation so long values wrap less, and made copy buttons always faintly visible with distinct icons for copying a value (`Copy`) versus an object (`Braces`) or array (`Brackets`).

@@ -40,7 +40,8 @@ import {
 	listCachedChains,
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
-import EndpointSelector, { createEndpointConfigs } from "./EndpointSelector";
+import { createEndpointConfigs } from "@/lib/utils/endpoint-configs";
+import EndpointSelector from "./EndpointSelector";
 
 interface AddNetworkDialogProps {
 	onAdd: (
@@ -258,6 +259,17 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 		}
 	};
 
+	const resetForm = (close = false) => {
+		setEndpoint("");
+		setTlsEnabled(true);
+		setShowDropdown(false);
+		setShowCachedChains(false);
+		setSelectedChainDetails(null);
+		setEndpointConfigs([]);
+		setValidatingEndpoints(false);
+		if (close) onClose();
+	};
+
 	// Add network with the current settings
 	const addNetwork = (
 		finalEndpoint: string,
@@ -274,14 +286,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 			buildAuthConfig(),
 			selectedChainDetails?.bech32_prefix,
 		);
-		setEndpoint("");
-		setTlsEnabled(true);
-		setShowDropdown(false);
-		setShowCachedChains(false);
-		setSelectedChainDetails(null);
-		setEndpointConfigs([]);
-		setValidatingEndpoints(false);
-		onClose();
+		resetForm(true);
 	};
 
 	const handleSubmit = (e: React.FormEvent) => {
@@ -302,16 +307,7 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 		}
 	};
 
-	const handleCancel = () => {
-		setEndpoint("");
-		setTlsEnabled(true);
-		setShowDropdown(false);
-		setShowCachedChains(false);
-		setSelectedChainDetails(null);
-		setEndpointConfigs([]);
-		setValidatingEndpoints(false);
-		onClose();
-	};
+	const handleCancel = () => resetForm(true);
 
 	// Select a cached chain directly
 	const selectCachedChain = (cached: CachedChainInfo) => {
@@ -462,12 +458,8 @@ const AddNetworkDialog: React.FC<AddNetworkDialogProps> = ({
 		if (nextMode === mode) return;
 
 		setMode(nextMode);
-		setEndpoint("");
-		setShowDropdown(false);
-		setShowCachedChains(false);
+		resetForm();
 		setFilteredChains(nextMode === "cosmos" ? chains : []);
-		setSelectedChainDetails(null);
-		setEndpointConfigs([]);
 		setGenericSourceTab("endpoint");
 	};
 

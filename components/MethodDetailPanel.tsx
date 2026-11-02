@@ -65,7 +65,6 @@ interface MethodDetailPanelProps {
 	params?: Record<string, any>;
 	metadata?: Record<string, string>;
 	authConfig?: GrpcAuthConfig | undefined;
-	restEndpoint?: string;
 	mode?: ExplorerMode | undefined;
 	/** Chain bech32 prefix from the chain registry, used to render address bytes. */
 	bech32Prefix?: string;
@@ -451,7 +450,6 @@ export default function MethodDetailPanel({
 	params = {},
 	metadata = {},
 	authConfig,
-	restEndpoint,
 	mode,
 	bech32Prefix,
 	result,
@@ -528,14 +526,13 @@ export default function MethodDetailPanel({
 	// ── Code generation context ─────────────────────────────────────────
 
 	const restBaseUrl = useMemo(() => {
-		if (restEndpoint) return restEndpoint;
 		if (!endpoint) return "https://api.example.com";
 		const url = endpoint.replace(/:9090$/, ":1317").replace(/:443$/, "");
 		if (!url.startsWith("http")) {
 			return tlsEnabled !== false ? `https://${url}` : `http://${url}`;
 		}
 		return url;
-	}, [endpoint, tlsEnabled, restEndpoint]);
+	}, [endpoint, tlsEnabled]);
 
 	const restResult = useMemo(() => {
 		return generateRestUrl(

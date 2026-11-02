@@ -1,9 +1,12 @@
 import type { EndpointExecutionHealth, GrpcNetwork } from "@/lib/types/grpc";
 import { errorMessage } from "@/lib/utils";
+import { normalizeEndpointsToConfigs } from "@/lib/utils/endpoint-configs";
+import { isLavenderFiveEndpoint } from "@/lib/utils/endpoint-priority";
 
 export type ExecutionEndpoint = {
 	address: string;
 	tlsEnabled: boolean;
+	provider?: string;
 };
 
 export type EndpointExecutionFailure = {
@@ -48,8 +51,15 @@ export function getExecutionEndpoints(
 		return [{ address: network.endpoint, tlsEnabled: network.tlsEnabled }];
 	}
 
-	const selected =
+	let selected =
 		network.endpointConfigs?.filter((endpoint) => endpoint.selected) ?? [];
+	if (selected.length === 0 && network.endpoints?.length) {
+		selected = normalizeEndpointsToConfigs(
+			network.endpoint,
+			network.endpoints,
+			network.tlsEnabled,
+		);
+	}
 	if (selected.length === 0) {
 		return [{ address: network.endpoint, tlsEnabled: network.tlsEnabled }];
 	}
@@ -59,7 +69,11 @@ export function getExecutionEndpoints(
 	const rotated = [
 		...selected.slice(normalizedStart),
 		...selected.slice(0, normalizedStart),
-	].map(({ address, tlsEnabled }) => ({ address, tlsEnabled }));
+	].map(({ address, tlsEnabled, provider }) => ({
+		address,
+		tlsEnabled,
+		...(provider ? { provider } : {}),
+	}));
 	const candidates = rotated.some(
 		(endpoint) => endpoint.address === network.endpoint,
 	)
@@ -73,7 +87,12 @@ export function getExecutionEndpoints(
 	);
 	const usable = eligible.length > 0 ? eligible : candidates;
 
-	return usable;
+	// Lavender Five nodes always go last, regardless of selection order.
+	return [...usable].sort(
+		(a, b) =>
+			Number(isLavenderFiveEndpoint(a.address, a.provider)) -
+			Number(isLavenderFiveEndpoint(b.address, b.provider)),
+	);
 }
 
 export type FailoverOptions = {

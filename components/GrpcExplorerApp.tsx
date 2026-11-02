@@ -43,6 +43,7 @@ import {
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
 import { isServiceDescriptorReady } from "@/lib/utils/descriptor-readiness";
+import { normalizeEndpointsToConfigs } from "@/lib/utils/endpoint-configs";
 import {
 	getExecutionEndpoints,
 	INCOMPATIBLE_ENDPOINT_COOLDOWN_MS,
@@ -187,6 +188,15 @@ export default function GrpcExplorerApp() {
 						parsed.networks.map((network: GrpcNetwork) => ({
 							...network,
 							services: filterRemovedCachedServices(network.services),
+							...(network.endpointConfigs?.length
+								? {}
+								: {
+										endpointConfigs: normalizeEndpointsToConfigs(
+											network.endpoint,
+											network.endpoints || [],
+											network.tlsEnabled,
+										),
+									}),
 						})),
 					);
 				} else {
@@ -348,6 +358,17 @@ export default function GrpcExplorerApp() {
 		);
 	}, [networks]);
 
+	const appendNetwork = useCallback(
+		(newNetwork: GrpcNetwork) => {
+			setNetworks((prev) =>
+				autoCollapseEnabled
+					? [...prev.map((n) => ({ ...n, expanded: false })), newNetwork]
+					: [...prev, newNetwork],
+			);
+		},
+		[autoCollapseEnabled],
+	);
+
 	// Add network
 	const handleAddNetwork = useCallback(
 		async (
@@ -381,15 +402,7 @@ export default function GrpcExplorerApp() {
 					...(authConfig ? { authConfig } : {}),
 				};
 
-				setNetworks((prev) => {
-					if (autoCollapseEnabled) {
-						return [
-							...prev.map((n) => ({ ...n, expanded: false })),
-							newNetwork,
-						];
-					}
-					return [...prev, newNetwork];
-				});
+				appendNetwork(newNetwork);
 
 				try {
 					const response = await fetch("/api/bsr/descriptor", {
@@ -528,15 +541,7 @@ export default function GrpcExplorerApp() {
 					...(authConfig ? { authConfig } : {}),
 				};
 
-				setNetworks((prev) => {
-					if (autoCollapseEnabled) {
-						return [
-							...prev.map((n) => ({ ...n, expanded: false })),
-							newNetwork,
-						];
-					}
-					return [...prev, newNetwork];
-				});
+				appendNetwork(newNetwork);
 				return;
 			}
 
@@ -566,12 +571,7 @@ export default function GrpcExplorerApp() {
 			};
 
 			// Add network to UI immediately with loading state
-			setNetworks((prev) => {
-				if (autoCollapseEnabled) {
-					return [...prev.map((n) => ({ ...n, expanded: false })), newNetwork];
-				}
-				return [...prev, newNetwork];
-			});
+			appendNetwork(newNetwork);
 
 			// Fetch data in background
 			try {
@@ -683,6 +683,7 @@ export default function GrpcExplorerApp() {
 		[
 			networks,
 			getNextColor,
+			appendNetwork,
 			autoCollapseEnabled,
 			defaultMode,
 			requestTimeoutMs,
@@ -733,7 +734,6 @@ export default function GrpcExplorerApp() {
 					body: JSON.stringify({
 						endpoint: network.endpoint,
 						tlsEnabled: network.tlsEnabled,
-						forceRefresh: true,
 						timeoutMs: requestTimeoutMs,
 					}),
 				});

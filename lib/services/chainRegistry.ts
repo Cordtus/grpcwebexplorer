@@ -155,43 +155,26 @@ export async function fetchChainData(chainName: string): Promise<{
 	apis: ChainApis;
 } | null> {
 	try {
-		const [info, apis] = await Promise.all([
-			fetchChainInfo(chainName),
-			fetchChainApis(chainName),
-		]);
-
-		if (!info || !apis) {
-			return null;
+		const response = await fetch(
+			`${CHAIN_REGISTRY_BASE}/${chainName}/chain.json`,
+		);
+		if (!response.ok) {
+			throw new Error(
+				`Failed to fetch chain data for ${chainName}: ${response.statusText}`,
+			);
 		}
 
-		return { info, apis };
+		const data = await response.json();
+		return {
+			info: data,
+			apis: {
+				rpc: data.apis?.rpc || [],
+				rest: data.apis?.rest || [],
+				grpc: data.apis?.grpc || [],
+			},
+		};
 	} catch (error) {
 		console.error(`Error fetching chain data for ${chainName}:`, error);
 		return null;
 	}
-}
-
-/**
- * Parse endpoint address to normalize format
- * Rule: Use TLS for port 443, non-TLS for everything else
- */
-export function normalizeEndpoint(endpoint: string): {
-	address: string;
-	tls: boolean;
-} {
-	// Remove protocol if present
-	let address = endpoint.replace(/^https?:\/\//, "");
-	const hasPort = address.includes(":");
-
-	if (!hasPort) {
-		// No port specified - default to 9090 without TLS
-		address = `${address}:9090`;
-		return { address, tls: false };
-	}
-
-	// Extract port and determine TLS: port 443 = TLS, everything else = no TLS
-	const port = address.split(":")[1];
-	const tls = port === "443";
-
-	return { address, tls };
 }

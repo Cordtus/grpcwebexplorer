@@ -29,6 +29,37 @@ describe("execution endpoint selection", () => {
 		]);
 	});
 
+	it("moves Lavender Five endpoints behind every other selected endpoint", () => {
+		const network: GrpcNetwork = {
+			...cosmosNetwork,
+			endpoint: "lavender.lavenderfive.com:443",
+			endpointConfigs: [
+				{
+					address: "lavender.lavenderfive.com:443",
+					tlsEnabled: true,
+					selected: true,
+				},
+				{ address: "normal:443", tlsEnabled: true, selected: true },
+			],
+		};
+
+		expect(
+			getExecutionEndpoints(network, 0).map((endpoint) => endpoint.address),
+		).toEqual(["normal:443", "lavender.lavenderfive.com:443"]);
+	});
+
+	it("falls back to legacy endpoints when endpointConfigs are missing", () => {
+		const network: GrpcNetwork = {
+			...cosmosNetwork,
+			endpointConfigs: undefined,
+			endpoints: ["secondary:443", "tertiary:9090"],
+		};
+
+		expect(
+			getExecutionEndpoints(network, 0).map((endpoint) => endpoint.address),
+		).toEqual(["primary:443", "secondary:443", "tertiary:9090"]);
+	});
+
 	it("uses one configured endpoint for generic gRPC sources", () => {
 		const genericNetwork: GrpcNetwork = {
 			...cosmosNetwork,

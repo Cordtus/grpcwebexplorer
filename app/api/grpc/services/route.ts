@@ -40,7 +40,11 @@ export async function POST(req: Request) {
 		// Check if this is a chain marker for round-robin mode (Cosmos only)
 		let isChainMarker = false;
 		let chainName = "";
-		let endpoints: Array<{ address: string; tls: boolean }> = [];
+		let endpoints: Array<{
+			address: string;
+			tls: boolean;
+			provider?: string;
+		}> = [];
 
 		if (!isGenericMode && endpoint.startsWith("chain:")) {
 			isChainMarker = true;
@@ -54,9 +58,10 @@ export async function POST(req: Request) {
 				const chainApis = await fetchChainApis(chainName);
 				if (chainApis?.grpc && chainApis.grpc.length > 0) {
 					// Use endpoint manager to normalize and detect TLS
-					endpoints = chainApis.grpc.map((ep) =>
-						endpointManager.normalizeEndpoint(ep.address),
-					);
+					endpoints = chainApis.grpc.map((ep) => ({
+						...endpointManager.normalizeEndpoint(ep.address),
+						...(ep.provider ? { provider: ep.provider } : {}),
+					}));
 
 					console.log(
 						`[Services] Loaded ${endpoints.length} endpoints for ${chainName}`,
@@ -103,6 +108,25 @@ export async function POST(req: Request) {
 			`[Services] Trying up to ${endpointsToTry.length} endpoints (prioritized, non-blacklisted)`,
 		);
 
+		const discoverServices = (
+			address: string,
+			tlsEnabled: boolean,
+			additionalEndpoints: Array<{ address: string; tls: boolean }>,
+		) =>
+			isGenericMode
+				? fetchServicesViaReflection({
+						endpoint: address,
+						tls: tlsEnabled,
+						timeout: requestTimeoutMs,
+						additionalEndpoints,
+					})
+				: fetchServicesWithCosmosOptimization({
+						endpoint: address,
+						tls: tlsEnabled,
+						timeout: requestTimeoutMs,
+						additionalEndpoints,
+					});
+
 		for (let i = 0; i < endpointsToTry.length; i++) {
 			const { address, tls: tlsEnabled } = endpointsToTry[i];
 
@@ -119,22 +143,11 @@ export async function POST(req: Request) {
 
 			const startTime = Date.now();
 			try {
-				// In generic mode, use standard reflection directly; Cosmos mode tries v2alpha1 first
-				if (isGenericMode) {
-					services = await fetchServicesViaReflection({
-						endpoint: address,
-						tls: tlsEnabled,
-						timeout: requestTimeoutMs,
-						additionalEndpoints,
-					});
-				} else {
-					services = await fetchServicesWithCosmosOptimization({
-						endpoint: address,
-						tls: tlsEnabled,
-						timeout: requestTimeoutMs,
-						additionalEndpoints,
-					});
-				}
+				services = await discoverServices(
+					address,
+					tlsEnabled,
+					additionalEndpoints,
+				);
 				const responseTime = Date.now() - startTime;
 
 				if (services.length === 0) {
@@ -178,21 +191,11 @@ export async function POST(req: Request) {
 									.filter((_, idx) => idx !== i)
 									.map((ep) => ({ address: ep.address, tls: ep.tls }))
 							: [];
-						if (isGenericMode) {
-							services = await fetchServicesViaReflection({
-								endpoint: address,
-								tls: false,
-								timeout: requestTimeoutMs,
-								additionalEndpoints: retryAdditionalEndpoints,
-							});
-						} else {
-							services = await fetchServicesWithCosmosOptimization({
-								endpoint: address,
-								tls: false,
-								timeout: requestTimeoutMs,
-								additionalEndpoints: retryAdditionalEndpoints,
-							});
-						}
+						services = await discoverServices(
+							address,
+							false,
+							retryAdditionalEndpoints,
+						);
 						const retryResponseTime = Date.now() - retryStartTime;
 
 						if (services.length === 0) {

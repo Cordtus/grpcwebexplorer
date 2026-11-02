@@ -216,11 +216,6 @@ export class DescriptorParser {
 		return this.root;
 	}
 
-	/** Get the descriptor Root (for FileDescriptorProto lookups) */
-	getDescriptorRoot(): protobuf.Root {
-		return this.descriptorRoot;
-	}
-
 	/** Check if a file has already been processed */
 	hasFile(filename: string): boolean {
 		return this.seenFiles.has(filename);

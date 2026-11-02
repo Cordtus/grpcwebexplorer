@@ -23,7 +23,6 @@ interface MenuBarProps {
 	mode?: ExplorerMode;
 	onPrimaryAction?: () => void;
 	onShowSettings?: () => void;
-	onShowKeyboardShortcuts?: () => void;
 	onShowHelp?: () => void;
 }
 
@@ -31,11 +30,9 @@ export default function MenuBar({
 	mode = "generic",
 	onPrimaryAction,
 	onShowSettings,
-	onShowKeyboardShortcuts,
 	onShowHelp,
 }: MenuBarProps) {
 	const [cacheStats, setCacheStats] = useState<CacheStats>({
-		count: 0,
 		serviceCount: 0,
 		descriptorCount: 0,
 		networkCount: 0,
@@ -177,7 +174,7 @@ export default function MenuBar({
 				{/* Help */}
 				<button
 					type="button"
-					onClick={onShowHelp || onShowKeyboardShortcuts}
+					onClick={onShowHelp}
 					className="icon-btn text-muted-foreground"
 					title={`Help & Guide (${isMac ? "Cmd" : "Ctrl"}+Shift+?)`}
 				>

@@ -56,7 +56,6 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
 	);
 	const [cacheTTL, setCacheTTLState] = useState<CacheTTLOption>("ONE_HOUR");
 	const [cacheStats, setCacheStatsState] = useState<CacheStats>({
-		count: 0,
 		serviceCount: 0,
 		descriptorCount: 0,
 		networkCount: 0,

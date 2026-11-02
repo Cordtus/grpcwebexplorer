@@ -112,9 +112,17 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 `lib/utils/endpoint-manager.ts` tracks endpoint health:
 
 - Records success/failure with response times
-- Blacklists endpoints after 3 consecutive failures
+- Blacklists endpoints after 5 consecutive failures
 - Prioritizes endpoints by success rate and response time
+- Always places Lavender Five endpoints last (`lib/utils/endpoint-priority.ts`),
+  regardless of score or round-robin position
 - Automatically retries with TLS disabled on SSL errors
+
+`lib/utils/endpoint-configs.ts` holds endpoint normalization/TLS helpers and the
+legacy `endpoints: string[]` → `endpointConfigs` conversion. Persisted networks
+are migrated on restore, and execution falls back to legacy endpoints when a
+network has no configs, so cached fallback endpoints still participate in
+failover.
 
 ## Type Definitions
 
