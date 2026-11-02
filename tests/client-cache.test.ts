@@ -3,8 +3,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+	filterRemovedCachedServices,
 	getDescriptorCacheKey,
 	getServicesCacheKey,
+	hasRemovedCachedServices,
 	normalizeRequestTimeoutMs,
 	REQUEST_TIMEOUT_MS,
 } from "@/lib/utils/client-cache";
@@ -26,6 +28,25 @@ describe("Cache key generation", () => {
 			const key1 = getServicesCacheKey("host1:443", true);
 			const key2 = getServicesCacheKey("host2:443", true);
 			expect(key1).not.toBe(key2);
+		});
+	});
+
+	describe("removed service migration", () => {
+		const pseudo = {
+			name: "Transactions",
+			fullName: "cosmos.tx.v1beta1.Transactions",
+		};
+		const real = { name: "Service", fullName: "cosmos.tx.v1beta1.Service" };
+
+		it("drops the old synthetic Transactions service", () => {
+			expect(filterRemovedCachedServices([pseudo, real])).toEqual([real]);
+			expect(hasRemovedCachedServices([pseudo, real])).toBe(true);
+			expect(hasRemovedCachedServices([real])).toBe(false);
+		});
+
+		it("handles missing services safely", () => {
+			expect(filterRemovedCachedServices(undefined)).toEqual([]);
+			expect(hasRemovedCachedServices(undefined)).toBe(false);
 		});
 	});
 

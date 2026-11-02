@@ -88,6 +88,9 @@ All gRPC operations follow browser -> Next.js API route -> gRPC server pattern:
 - `CachedChainInfo`: Type containing endpoint, chainId, tlsEnabled, serviceCount, cachedAt, age
 - The menu-bar indicator counts service lists and descriptors separately; it
   no longer presents a raw localStorage key count as "cached"
+- `filterRemovedCachedServices()`/`hasRemovedCachedServices()` sanitize caches
+  written by older builds; a stale service list containing a removed synthetic
+  service is discarded and fetched fresh
 
 ### State Management Pattern
 

@@ -30,12 +30,15 @@ import { cn, errorMessage } from "@/lib/utils";
 import {
 	CACHE_CHANGED_EVENT,
 	clearDescriptorCache,
+	filterRemovedCachedServices,
 	getCacheTTL,
 	getDescriptorCacheKey,
 	getFromCache,
 	getRequestTimeoutMs,
 	getServicesCacheKey,
+	hasRemovedCachedServices,
 	NETWORK_CACHE_STORAGE_KEY,
+	removeFromCache,
 	saveToCache,
 } from "@/lib/utils/client-cache";
 import { debug } from "@/lib/utils/debug";
@@ -180,7 +183,12 @@ export default function GrpcExplorerApp() {
 					(ttl === Infinity || age < ttl);
 
 				if (isValid) {
-					setNetworks(parsed.networks);
+					setNetworks(
+						parsed.networks.map((network: GrpcNetwork) => ({
+							...network,
+							services: filterRemovedCachedServices(network.services),
+						})),
+					);
 				} else {
 					localStorage.removeItem(NETWORK_CACHE_STORAGE_KEY);
 				}
@@ -436,7 +444,13 @@ export default function GrpcExplorerApp() {
 
 			// Check client-side cache first to get chain-id for deduplication
 			const cacheKey = getServicesCacheKey(endpoint, tlsEnabled);
-			const cached = getFromCache<any>(cacheKey);
+			let cached = getFromCache<any>(cacheKey);
+			if (cached && hasRemovedCachedServices(cached.services)) {
+				// Discard service lists written by builds that exposed removed
+				// pseudo-services; the next fetch also picks up newly unioned services.
+				removeFromCache(cacheKey);
+				cached = null;
+			}
 			const cachedChainId = cached?.chainId || cached?.status?.chainId;
 
 			// If we have cached data, use it immediately
@@ -504,7 +518,7 @@ export default function GrpcExplorerApp() {
 						? { bech32Prefix: cached.bech32Prefix || bech32Prefix }
 						: {}),
 					tlsEnabled: resolvedTls,
-					services: cached.services || [],
+					services: filterRemovedCachedServices(cached.services),
 					color,
 					loading: false,
 					cached: true,
@@ -696,7 +710,6 @@ export default function GrpcExplorerApp() {
 				network.endpoint,
 				network.tlsEnabled,
 			);
-			const { removeFromCache } = await import("@/lib/utils/client-cache");
 			removeFromCache(cacheKey);
 
 			debug.log(`🔄 Force refreshing ${network.endpoint}...`);
@@ -731,7 +744,6 @@ export default function GrpcExplorerApp() {
 				const now = Date.now();
 
 				// Save to cache
-				const { saveToCache } = await import("@/lib/utils/client-cache");
 				saveToCache(cacheKey, { ...data, timestamp: now });
 
 				const actualEndpoint = data.status?.endpoint || network.endpoint;

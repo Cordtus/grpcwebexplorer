@@ -321,6 +321,26 @@ export function getServicesCacheKey(
 	return `services:${endpoint}:${tlsEnabled}`;
 }
 
+// Removed services can live on in persisted network/service caches written by
+// older builds. Drop them on read so an upgrade does not keep exposing them.
+const REMOVED_SERVICE_FULL_NAMES = new Set(["cosmos.tx.v1beta1.Transactions"]);
+
+export function filterRemovedCachedServices<T extends { fullName: string }>(
+	services: T[] | undefined,
+): T[] {
+	return (services || []).filter(
+		(service) => !REMOVED_SERVICE_FULL_NAMES.has(service.fullName),
+	);
+}
+
+export function hasRemovedCachedServices(
+	services: Array<{ fullName: string }> | undefined,
+): boolean {
+	return (services || []).some((service) =>
+		REMOVED_SERVICE_FULL_NAMES.has(service.fullName),
+	);
+}
+
 /** Generate cache key for one service descriptor. */
 export function getDescriptorCacheKey(
 	endpoint: string,
