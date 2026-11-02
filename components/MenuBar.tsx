@@ -115,7 +115,8 @@ export default function MenuBar({
 					>
 						<Database className="h-3.5 w-3.5" />
 						<span className="hidden md:inline">
-							{cacheStats.networkCount} networks cached
+							{cacheStats.networkCount}{" "}
+							{cacheStats.networkCount === 1 ? "network" : "networks"} cached
 						</span>
 						<span className="text-muted-foreground/70">
 							<span className="hidden lg:inline">({cacheStats.sizeKB}KB)</span>
