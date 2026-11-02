@@ -186,10 +186,17 @@ the results UI, with a "Decode" toggle to turn it off:
   extension so they survive reflection decoding; the HTTP annotation drives the
   REST path (`lib/utils/rest-path-mapper.ts`), and methods without one report no
   REST mapping
+- `lib/grpc/reflection-client.ts` expands `google.protobuf.Any` wrappers while
+  decoding a response, using the reflected descriptor named by the type URL and
+  adding `@type` for provenance. It accepts both descriptor-named `type_url`
+  and JSON-style `typeUrl` keys, recurses into decoded messages, and leaves
+  wrappers alone when the type cannot be loaded. This is what turns Cosmos tx
+  payloads (`tx.body.messages[].value`) into readable message fields
 - `components/MethodDetailPanel.tsx`: Provides the "Decode" toggle in the
   Results toolbar and builds the field-context map passed to the decoder
 - Raw response JSON, whole-response copy, and saved JSON keep original base64
-  values
+  values; `google.protobuf.Any` wrappers are the exception because the server
+  expands them before the response reaches the UI
 - Field-level copy from a decoded formatted value copies bech32 when present,
   then the interpreted decimal or percentage, then decoded JSON, then decoded
   text, otherwise the original base64 value

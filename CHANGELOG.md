@@ -10,6 +10,7 @@
 - Address-typed `bytes` fields (`AccAddress`/`ValAddress`/`ConsAddress` customtypes or `cosmos.*AddressBytes` scalars) render as bech32. The prefix comes from the chain registry `bech32_prefix` for chain markers, from `cosmos.auth.v1beta1.Query/Bech32Prefix` (services route) for direct endpoints, and falls back to inference from a bech32 string in the same response.
 
 ### Fixed
+- `google.protobuf.Any` wrappers in responses are decoded again. Descriptor field names are snake_case (`type_url`), but the decoder only recognized camelCase (`typeUrl`), so Cosmos tx messages such as `tx.body.messages[].value` stayed base64. Both key shapes now resolve the inner type through reflection and show its fields with `@type`.
 - Methods whose request type is itself `google.protobuf.Struct`, `Value`, or `ListValue` now show a single JSON editor instead of the type's internal plumbing, and encode correctly (previously the form emitted field-shaped params that no longer matched the request).
 - Struct inputs are shape-validated in the form (object, or array when repeated) alongside `ListValue`, so a malformed value is reported inline instead of failing at encode time and counting against endpoint health.
 - Repeated message items and nested fields get unique DOM ids, so field labels target the right input.

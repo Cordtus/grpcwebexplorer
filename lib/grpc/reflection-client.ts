@@ -787,7 +787,8 @@ export class ReflectionClient {
 
 	/**
 	 * Recursively decode google.protobuf.Any fields in a JSON response object.
-	 * Detects objects with both `typeUrl` and `value` keys (protobufjs camelCase output),
+	 * Detects objects with both a type URL and `value` key (protobufjs preserves
+	 * the descriptor's field naming, so `typeUrl` and `type_url` both occur),
 	 * resolves the inner protobuf type via reflection, and replaces the Any wrapper
 	 * with the decoded inner message plus an `@type` field for provenance.
 	 * @param obj - The JSON object to walk
@@ -810,15 +811,18 @@ export class ReflectionClient {
 			return obj;
 		}
 
-		// Detect google.protobuf.Any: object with typeUrl (string) and value (string/Buffer)
+		// Detect google.protobuf.Any: object with a type URL (string) and value
+		// (string/Buffer). Descriptor fields keep their proto names, so the key is
+		// normally snake_case (`type_url`); accept camelCase for JSON-shaped input.
+		const typeUrl = obj.typeUrl ?? obj.type_url;
 		if (
-			typeof obj.typeUrl === "string" &&
-			obj.typeUrl.length > 0 &&
+			typeof typeUrl === "string" &&
+			typeUrl.length > 0 &&
 			(typeof obj.value === "string" || Buffer.isBuffer(obj.value))
 		) {
-			const typeName = obj.typeUrl.includes("/")
-				? obj.typeUrl.substring(obj.typeUrl.lastIndexOf("/") + 1)
-				: obj.typeUrl;
+			const typeName = typeUrl.includes("/")
+				? typeUrl.substring(typeUrl.lastIndexOf("/") + 1)
+				: typeUrl;
 
 			try {
 				let msgType: protobuf.Type;
