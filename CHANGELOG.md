@@ -7,6 +7,7 @@
 - Decoding auto-detects the encoding (base64 or hex) and only surfaces a result that is human-readable — plaintext, JSON, a normalized `sdk.Dec`, or a bech32 address. Binary bytes are left as their original base64 instead of being shown as hex/byte dumps.
 - Context-aware response decoding: Cosmos `sdk.Dec` fields (gogoproto `customtype` / `cosmos_proto.scalar`) are normalized to a decimal in the formatted results view. Works for both `bytes`-encoded and `string`-encoded Dec fields, across all modules (slashing, staking, mint, distribution, gov, dynamicfee, ...).
 - Dec fields classified as fractions (rates, quorums, taxes, inflation, commission) also show a percentage (e.g. `0.05 (5%)`); quantities such as coin amounts, shares, and prices are normalized without a percentage to avoid mislabeling.
+- Generated curl snippets now use a verified REST/LCD base URL from the chain registry instead of deriving a REST host from the gRPC endpoint. After service discovery, the client probes the registry's REST endpoints, picks a random working one (Lavender Five last), and persists it with the network cache.
 - Address-typed `bytes` fields (`AccAddress`/`ValAddress`/`ConsAddress` customtypes or `cosmos.*AddressBytes` scalars) render as bech32. The prefix comes from the chain registry `bech32_prefix` for chain markers, from `cosmos.auth.v1beta1.Query/Bech32Prefix` (services route) for direct endpoints, and falls back to inference from a bech32 string in the same response.
 
 ### Fixed

@@ -61,6 +61,8 @@ interface MethodDetailPanelProps {
 	service: GrpcService;
 	color: string;
 	endpoint?: string;
+	/** Verified REST/LCD base URL from the chain registry. */
+	restEndpoint?: string;
 	tlsEnabled?: boolean;
 	params?: Record<string, any>;
 	metadata?: Record<string, string>;
@@ -446,6 +448,7 @@ export default function MethodDetailPanel({
 	service,
 	color,
 	endpoint,
+	restEndpoint,
 	tlsEnabled,
 	params = {},
 	metadata = {},
@@ -526,13 +529,14 @@ export default function MethodDetailPanel({
 	// ── Code generation context ─────────────────────────────────────────
 
 	const restBaseUrl = useMemo(() => {
+		if (restEndpoint) return restEndpoint.replace(/\/+$/, "");
 		if (!endpoint) return "https://api.example.com";
 		const url = endpoint.replace(/:9090$/, ":1317").replace(/:443$/, "");
 		if (!url.startsWith("http")) {
 			return tlsEnabled !== false ? `https://${url}` : `http://${url}`;
 		}
 		return url;
-	}, [endpoint, tlsEnabled]);
+	}, [endpoint, restEndpoint, tlsEnabled]);
 
 	const restResult = useMemo(() => {
 		return generateRestUrl(

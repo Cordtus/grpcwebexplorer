@@ -124,6 +124,18 @@ are migrated on restore, and execution falls back to legacy endpoints when a
 network has no configs, so cached fallback endpoints still participate in
 failover.
 
+### REST/LCD Endpoints
+
+Cosmos chain-registry networks need a separate REST base for generated curl
+snippets. `/api/grpc/services` returns the registry's `restEndpoints`;
+`GrpcExplorerApp` then calls `/api/rest/validate` with the network's `chainName`.
+That route fetches `apis.rest`, probes
+`/cosmos/base/tendermint/v1beta1/node_info`, excludes Lavender Five when any
+non-Lavender provider works, and returns verified bases. The client picks one
+at random, stores it as `GrpcNetwork.restEndpoint`, and persists it with the
+network/services cache. `MethodDetailPanel` uses it for the curl tab. Direct
+endpoints without a registry `chainName` keep the existing derived fallback.
+
 ## Type Definitions
 
 Core types in `lib/types/grpc.ts`:

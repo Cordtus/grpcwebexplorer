@@ -167,6 +167,7 @@ export default function GrpcExplorerApp() {
 
 	// Round-robin endpoint index tracker per network (for load distribution)
 	const endpointIndexRef = useRef<Map<string, number>>(new Map());
+	const restProbeRef = useRef<Set<string>>(new Set());
 	const leftPanelCollapsedRef = useRef(leftPanelCollapsed);
 	const isOverlayModeRef = useRef(isOverlayMode);
 	const userCollapsedPanelRef = useRef(userCollapsedPanel);
@@ -269,6 +270,63 @@ export default function GrpcExplorerApp() {
 		return () => {
 			if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 		};
+	}, [networks]);
+
+	// Fill in a verified REST base URL after service discovery settles, for
+	// Cosmos networks added through the chain registry.
+	useEffect(() => {
+		for (const network of networks) {
+			if (
+				network.mode !== "cosmos" ||
+				network.loading ||
+				network.services.length === 0 ||
+				network.restEndpoint ||
+				restProbeRef.current.has(network.id)
+			) {
+				continue;
+			}
+
+			const chainName =
+				network.chainName ||
+				(network.endpoint.startsWith("chain:")
+					? network.endpoint.slice("chain:".length)
+					: undefined);
+			if (!chainName) continue;
+			restProbeRef.current.add(network.id);
+
+			void (async () => {
+				try {
+					const response = await fetch("/api/rest/validate", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ chainName }),
+					});
+					if (!response.ok) return;
+
+					const data = await response.json();
+					const endpoints: string[] = Array.isArray(data.endpoints)
+						? data.endpoints
+						: [];
+					if (endpoints.length === 0) {
+						debug.warn(`No working REST endpoint found for ${chainName}`);
+						return;
+					}
+
+					const restEndpoint =
+						endpoints[Math.floor(Math.random() * endpoints.length)];
+					setNetworks((prev) =>
+						prev.map((candidate) =>
+							candidate.id === network.id && !candidate.restEndpoint
+								? { ...candidate, restEndpoint, restEndpoints: endpoints }
+								: candidate,
+						),
+					);
+					debug.log(`REST endpoint for ${chainName}: ${restEndpoint}`);
+				} catch (error) {
+					debug.warn(`REST endpoint probe failed for ${chainName}`, error);
+				}
+			})();
+		}
 	}, [networks]);
 
 	// Generate unique ID
@@ -534,11 +592,16 @@ export default function GrpcExplorerApp() {
 						? { endpointConfigs: cachedEndpointConfigs }
 						: {}),
 					...(cachedChainId ? { chainId: cachedChainId } : {}),
+					...(cached.chainName ? { chainName: cached.chainName } : {}),
 					...(cached.bech32Prefix || bech32Prefix
 						? { bech32Prefix: cached.bech32Prefix || bech32Prefix }
 						: {}),
 					tlsEnabled: resolvedTls,
 					services: filterRemovedCachedServices(cached.services),
+					...(cached.restEndpoint ? { restEndpoint: cached.restEndpoint } : {}),
+					...(cached.restEndpoints?.length
+						? { restEndpoints: cached.restEndpoints }
+						: {}),
 					color,
 					loading: false,
 					cached: true,
@@ -669,6 +732,9 @@ export default function GrpcExplorerApp() {
 									services: data.services || [],
 									endpoint: actualEndpoint,
 									tlsEnabled: resolvedTls,
+									...(data.restEndpoints?.length
+										? { restEndpoints: data.restEndpoints }
+										: {}),
 									endpoints: availableEndpoints.filter(
 										(address) => address !== actualEndpoint,
 									),
@@ -679,6 +745,7 @@ export default function GrpcExplorerApp() {
 										[actualEndpoint]: { lastSuccess: now },
 									},
 									...(fetchedChainId ? { chainId: fetchedChainId } : {}),
+									...(data.chainName ? { chainName: data.chainName } : {}),
 									...(data.bech32Prefix || bech32Prefix
 										? { bech32Prefix: data.bech32Prefix || bech32Prefix }
 										: {}),
@@ -799,6 +866,10 @@ export default function GrpcExplorerApp() {
 								services: data.services || [],
 								endpoint: actualEndpoint,
 								tlsEnabled: resolvedTls,
+								...(data.restEndpoints?.length
+									? { restEndpoints: data.restEndpoints }
+									: {}),
+								...(data.chainName ? { chainName: data.chainName } : {}),
 								chainId,
 								endpointHealth: {
 									...n.endpointHealth,
@@ -1540,6 +1611,9 @@ export default function GrpcExplorerApp() {
 												: {})}
 											{...(network?.bech32Prefix
 												? { bech32Prefix: network.bech32Prefix }
+												: {})}
+											{...(network?.restEndpoint
+												? { restEndpoint: network.restEndpoint }
 												: {})}
 											mode={network?.mode}
 										/>

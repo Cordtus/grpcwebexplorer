@@ -116,6 +116,7 @@ Basic UI / UX preferences:
 | `POST /api/grpc/descriptor` | Lazy-load service field definitions |
 | `POST /api/grpc/validate-endpoints` | DNS plus bounded gRPC reflection qualification |
 | `POST /api/grpc/test-compatibility` | Bulk method testing |
+| `POST /api/rest/validate` | Verify chain-registry REST/LCD endpoints |
 | `GET /api/bsr/modules` | BSR module search |
 | `POST /api/bsr/descriptor` | Fetch FileDescriptorSet from BSR |
 | `GET /api/chains` | Cosmos chain registry |

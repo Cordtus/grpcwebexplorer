@@ -125,8 +125,14 @@ export interface GrpcNetwork {
 	endpointConfigs?: EndpointConfig[]; // Per-endpoint settings for round-robin
 	endpointHealth?: Record<string, EndpointExecutionHealth>;
 	chainId?: string;
+	/** Cosmos chain-registry directory name, when the network came from the registry. */
+	chainName?: string;
 	/** Chain bech32 prefix from the chain registry, used to render address bytes. */
 	bech32Prefix?: string;
+	/** Verified REST/LCD base URL used for generated curl snippets. */
+	restEndpoint?: string;
+	/** Candidate REST/LCD URLs from the chain registry, verified on first load. */
+	restEndpoints?: string[];
 	tlsEnabled: boolean;
 	services: GrpcService[];
 	color: string;

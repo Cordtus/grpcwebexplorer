@@ -40,6 +40,7 @@ export async function POST(req: Request) {
 		// Check if this is a chain marker for round-robin mode (Cosmos only)
 		let isChainMarker = false;
 		let chainName = "";
+		let restEndpoints: string[] = [];
 		let endpoints: Array<{
 			address: string;
 			tls: boolean;
@@ -56,6 +57,9 @@ export async function POST(req: Request) {
 			// Fetch endpoints from chain registry using the chainRegistry service
 			try {
 				const chainApis = await fetchChainApis(chainName);
+				restEndpoints = (chainApis?.rest || [])
+					.map((endpoint) => endpoint.address)
+					.filter((address): address is string => Boolean(address));
 				if (chainApis?.grpc && chainApis.grpc.length > 0) {
 					// Use endpoint manager to normalize and detect TLS
 					endpoints = chainApis.grpc.map((ep) => ({
@@ -435,7 +439,9 @@ export async function POST(req: Request) {
 		return NextResponse.json({
 			services: services,
 			chainId: detectedChainId,
+			chainName: isChainMarker ? chainName : undefined,
 			bech32Prefix: detectedBech32Prefix,
+			restEndpoints,
 			status,
 			// Include all endpoints for round-robin distribution (only for chain markers)
 			availableEndpoints: allEndpoints,
